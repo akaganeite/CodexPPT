@@ -1,0 +1,599 @@
+{
+  "CVE-2021-20294": [
+    "binutils-2.35.1-readelf",
+    "binutils-2.35-readelf",
+    "binutils-2.36-readelf",
+    "binutils-2.35.2-readelf",
+    "binutils-2.36.1-readelf"
+  ],
+  "CVE-2017-14128": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-7303": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2022-48064": [
+    "binutils-2.39-objdump",
+    "binutils-2.38-objdump",
+    "binutils-2.37-objdump",
+    "binutils-2.40-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump"
+  ],
+  "CVE-2018-7570": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2021-45078": [
+    "binutils-2.37-objdump",
+    "binutils-2.36.1-objdump",
+    "binutils-2.35.2-objdump",
+    "binutils-2.38-objdump",
+    "binutils-2.39-objdump",
+    "binutils-2.40-objdump"
+  ],
+  "CVE-2017-9043": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2022-48065": [
+    "binutils-2.39-objdump",
+    "binutils-2.38-objdump",
+    "binutils-2.37-objdump",
+    "binutils-2.40-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump"
+  ],
+  "CVE-2019-17451": [
+    "binutils-2.32-objdump",
+    "binutils-2.33.1-objdump",
+    "binutils-2.34-objdump",
+    "binutils-2.35-objdump"
+  ],
+  "CVE-2017-15025": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-13710": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-15938": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-9955": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2018-7643": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-16828": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2020-16591": [
+    "binutils-2.35-readelf",
+    "binutils-2.35.1-readelf",
+    "binutils-2.36-readelf",
+    "binutils-2.35.2-readelf"
+  ],
+  "CVE-2017-9040": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2017-14729": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-6966": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2017-15996": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-9038": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2017-15020": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2020-16599": [
+    "binutils-2.35-objdump",
+    "binutils-2.35.1-objdump",
+    "binutils-2.36-objdump",
+    "binutils-2.35.2-objdump"
+  ],
+  "CVE-2014-8485": [
+    "binutils-2.24-objdump",
+    "binutils-2.23.2-objdump",
+    "binutils-2.23.1-objdump",
+    "binutils-2.25-objdump",
+    "binutils-2.25.1-objdump",
+    "binutils-2.26-objdump"
+  ],
+  "CVE-2017-8397": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2014-8738": [
+    "binutils-2.24-objdump",
+    "binutils-2.23.2-objdump",
+    "binutils-2.23.1-objdump",
+    "binutils-2.25-objdump",
+    "binutils-2.25.1-objdump",
+    "binutils-2.26-objdump"
+  ],
+  "CVE-2017-12967": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-7304": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2020-16593": [
+    "binutils-2.35-objdump",
+    "binutils-2.35.1-objdump",
+    "binutils-2.36-objdump",
+    "binutils-2.35.2-objdump"
+  ],
+  "CVE-2017-14939": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-19932": [
+    "binutils-2.31-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2017-15939": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-15022": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-20671": [
+    "binutils-2.31.1-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2017-9039": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2022-48063": [
+    "binutils-2.39-objdump",
+    "binutils-2.38-objdump",
+    "binutils-2.37-objdump",
+    "binutils-2.40-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump"
+  ],
+  "CVE-2018-18606": [
+    "binutils-2.31-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2018-17360": [
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2018-10373": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-17124": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-7208": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-14974": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-6965": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2017-7299": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2018-1000876": [
+    "binutils-2.31.1-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2018-6543": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-14932": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2020-16590": [
+    "binutils-2.35-readelf",
+    "binutils-2.35.1-readelf",
+    "binutils-2.36-readelf",
+    "binutils-2.35.2-readelf"
+  ],
+  "CVE-2018-17358": [
+    "binutils-2.31.1-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump",
+    "binutils-2.43-objdump"
+  ],
+  "CVE-2017-13757": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-9954": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2017-14130": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-7209": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2014-8484": [
+    "binutils-2.24-objdump",
+    "binutils-2.23.2-objdump",
+    "binutils-2.23.1-objdump",
+    "binutils-2.25-objdump",
+    "binutils-2.25.1-objdump",
+    "binutils-2.26-objdump"
+  ],
+  "CVE-2017-8398": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2017-15023": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-16831": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-17080": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-20651": [
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2023-1579": [
+    "binutils-2.39-objdump",
+    "binutils-2.40-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump"
+  ],
+  "CVE-2018-7569": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-14934": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-10372": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-15021": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-15024": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-6969": [
+    "binutils-2.28-readelf",
+    "binutils-2.29-readelf",
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf"
+  ],
+  "CVE-2017-8395": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2018-18607": [
+    "binutils-2.31-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2017-14940": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-15225": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-16830": [
+    "binutils-2.29.1-readelf",
+    "binutils-2.30-readelf",
+    "binutils-2.31-readelf",
+    "binutils-2.31.1-readelf"
+  ],
+  "CVE-2018-8945": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-12799": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-17122": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-16829": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-8392": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2018-6759": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-8421": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2022-38533": [
+    "binutils-2.39-objdump",
+    "binutils-2.38-objdump",
+    "binutils-2.37-objdump",
+    "binutils-2.40-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump"
+  ],
+  "CVE-2017-14529": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-12448": [
+    "binutils-2.29-objdump",
+    "binutils-2.28-objdump",
+    "binutils-2.27-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2017-14930": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-14129": [
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump"
+  ],
+  "CVE-2018-18605": [
+    "binutils-2.31-objdump",
+    "binutils-2.32-objdump",
+    "binutils-2.33-objdump",
+    "binutils-2.33.1-objdump"
+  ],
+  "CVE-2020-35448": [
+    "binutils-2.35.1-objdump",
+    "binutils-2.36-objdump",
+    "binutils-2.35.2-objdump",
+    "binutils-2.36.1-objdump"
+  ],
+  "CVE-2017-17126": [
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2020-19724": [
+    "binutils-2.33.1-nm",
+    "binutils-2.33-nm",
+    "binutils-2.32-nm",
+    "binutils-2.34-nm",
+    "binutils-2.35-nm",
+    "binutils-2.35.1-nm"
+  ],
+  "CVE-2023-25586": [
+    "binutils-2.40-objdump",
+    "binutils-2.41-objdump",
+    "binutils-2.42-objdump",
+    "binutils-2.43-objdump"
+  ],
+  "CVE-2018-7568": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-14933": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-6872": [
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump",
+    "binutils-2.32-objdump"
+  ],
+  "CVE-2017-14745": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2017-8396": [
+    "binutils-2.28-objdump",
+    "binutils-2.29-objdump",
+    "binutils-2.29.1-objdump",
+    "binutils-2.30-objdump"
+  ],
+  "CVE-2017-14938": [
+    "binutils-2.29-objdump",
+    "binutils-2.30-objdump",
+    "binutils-2.31-objdump",
+    "binutils-2.31.1-objdump"
+  ],
+  "CVE-2018-20002": [
+    "binutils-2.31-nm",
+    "binutils-2.32-nm",
+    "binutils-2.33-nm",
+    "binutils-2.33.1-nm"
+  ]
+}
