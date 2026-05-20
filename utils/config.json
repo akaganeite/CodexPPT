@@ -1,0 +1,11 @@
+{
+  "safe_objdump": {
+    "default_window": 384,
+    "max_window": 4096,
+    "default_context": 4,
+    "max_context": 16,
+    "default_max_output_bytes": 8192,
+    "min_max_output_bytes": 1024,
+    "max_output_bytes": 65536
+  }
+}

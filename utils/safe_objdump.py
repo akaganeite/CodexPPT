@@ -9,18 +9,24 @@ from __future__ import annotations
 
 import argparse
 import collections
+import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 
-DEFAULT_WINDOW = 384
-MAX_WINDOW = 4096
-DEFAULT_CONTEXT = 4
-MAX_CONTEXT = 16
-DEFAULT_MAX_OUTPUT = 8192
-MAX_OUTPUT = 65536
+DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.json")
+CONFIG_SECTION = "safe_objdump"
+FALLBACK_CONFIG = {
+    "default_window": 384,
+    "max_window": 4096,
+    "default_context": 4,
+    "max_context": 16,
+    "default_max_output_bytes": 8192,
+    "min_max_output_bytes": 1024,
+    "max_output_bytes": 65536,
+}
 
 
 def parse_int(value: str) -> int:
@@ -29,6 +35,26 @@ def parse_int(value: str) -> int:
 
 def clamp(value: int, lower: int, upper: int) -> int:
     return max(lower, min(value, upper))
+
+
+def load_config(path: Path | None = None) -> dict[str, int]:
+    config = dict(FALLBACK_CONFIG)
+    config_path = path or DEFAULT_CONFIG_PATH
+    if config_path.exists():
+        with config_path.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if not isinstance(raw, dict):
+            raise SystemExit(f"safe_objdump config must be a JSON object: {config_path}")
+        raw = raw.get(CONFIG_SECTION, raw)
+        if not isinstance(raw, dict):
+            raise SystemExit(f"safe_objdump config section must be a JSON object: {CONFIG_SECTION}")
+        for key in config:
+            if key in raw:
+                value = raw[key]
+                if not isinstance(value, int):
+                    raise SystemExit(f"safe_objdump config value must be int: {key}")
+                config[key] = value
+    return config
 
 
 def append_capped(chunks: list[str], text: str, state: dict[str, int], limit: int) -> bool:
@@ -170,15 +196,23 @@ def emit_with_cap(lines: list[str], max_output: int) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run objdump with bounded output.")
     parser.add_argument("--binary", required=True, type=Path)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH, help="Unified JSON config file.")
     parser.add_argument("--symbol", help="Disassemble a bounded window starting at this exact nm symbol.")
     parser.add_argument("--addr", type=parse_int, help="Disassemble around this address.")
-    parser.add_argument("--window", type=parse_int, default=DEFAULT_WINDOW, help="Byte window for --symbol/--addr.")
+    parser.add_argument("--window", type=parse_int, default=None, help="Byte window for --symbol/--addr.")
     parser.add_argument("--grep", help="Regex filter. With no --symbol/--addr, scans disassembly and prints matches with context.")
-    parser.add_argument("--context", type=int, default=DEFAULT_CONTEXT)
-    parser.add_argument("--max-output-bytes", type=parse_int, default=DEFAULT_MAX_OUTPUT)
+    parser.add_argument("--context", type=int, default=None)
+    parser.add_argument("--max-output-bytes", type=parse_int, default=None)
     parser.add_argument("--demangle", action="store_true")
     parser.add_argument("--line-numbers", action="store_true")
     args = parser.parse_args()
+    config = load_config(args.config)
+    if args.window is None:
+        args.window = config["default_window"]
+    if args.context is None:
+        args.context = config["default_context"]
+    if args.max_output_bytes is None:
+        args.max_output_bytes = config["default_max_output_bytes"]
 
     binary = args.binary.resolve()
     if not binary.is_file():
@@ -188,9 +222,9 @@ def main() -> int:
     if not args.symbol and args.addr is None and not args.grep:
         raise SystemExit("provide --symbol, --addr, or --grep")
 
-    window = clamp(args.window, 1, MAX_WINDOW)
-    context = clamp(args.context, 0, MAX_CONTEXT)
-    max_output = clamp(args.max_output_bytes, 1024, MAX_OUTPUT)
+    window = clamp(args.window, 1, config["max_window"])
+    context = clamp(args.context, 0, config["max_context"])
+    max_output = clamp(args.max_output_bytes, config["min_max_output_bytes"], config["max_output_bytes"])
 
     header: list[str] = []
     if args.symbol:
