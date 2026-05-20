@@ -127,6 +127,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Prompt Codex to avoid --line-numbers unless line mapping is essential.",
     )
+    parser.add_argument(
+        "--avoid-decodedline",
+        action="store_true",
+        help="Prompt Codex to avoid readelf --debug-dump=decodedline unless line mapping is essential.",
+    )
     return parser.parse_args()
 
 
@@ -209,6 +214,11 @@ def prompt_extra_rules(args: argparse.Namespace) -> list[str]:
         rules.append(
             "- Avoid `--line-numbers` by default. Use it only if raw addresses/calls are insufficient; "
             "line-number output repeats long source paths and should not be used for routine confirmation."
+        )
+    if args.avoid_decodedline:
+        rules.append(
+            "- Avoid `readelf --debug-dump=decodedline` by default. It is usually verbose; prefer symbols, "
+            "relocations, strings, and narrow disassembly for patch-presence evidence."
         )
     return rules
 
