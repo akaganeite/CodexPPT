@@ -21,7 +21,8 @@ Tool-output budget rules:
 - If you cannot reach decisive evidence inside that budget, return inconclusive for the affected binary instead of continuing exploration.
 - Reuse evidence across binaries when the same symbol and pattern are being checked; do not repeat broad scans for every binary.
 - Avoid repeated exploration: once you have decisive local evidence for a binary, stop inspecting that binary.
-{{EXTRA_RULES}}
+- Start with one batched cross-binary scan for the key symbol/call/string pattern across all requested binaries. Then inspect at most one vulnerable-side representative and one patched-side representative in detail; classify sibling binaries by the same decisive local pattern.
+- Keep the final JSON compact: at most 2 evidence strings per binary, each under 25 words; reasoning under 35 words. Include only decisive addresses/calls/patterns, not full command narratives.
 
 Status semantics:
 - present: patch is present in the binary.

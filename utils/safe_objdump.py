@@ -18,15 +18,15 @@ from pathlib import Path
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.json")
 CONFIG_SECTION = "safe_objdump"
-FALLBACK_CONFIG = {
-    "default_window": 384,
-    "max_window": 4096,
-    "default_context": 4,
-    "max_context": 16,
-    "default_max_output_bytes": 8192,
-    "min_max_output_bytes": 1024,
-    "max_output_bytes": 65536,
-}
+REQUIRED_CONFIG_KEYS = (
+    "default_window",
+    "max_window",
+    "default_context",
+    "max_context",
+    "default_max_output_bytes",
+    "min_max_output_bytes",
+    "max_output_bytes",
+)
 
 
 def parse_int(value: str) -> int:
@@ -38,22 +38,25 @@ def clamp(value: int, lower: int, upper: int) -> int:
 
 
 def load_config(path: Path | None = None) -> dict[str, int]:
-    config = dict(FALLBACK_CONFIG)
     config_path = path or DEFAULT_CONFIG_PATH
-    if config_path.exists():
-        with config_path.open("r", encoding="utf-8") as f:
-            raw = json.load(f)
-        if not isinstance(raw, dict):
-            raise SystemExit(f"safe_objdump config must be a JSON object: {config_path}")
-        raw = raw.get(CONFIG_SECTION, raw)
-        if not isinstance(raw, dict):
-            raise SystemExit(f"safe_objdump config section must be a JSON object: {CONFIG_SECTION}")
-        for key in config:
-            if key in raw:
-                value = raw[key]
-                if not isinstance(value, int):
-                    raise SystemExit(f"safe_objdump config value must be int: {key}")
-                config[key] = value
+    if not config_path.is_file():
+        raise SystemExit(f"safe_objdump config file not found: {config_path}")
+    with config_path.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+    if not isinstance(raw, dict):
+        raise SystemExit(f"safe_objdump config must be a JSON object: {config_path}")
+    raw = raw.get(CONFIG_SECTION)
+    if not isinstance(raw, dict):
+        raise SystemExit(f"safe_objdump config section must be a JSON object: {CONFIG_SECTION}")
+
+    config: dict[str, int] = {}
+    for key in REQUIRED_CONFIG_KEYS:
+        if key not in raw:
+            raise SystemExit(f"safe_objdump config missing required key: {CONFIG_SECTION}.{key}")
+        value = raw[key]
+        if not isinstance(value, int):
+            raise SystemExit(f"safe_objdump config value must be int: {CONFIG_SECTION}.{key}")
+        config[key] = value
     return config
 
 

@@ -122,26 +122,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pass --json to codex exec. The final message is still read from --output-last-message.",
     )
-    parser.add_argument(
-        "--avoid-line-numbers",
-        action="store_true",
-        help="Prompt Codex to avoid --line-numbers unless line mapping is essential.",
-    )
-    parser.add_argument(
-        "--avoid-decodedline",
-        action="store_true",
-        help="Prompt Codex to avoid readelf --debug-dump=decodedline unless line mapping is essential.",
-    )
-    parser.add_argument(
-        "--batch-first",
-        action="store_true",
-        help="Prompt Codex to start with batched cross-binary scans and inspect only representative binaries in detail.",
-    )
-    parser.add_argument(
-        "--compact-final-json",
-        action="store_true",
-        help="Prompt Codex to keep final evidence/reasoning short.",
-    )
     return parser.parse_args()
 
 
@@ -218,32 +198,6 @@ def safe_objdump_helper_for_prompt(cd: Path) -> str:
     return os.path.relpath(helper, cd)
 
 
-def prompt_extra_rules(args: argparse.Namespace) -> list[str]:
-    rules: list[str] = []
-    if args.avoid_line_numbers:
-        rules.append(
-            "- Avoid `--line-numbers` by default. Use it only if raw addresses/calls are insufficient; "
-            "line-number output repeats long source paths and should not be used for routine confirmation."
-        )
-    if args.avoid_decodedline:
-        rules.append(
-            "- Avoid `readelf --debug-dump=decodedline` by default. It is usually verbose; prefer symbols, "
-            "relocations, strings, and narrow disassembly for patch-presence evidence."
-        )
-    if args.batch_first:
-        rules.append(
-            "- Start with one batched cross-binary scan for the key symbol/call/string pattern across all requested "
-            "binaries. Then inspect at most one vulnerable-side representative and one patched-side representative "
-            "in detail; classify sibling binaries by the same decisive local pattern."
-        )
-    if args.compact_final_json:
-        rules.append(
-            "- Keep the final JSON compact: at most 2 evidence strings per binary, each under 25 words; reasoning "
-            "under 35 words. Include only decisive addresses/calls/patterns, not full command narratives."
-        )
-    return rules
-
-
 def process_cve(
     cve: str,
     index: int,
@@ -285,7 +239,6 @@ def process_cve(
         target_dir,
         args.opt,
         safe_objdump_helper_for_prompt(args.cd),
-        prompt_extra_rules(args),
     )
 
     print(f"[{index}/{total}] run {cve} ({len(binaries)} binaries)")

@@ -16,6 +16,7 @@ def derive_project_paths(args: argparse.Namespace) -> None:
     """Fill project_json/testset_json/target_dir/output from --project when used."""
     base_dir = args.base_dir.resolve()
     binaries_root = args.binaries_root.resolve()
+    runs_dir = base_dir / "runs"
     args.project_dir = None
     if args.project:
         project = args.project
@@ -38,7 +39,7 @@ def derive_project_paths(args: argparse.Namespace) -> None:
         if args.target_dir is None:
             args.target_dir = next((p for p in target_candidates if p.exists()), target_candidates[0])
         if args.output is None:
-            args.output = project_dir / f"{project}_{args.opt}_codex_results.json"
+            args.output = runs_dir / f"{project}_{args.opt}_codex_results.json"
 
     missing = [
         name
@@ -48,4 +49,3 @@ def derive_project_paths(args: argparse.Namespace) -> None:
     if missing:
         opts = ", ".join("--" + name.replace("_", "-") for name in missing)
         raise ValueError(f"missing required arguments: {opts}; or provide --project")
-

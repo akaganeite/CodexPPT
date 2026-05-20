@@ -5,4 +5,5 @@ __pycache__/
 .codex/
 
 detect*/
+runs/
 binutils/gcc/

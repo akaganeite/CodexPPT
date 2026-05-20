@@ -15,7 +15,6 @@ def build_prompt(
     target_dir: Path,
     opt: str,
     safe_objdump_helper: str,
-    extra_rules: list[str] | None = None,
 ) -> str:
     actual_map = {b: requested_binary_to_actual(b, opt) for b in binaries}
     payload = {
@@ -28,7 +27,6 @@ def build_prompt(
     }
     variables = {
         "SAFE_OBJDUMP_HELPER": safe_objdump_helper,
-        "EXTRA_RULES": "\n".join(extra_rules or []),
         "TASK_PAYLOAD_JSON": json.dumps(payload, indent=2, ensure_ascii=False),
     }
     return render_template(template_path.read_text(encoding="utf-8"), variables)
