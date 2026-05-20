@@ -21,6 +21,7 @@ Tool-output budget rules:
 - If you cannot reach decisive evidence inside that budget, return inconclusive for the affected binary instead of continuing exploration.
 - Reuse evidence across binaries when the same symbol and pattern are being checked; do not repeat broad scans for every binary.
 - Avoid repeated exploration: once you have decisive local evidence for a binary, stop inspecting that binary.
+{{EXTRA_RULES}}
 
 Status semantics:
 - present: patch is present in the binary.

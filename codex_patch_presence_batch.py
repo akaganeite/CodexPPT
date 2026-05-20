@@ -122,6 +122,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pass --json to codex exec. The final message is still read from --output-last-message.",
     )
+    parser.add_argument(
+        "--avoid-line-numbers",
+        action="store_true",
+        help="Prompt Codex to avoid --line-numbers unless line mapping is essential.",
+    )
     return parser.parse_args()
 
 
@@ -198,6 +203,16 @@ def safe_objdump_helper_for_prompt(cd: Path) -> str:
     return os.path.relpath(helper, cd)
 
 
+def prompt_extra_rules(args: argparse.Namespace) -> list[str]:
+    rules: list[str] = []
+    if args.avoid_line_numbers:
+        rules.append(
+            "- Avoid `--line-numbers` by default. Use it only if raw addresses/calls are insufficient; "
+            "line-number output repeats long source paths and should not be used for routine confirmation."
+        )
+    return rules
+
+
 def process_cve(
     cve: str,
     index: int,
@@ -239,6 +254,7 @@ def process_cve(
         target_dir,
         args.opt,
         safe_objdump_helper_for_prompt(args.cd),
+        prompt_extra_rules(args),
     )
 
     print(f"[{index}/{total}] run {cve} ({len(binaries)} binaries)")
