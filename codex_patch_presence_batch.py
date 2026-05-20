@@ -137,6 +137,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Prompt Codex to start with batched cross-binary scans and inspect only representative binaries in detail.",
     )
+    parser.add_argument(
+        "--compact-final-json",
+        action="store_true",
+        help="Prompt Codex to keep final evidence/reasoning short.",
+    )
     return parser.parse_args()
 
 
@@ -230,6 +235,11 @@ def prompt_extra_rules(args: argparse.Namespace) -> list[str]:
             "- Start with one batched cross-binary scan for the key symbol/call/string pattern across all requested "
             "binaries. Then inspect at most one vulnerable-side representative and one patched-side representative "
             "in detail; classify sibling binaries by the same decisive local pattern."
+        )
+    if args.compact_final_json:
+        rules.append(
+            "- Keep the final JSON compact: at most 2 evidence strings per binary, each under 25 words; reasoning "
+            "under 35 words. Include only decisive addresses/calls/patterns, not full command narratives."
         )
     return rules
 
