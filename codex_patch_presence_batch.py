@@ -132,6 +132,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Prompt Codex to avoid readelf --debug-dump=decodedline unless line mapping is essential.",
     )
+    parser.add_argument(
+        "--batch-first",
+        action="store_true",
+        help="Prompt Codex to start with batched cross-binary scans and inspect only representative binaries in detail.",
+    )
     return parser.parse_args()
 
 
@@ -219,6 +224,12 @@ def prompt_extra_rules(args: argparse.Namespace) -> list[str]:
         rules.append(
             "- Avoid `readelf --debug-dump=decodedline` by default. It is usually verbose; prefer symbols, "
             "relocations, strings, and narrow disassembly for patch-presence evidence."
+        )
+    if args.batch_first:
+        rules.append(
+            "- Start with one batched cross-binary scan for the key symbol/call/string pattern across all requested "
+            "binaries. Then inspect at most one vulnerable-side representative and one patched-side representative "
+            "in detail; classify sibling binaries by the same decisive local pattern."
         )
     return rules
 
