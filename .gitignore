@@ -7,3 +7,5 @@ __pycache__/
 detect*/
 runs/
 binutils/gcc/
+binutils/gcc_strip_debug_keep_symbols/
+metadata/**/*.json

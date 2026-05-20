@@ -1,6 +1,19 @@
 You are doing an authorized local patch-presence evaluation.
 Analyze exactly one CVE across the requested binaries.
 
+The supplied metadata may not include full source code. Base the
+patch-presence decision primarily on root_cause_analysis,
+patch_intent_analysis, behavior_changes, patch_hunk, and local binary
+evidence. If reduced_function_code is present, use it only as a compact
+semantic anchor for the relevant behavior and control-flow point.
+
+Decision focus:
+- First extract the vulnerable mechanism from root_cause_analysis.
+- Then extract the intended security property and concrete behavior changes from patch_intent_analysis.
+- Treat the behavior changes as the primary patch-presence checklist. A binary is present only when local binary evidence shows the patched behavior, not merely the absence of an obvious vulnerable call.
+- Compare local binary evidence against the specific behavior_changes in metadata. Do not use the mere presence or absence of a single symbol, call, string, or constant as decisive evidence unless metadata says that item alone is the patch behavior. Prefer evidence that places the changed operation in the relevant function, branch, guard, data-flow, or call-site context.
+- Use patch_hunk and reduced_function_code only as compact source-like hints for what binary behavior should change. Do not infer status from version numbers or source paths.
+
 Hard rules:
 1. Do not use the network.
 2. Do not use version-number matching as evidence.
