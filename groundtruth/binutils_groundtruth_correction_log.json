@@ -1,0 +1,331 @@
+{
+  "corrections": [
+    {
+      "after": {
+        "patch": [],
+        "vuln": [
+          "2.23.1",
+          "2.23.2",
+          "2.24",
+          "2.25",
+          "2.25.1",
+          "2.26"
+        ]
+      },
+      "before": {
+        "patch": [
+          "2.25",
+          "2.25.1",
+          "2.26"
+        ],
+        "vuln": [
+          "2.24",
+          "2.23.2",
+          "2.23.1"
+        ]
+      },
+      "category": "missing_fix_in_release",
+      "cve_id": "CVE-2014-8738",
+      "evidence_note": "binutils-2_25, binutils-2_25_1, and binutils-2_26 source lack the expected file-size guard.",
+      "from": "patch",
+      "reason": "Release source lacks the amt > bfd_get_size(abfd) archive extended-name-table guard, so these releases still match vulnerable behavior.",
+      "to": "vuln",
+      "versions": [
+        "2.25",
+        "2.25.1",
+        "2.26"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.34",
+          "2.35"
+        ],
+        "vuln": [
+          "2.32",
+          "2.33.1"
+        ]
+      },
+      "before": {
+        "patch": [
+          "2.33.1",
+          "2.34",
+          "2.35"
+        ],
+        "vuln": [
+          "2.32"
+        ]
+      },
+      "category": "missing_fix_in_release",
+      "cve_id": "CVE-2019-17451",
+      "evidence_note": "binutils-2_33_1 source lacks the expected overflow guard.",
+      "from": "patch",
+      "reason": "Release source still has bare total_size += msec->size without the overflow guard.",
+      "to": "vuln",
+      "versions": [
+        "2.33.1"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.36.1",
+          "2.37"
+        ],
+        "vuln": [
+          "2.35.1",
+          "2.35.2"
+        ]
+      },
+      "before": {
+        "patch": [
+          "2.35.2",
+          "2.36.1",
+          "2.37"
+        ],
+        "vuln": [
+          "2.35.1"
+        ]
+      },
+      "category": "missing_fix_in_release",
+      "cve_id": "CVE-2020-35448",
+      "evidence_note": "binutils-2_35_2 source lacks the expected relocation-entry-size guard.",
+      "from": "patch",
+      "reason": "Release source lacks the hdr->sh_entsize == sizeof_rel/sizeof_rela guard.",
+      "to": "vuln",
+      "versions": [
+        "2.35.2"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.28",
+          "2.29",
+          "2.29.1",
+          "2.30"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.29",
+          "2.29.1",
+          "2.30"
+        ],
+        "vuln": [
+          "2.28"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2017-7303",
+      "evidence_note": "External backportfix result and binutils-2_28 source both show the NULL guards already present.",
+      "from": "vuln",
+      "reason": "Release source already has the find_link NULL guards although the dataset label expected vulnerable.",
+      "to": "patch",
+      "versions": [
+        "2.28"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.28",
+          "2.29",
+          "2.29.1",
+          "2.30"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.29",
+          "2.29.1",
+          "2.30"
+        ],
+        "vuln": [
+          "2.28"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2017-7304",
+      "evidence_note": "External backportfix result and binutils-2_28 source both show the sh_link bounds guard already present.",
+      "from": "vuln",
+      "reason": "Release source already has the sh_link >= elf_numsections guard although the dataset label expected vulnerable.",
+      "to": "patch",
+      "versions": [
+        "2.28"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.28",
+          "2.29",
+          "2.29.1",
+          "2.30"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.29",
+          "2.29.1",
+          "2.30"
+        ],
+        "vuln": [
+          "2.28"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2017-7299",
+      "evidence_note": "Primary category backportfix; secondary patch_evolution because commit a961cdd5f13 rewrote the original PR20908 patch shape.",
+      "from": "vuln",
+      "reason": "External backportfix result marks 2.28 as backported; PR20908 later evolved, so the original error string is not a reliable label anchor.",
+      "to": "patch",
+      "versions": [
+        "2.28"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.35",
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": [
+          "2.35"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2020-16590",
+      "evidence_note": "External backportfix result and binutils-2_35 source show the fix already present.",
+      "from": "vuln",
+      "reason": "Release source frees and nulls both buckets and chains although the dataset label expected vulnerable.",
+      "to": "patch",
+      "versions": [
+        "2.35"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.35",
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": [
+          "2.35"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2020-16591",
+      "evidence_note": "External backportfix result and binutils-2_35 source show the fix already present.",
+      "from": "vuln",
+      "reason": "Release source guards num_of_syms assignment with buckets != NULL && chains != NULL although the dataset label expected vulnerable.",
+      "to": "patch",
+      "versions": [
+        "2.35"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.35",
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": [
+          "2.35"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2020-16593",
+      "evidence_note": "External backportfix result and binutils-2_35 source show the fix already present.",
+      "from": "vuln",
+      "reason": "Release source has the spec_var->file != NULL guard although the dataset label expected vulnerable.",
+      "to": "patch",
+      "versions": [
+        "2.35"
+      ]
+    },
+    {
+      "after": {
+        "patch": [
+          "2.35",
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": []
+      },
+      "before": {
+        "patch": [
+          "2.35.1",
+          "2.35.2",
+          "2.36.1"
+        ],
+        "vuln": [
+          "2.35"
+        ]
+      },
+      "category": "backportfix",
+      "cve_id": "CVE-2020-16599",
+      "evidence_note": "External backportfix result and binutils-2_35 source show the fix already present.",
+      "from": "vuln",
+      "reason": "Release source guards nodename and symbol->name before strcmp although the dataset label expected vulnerable.",
+      "to": "patch",
+      "versions": [
+        "2.35"
+      ]
+    }
+  ],
+  "description": "Groundtruth corrections derived from source-review categories backportfix and missing_fix_in_release in binutils_error_statistics.md.",
+  "generated_at": "2026-06-02T09:42:14+08:00",
+  "groundtruth_file": "/home/zhangxb/ClawSpace/agent/straight_detect/groundtruth/binutils.json",
+  "policy": {
+    "backportfix": "Move version from vuln to patch.",
+    "excluded_categories": [
+      "patch_evolution",
+      "other"
+    ],
+    "missing_fix_in_release": "Move version from patch to vuln."
+  },
+  "project": "binutils",
+  "source_report": "/home/zhangxb/ClawSpace/agent/straight_detect/runs/binutils_error_statistics.md",
+  "summary": {
+    "backportfix_version_rows": 7,
+    "correction_groups": 10,
+    "missing_fix_in_release_version_rows": 5,
+    "version_rows": 12
+  }
+}

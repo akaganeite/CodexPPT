@@ -1,0 +1,57 @@
+{
+  "project": "curl",
+  "kind": "build_specific_not_affected",
+  "source_groundtruth": "groundtruth/curl.json",
+  "semantics": "These entries are applicability annotations for the tested build/target context. They do not replace the original version-based groundtruth labels.",
+  "target_context": {
+    "binary_root": "/home/zhangxb/extdisk/packedbins/curl/curl_stripped",
+    "opt": "o0",
+    "run_results": "runs/curl_stripped_o0_unbounded_not_affected_prompt_raw/curl_stripped_o0_unbounded_not_affected_prompt_results.json"
+  },
+  "entries": {
+    "CVE-2016-8617": {
+      "status": "not_affected",
+      "reason_category": "build_arch_not_affected",
+      "reason": "The vulnerable allocation/overflow condition is specific to 32-bit size_t builds. The tested curl binaries are ELF64 x86-64, so the vulnerable mechanism is not applicable even for versions that are version-labeled vulnerable or patched in the original groundtruth.",
+      "versions": [
+        "7.50.1",
+        "7.50.2",
+        "7.50.3",
+        "7.51.0",
+        "7.52.0",
+        "7.52.1"
+      ],
+      "binaries": [
+        "curl-7.50.1-curl",
+        "curl-7.50.2-curl",
+        "curl-7.50.3-curl",
+        "curl-7.51.0-curl",
+        "curl-7.52.0-curl",
+        "curl-7.52.1-curl"
+      ],
+      "evidence": [
+        "Metadata and patch hunk gate the added guard on SIZEOF_SIZE_T == 4.",
+        "The tested binaries are 64-bit x86-64 ELF targets."
+      ]
+    },
+    "CVE-2016-8625": {
+      "status": "not_affected",
+      "reason_category": "feature_not_built",
+      "reason": "The vulnerable mechanism requires IDN support through the old libidn/IDNA2003 backend. The tested vulnerable-version binaries do not have IDN support compiled in, so the vulnerable backend is not applicable.",
+      "versions": [
+        "7.50.1",
+        "7.50.2",
+        "7.50.3"
+      ],
+      "binaries": [
+        "curl-7.50.1-curl",
+        "curl-7.50.2-curl",
+        "curl-7.50.3-curl"
+      ],
+      "evidence": [
+        "Local binary evidence shows IDN support is not present for these tested binaries.",
+        "No old libidn/stringprep/idna/tld backend imports were found in these tested binaries."
+      ]
+    }
+  }
+}

@@ -4,15 +4,17 @@ import re
 from typing import Any
 
 
-VERSION_RE = re.compile(r"^binutils-([0-9]+(?:\.[0-9]+){1,2})-(?:objdump|readelf|nm)$")
+VERSION_RE = re.compile(r"^[A-Za-z0-9_+.-]+-([0-9]+(?:\.[0-9]+){1,3})-[A-Za-z0-9_+.-]+$")
 
 
 def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> dict[str, Any]:
     """Evaluate merged results against CVE -> {vuln, patch} groundtruth.
 
-    not_found is excluded from TC. inconclusive and error are counted in TC, but
-    not in the Accuracy denominator, matching the table definition supplied by
-    the user.
+    not_found is excluded from TC. not_affected is reported separately and also
+    excluded from patch-presence TC because it is an applicability decision
+    rather than a present/absent prediction. inconclusive and error are counted
+    in TC, but not in the Accuracy denominator, matching the table definition
+    supplied by the user.
     """
     counts = {
         "TP": 0,
@@ -22,6 +24,7 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
         "inconclusive": 0,
         "error": 0,
         "not_found": 0,
+        "not_affected": 0,
         "version_not_in_groundtruth": 0,
         "missing_groundtruth_cve": 0,
     }
@@ -52,6 +55,9 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
             status = str(row.get("status", "error")) if isinstance(row, dict) else "error"
             if status == "not_found":
                 counts["not_found"] += 1
+                continue
+            if status == "not_affected":
+                counts["not_affected"] += 1
                 continue
             if status == "inconclusive":
                 counts["inconclusive"] += 1
@@ -102,4 +108,3 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
         },
         "mismatches": mismatches,
     }
-

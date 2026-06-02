@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from codex_batch.anonymize import prepare_anonymous_targets, remap_result_to_original
 from codex_batch.evaluation import evaluate_results
 from codex_batch.io import is_relative_to, load_json, write_json
 from codex_batch.paths import derive_project_paths
@@ -122,6 +123,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Pass --json to codex exec. The final message is still read from --output-last-message.",
     )
+    parser.add_argument(
+        "--no-anonymize-targets",
+        action="store_true",
+        help="Expose original target filenames to codex exec instead of per-CVE anonymous temp copies.",
+    )
     return parser.parse_args()
 
 
@@ -144,6 +150,7 @@ def resolve_run_paths(args: argparse.Namespace) -> dict[str, Path | None]:
     args.cd = cd
     args.prompt_template = args.prompt_template.resolve()
     args.safe_objdump_dir = SCRIPT_DIR / "utils"
+    args.original_cd = cd
     return {
         "project_json": project_json,
         "testset_json": testset_json,
@@ -231,27 +238,69 @@ def process_cve(
         write_json(output, merged)
         return
 
+    anonymous_targets = None
+    run_binaries = binaries
+    run_target_dir = target_dir
+    run_cd = args.original_cd
+    run_safe_objdump_dir = args.safe_objdump_dir
+    run_safe_objdump_helper = safe_objdump_helper_for_prompt(run_cd)
+    run_binary_resolution = None
+    if not args.no_anonymize_targets:
+        anonymous_targets = prepare_anonymous_targets(
+            cve,
+            binaries,
+            target_dir,
+            args.opt,
+            args.safe_objdump_dir,
+        )
+        run_binaries = anonymous_targets.requested_binaries
+        run_target_dir = anonymous_targets.target_dir
+        run_cd = anonymous_targets.cd
+        run_safe_objdump_dir = anonymous_targets.safe_objdump_dir
+        run_safe_objdump_helper = anonymous_targets.safe_objdump_helper
+        run_binary_resolution = anonymous_targets.binary_resolution
+
     prompt = build_prompt(
         args.prompt_template,
         cve,
         metadata[cve],
-        binaries,
-        target_dir,
+        run_binaries,
+        run_target_dir,
         args.opt,
-        safe_objdump_helper_for_prompt(args.cd),
+        run_safe_objdump_helper,
+        run_binary_resolution,
     )
 
     print(f"[{index}/{total}] run {cve} ({len(binaries)} binaries)")
     if args.dry_run:
         (raw_dir / f"{cve}.prompt.txt").write_text(prompt, encoding="utf-8")
+        if anonymous_targets is not None:
+            write_json(raw_dir / f"{cve}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
+            anonymous_targets.cleanup()
         return
 
+    old_cd = args.cd
+    old_target_dir = args.target_dir
+    old_safe_objdump_dir = args.safe_objdump_dir
+    args.cd = run_cd
+    args.target_dir = run_target_dir
+    args.safe_objdump_dir = run_safe_objdump_dir
     try:
+        if anonymous_targets is not None:
+            write_json(raw_dir / f"{cve}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
         rc, final_text, stderr_text, _ = run_codex(prompt, cve, args, raw_dir, schema_path)
         if rc != 0:
             raise RuntimeError(f"codex exec exited {rc}: {stderr_text[-1000:]}")
         parsed = extract_json_object(final_text)
-        merged[cve] = validate_cve_result(cve, binaries, parsed)
+        result = validate_cve_result(cve, run_binaries, parsed)
+        if anonymous_targets is not None:
+            result = remap_result_to_original(
+                result,
+                anonymous_targets.anonymous_to_original,
+                binaries,
+                anonymous_targets.target_dir,
+            )
+        merged[cve] = result
     except Exception as exc:
         merged[cve] = error_result(
             cve,
@@ -259,7 +308,24 @@ def process_cve(
             "See raw per-CVE files in raw_dir.",
             f"codex exec failed or returned invalid JSON: {exc}",
         )
+    finally:
+        args.cd = old_cd
+        args.target_dir = old_target_dir
+        args.safe_objdump_dir = old_safe_objdump_dir
+        if anonymous_targets is not None:
+            anonymous_targets.cleanup()
     write_json(output, merged)
+
+
+def anonymized_mapping_payload(targets: Any) -> dict[str, Any]:
+    return {
+        "target_dir": str(targets.target_dir),
+        "cd": str(targets.cd),
+        "anonymous_to_original": targets.anonymous_to_original,
+        "original_to_anonymous": targets.original_to_anonymous,
+        "original_to_actual": targets.actual_mapping,
+        "safe_objdump_helper": targets.safe_objdump_helper,
+    }
 
 
 def write_metrics(paths: dict[str, Path | None], merged: dict[str, Any]) -> None:

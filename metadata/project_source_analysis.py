@@ -25,9 +25,19 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 DEFAULT_OUTPUT_DIR = "/home/zhangxb/ClawSpace/agent/patch_presence_workflow/outputs"
 DEFAULT_TARGET_ROOT = "/home/zhangxb/patch/related-works/CVE-Dataset/target"
+DEFAULT_EXTREPO_TARGET_ROOT = "/home/zhangxb/extrepo/CVE-Dataset-target"
 
 PROJECT_REPO_DEFAULTS = {
-    "binutils": "/home/zhangxb/patch/related-works/CVE-Dataset/target/binutils-gdb",
+    "binutils": "/home/zhangxb/extrepo/CVE-Dataset-target/binutils-gdb",
+    "curl": "/home/zhangxb/extrepo/CVE-Dataset-target/curl",
+    "ffmpeg": "/home/zhangxb/extrepo/CVE-Dataset-target/ffmpeg",
+    "freetype": "/home/zhangxb/extrepo/CVE-Dataset-target/freetype",
+    "imagemagick": "/home/zhangxb/extrepo/CVE-Dataset-target/imagemagick",
+    "libxml2": "/home/zhangxb/extrepo/CVE-Dataset-target/libxml2",
+    "openjpeg": "/home/zhangxb/extrepo/CVE-Dataset-target/openjpeg",
+    "openssl": "/home/zhangxb/extrepo/CVE-Dataset-target/openssl",
+    "sqlite": "/home/zhangxb/extrepo/CVE-Dataset-target/sqlite",
+    "tcpdump": "/home/zhangxb/extrepo/CVE-Dataset-target/tcpdump",
 }
 
 
@@ -1099,6 +1109,9 @@ def infer_repo_path(project: str, explicit: str = "") -> str:
     candidates.extend([
         os.path.join(DEFAULT_TARGET_ROOT, project),
         os.path.join(DEFAULT_TARGET_ROOT, f"{project}-gdb"),
+        os.path.join(DEFAULT_TARGET_ROOT, f"{project}-new"),
+        os.path.join(DEFAULT_EXTREPO_TARGET_ROOT, project),
+        os.path.join(DEFAULT_EXTREPO_TARGET_ROOT, f"{project}-gdb"),
     ])
 
     for cand in candidates:

@@ -20,9 +20,10 @@ Hard rules:
 3. Use only local binary evidence and the supplied metadata: symbols, strings, disassembly, DWARF line info, calls, branches, constants, and control-flow/guard differences.
 4. Do not open, read, cat, sed, grep, or otherwise inspect source files referenced by DWARF/debug info paths, diff file paths, or absolute paths inside metadata. The metadata JSON included in this prompt is the only source-like context you may use.
 5. You may use line/file annotations printed by binary tools such as objdump --line-numbers, because those annotations come from the binary's debug info. Do not follow those paths to read the actual source files.
-6. If the resolved binary file does not exist under target_dir, return status not_found for that requested binary.
-7. If evidence is not decisive, return inconclusive. Do not guess.
-8. Final response must be valid JSON only, with no markdown fences.
+6. Do not inspect files outside target_dir, except the supplied safe_objdump helper path. Do not scan parent directories or sibling directories for alternate binaries.
+7. If the resolved binary file does not exist under target_dir, return status not_found for that requested binary.
+8. If evidence is not decisive, return inconclusive. Do not guess.
+9. Final response must be valid JSON only, with no markdown fences.
 
 Tool-output budget rules:
 - Prefer `nm`, `strings`, `readelf`, and narrowly filtered commands to locate evidence before disassembly.
@@ -34,7 +35,7 @@ Tool-output budget rules:
 - If you cannot reach decisive evidence inside that budget, return inconclusive for the affected binary instead of continuing exploration.
 - Reuse evidence across binaries when the same symbol and pattern are being checked; do not repeat broad scans for every binary.
 - Avoid repeated exploration: once you have decisive local evidence for a binary, stop inspecting that binary.
-- Start with one batched cross-binary scan for the key symbol/call/string pattern across all requested binaries. Then inspect at most one vulnerable-side representative and one patched-side representative in detail; classify sibling binaries by the same decisive local pattern.
+- Start with one batched cross-binary scan for the key symbol/call/string pattern across all requested binaries. After finding the decisive pattern in one patched-side representative and one vulnerable-side representative, classify sibling binaries using the same narrow symbol/call/string pattern. Do not repeat full-window disassembly for every sibling unless the representative evidence does not transfer.
 - Keep the final JSON compact: at most 2 evidence strings per binary, each under 25 words; reasoning under 35 words. Include only decisive addresses/calls/patterns, not full command narratives.
 
 Status semantics:

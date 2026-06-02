@@ -38,7 +38,8 @@ def run_codex(
     ]
     if not is_relative_to(args.target_dir, args.cd):
         cmd.extend(["--add-dir", str(args.target_dir)])
-    if hasattr(args, "safe_objdump_dir") and not is_relative_to(args.safe_objdump_dir, args.cd):
+    safe_objdump_dir = getattr(args, "safe_objdump_dir", None)
+    if safe_objdump_dir is not None and not is_relative_to(safe_objdump_dir, args.cd):
         cmd.extend(["--add-dir", str(args.safe_objdump_dir)])
     if args.model:
         cmd.extend(["--model", args.model])

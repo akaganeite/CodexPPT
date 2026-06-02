@@ -1,0 +1,27 @@
+{
+  "project": "curl",
+  "source_diff": "/home/zhangxb/patch/related-works/CVE-Dataset/New/Diff/curl/source_diff.json",
+  "diff_dir": "/home/zhangxb/patch/related-works/CVE-Dataset/New/Diff/curl/diff_files",
+  "cveinfo": "/home/zhangxb/patch/related-works/CVE-Dataset/New/cveinfo/curl/curl_parsed.json",
+  "input_source_diff_cves": 52,
+  "selected_cves": 52,
+  "emitted_cves": 52,
+  "total_functions": 94,
+  "diff_files_found": 52,
+  "diff_files_missing": 0,
+  "cveinfo_found": 52,
+  "cveinfo_missing": 0,
+  "functions_with_file": 94,
+  "functions_without_file": 0,
+  "change_types": {
+    "modified": 79,
+    "added": 11,
+    "deleted": 4
+  },
+  "inference_methods": {
+    "function_header_hunk_match": 72,
+    "function_definition_hunk_match": 16,
+    "function_reference_hunk_match": 6
+  },
+  "warnings": []
+}

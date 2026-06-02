@@ -81,6 +81,11 @@ def run_text(cmd: list[str]) -> str:
     return proc.stdout
 
 
+def has_debug_line(binary: Path) -> bool:
+    out = run_text(["readelf", "-S", str(binary)])
+    return any(".debug_line" in line for line in out.splitlines())
+
+
 def load_symbols(binary: Path) -> list[tuple[int, str, str]]:
     out = run_text(["nm", "-an", str(binary)])
     symbols: list[tuple[int, str, str]] = []
@@ -228,27 +233,33 @@ def main() -> int:
     window = clamp(args.window, 1, config["max_window"])
     context = clamp(args.context, 0, config["max_context"])
     max_output = clamp(args.max_output_bytes, config["min_max_output_bytes"], config["max_output_bytes"])
+    line_numbers = args.line_numbers
+    line_number_note = ""
+    if line_numbers and not has_debug_line(binary):
+        line_numbers = False
+        line_number_note = "# note: --line-numbers ignored because binary has no .debug_line section\n"
 
     header: list[str] = []
     if args.symbol:
         start, stop, found = symbol_range(binary, args.symbol, window)
         header.append(f"# safe_objdump symbol={found} range=0x{start:x}:0x{stop:x} window={window}\n")
-        lines = objdump_range(binary, start, stop, args.demangle, args.line_numbers)
+        lines = objdump_range(binary, start, stop, args.demangle, line_numbers)
     elif args.addr is not None:
         half = max(1, window // 2)
         start = max(0, args.addr - half)
         stop = args.addr + half
         header.append(f"# safe_objdump addr=0x{args.addr:x} range=0x{start:x}:0x{stop:x} window={window}\n")
-        lines = objdump_range(binary, start, stop, args.demangle, args.line_numbers)
+        lines = objdump_range(binary, start, stop, args.demangle, line_numbers)
     else:
         header.append(f"# safe_objdump grep={args.grep!r} full-disassembly-scan context={context}\n")
         output, truncated, matched = filter_lines(
-            objdump_stream(binary, args.demangle, args.line_numbers),
+            objdump_stream(binary, args.demangle, line_numbers),
             args.grep,
             context,
             max_output,
         )
         sys.stdout.write("".join(header))
+        sys.stdout.write(line_number_note)
         sys.stdout.write(f"# matches={matched} max_output_bytes={max_output}\n")
         sys.stdout.write(output)
         if truncated:
@@ -258,6 +269,7 @@ def main() -> int:
     if args.grep:
         output, truncated, matched = filter_lines(lines, args.grep, context, max_output)
         sys.stdout.write("".join(header))
+        sys.stdout.write(line_number_note)
         sys.stdout.write(f"# matches={matched} max_output_bytes={max_output}\n")
         sys.stdout.write(output)
         if truncated:
@@ -265,6 +277,7 @@ def main() -> int:
         return 0
 
     sys.stdout.write("".join(header))
+    sys.stdout.write(line_number_note)
     truncated = emit_with_cap(lines, max_output)
     if truncated:
         sys.stdout.write("\n# TRUNCATED: use a smaller --window or add --grep.\n")

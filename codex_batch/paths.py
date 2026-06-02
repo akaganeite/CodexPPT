@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def requested_binary_to_actual(name: str, opt: str = "o0") -> str:
-    for tool in ("readelf", "objdump", "nm"):
+    for tool in ("readelf", "objdump", "nm", "curl"):
         suffix = "-" + tool
         if name.endswith(suffix):
             return name[: -len(suffix)] + "-" + opt + suffix

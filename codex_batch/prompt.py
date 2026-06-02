@@ -15,8 +15,13 @@ def build_prompt(
     target_dir: Path,
     opt: str,
     safe_objdump_helper: str,
+    binary_resolution: dict[str, str] | None = None,
 ) -> str:
-    actual_map = {b: requested_binary_to_actual(b, opt) for b in binaries}
+    actual_map = (
+        binary_resolution
+        if binary_resolution is not None
+        else {b: requested_binary_to_actual(b, opt) for b in binaries}
+    )
     payload = {
         "cve": cve,
         "metadata": metadata,

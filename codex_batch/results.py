@@ -8,7 +8,7 @@ from typing import Any
 from .io import write_json
 
 
-STATUS_VALUES = {"present", "absent", "inconclusive", "not_found", "error"}
+STATUS_VALUES = {"present", "absent", "not_affected", "inconclusive", "not_found", "error"}
 
 
 def extract_json_object(text: str) -> Any:
@@ -111,7 +111,7 @@ def write_schema(path: Path) -> None:
                         "binary": {"type": "string"},
                         "status": {
                             "type": "string",
-                            "enum": ["present", "absent", "inconclusive", "not_found"],
+                            "enum": ["present", "absent", "not_affected", "inconclusive", "not_found"],
                         },
                         "confidence": {
                             "type": "string",
@@ -127,4 +127,3 @@ def write_schema(path: Path) -> None:
         "additionalProperties": False,
     }
     write_json(path, schema)
-
