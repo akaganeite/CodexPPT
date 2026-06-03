@@ -1,0 +1,405 @@
+[
+  {
+    "cve": "CVE-2017-12799",
+    "commands": [
+      {
+        "id": "item_29",
+        "kind": "objdump_scan",
+        "output_bytes": 303426,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re,sys\nbins=['binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump','binutils-2.31-o0-objdump']\nbase='gcc_stripped/'\n# known bfd_malloc-like wrapper addrs found from malloc callers? We'll just find calls to malloc@plt and wrapper addresses manually? Use objdump full text and group funcs by endbr/prologue.\nfor b in bins:\n    text=subprocess.check_output(['objdump','-d','-M','intel',base+b], text=True, errors='replace')\n    lines=text.splitlines()\n    # split by function-like endbr64 labels? stripped only labels for PLT and dynamic maybe not all funcs. Use endbr64 lines addresses as starts.\n    # find candidates with add rax,0x1 then call an internal target then mov BYTE PTR [rax],0 pattern nearby.\n    cand=[]\n    for i,l in enumerate(lines):\n        if 'add    rax,0x1' in l:\n            win='\\\\n'.join(lines[i:i+45])\n            if 'mov    rdi,rax' in win and 'call' in win and 'BYTE PTR' in win and ',0x0' in win:\n                # find enclosing previous endbr or blank label\n                start=None\n                for j in range(i, max(-1,i-80), -1):\n                    if 'endbr64' in lines[j]:\n                        start=lines[j].split(':')[0].strip(); break\n                cand.append((start, i+1, '\\\\n'.join(lines[max(0,i-15):i+45])))\n    print('===',b,'candidates',len(cand))\n    for start,ln,snip in cand[:30]:\n        print('START',start,'line',ln)\n        print(snip[:2500])\n        print('---')\nPY\""
+      },
+      {
+        "id": "item_30",
+        "kind": "objdump_scan",
+        "output_bytes": 134642,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins={\n'2.29':'gcc_stripped/binutils-2.29-o0-objdump',\n'2.29.1':'gcc_stripped/binutils-2.29.1-o0-objdump',\n'2.30':'gcc_stripped/binutils-2.30-o0-objdump',\n'2.31':'gcc_stripped/binutils-2.31-o0-objdump',\n}\n# find bfd_malloc wrapper: tiny function that calls malloc@plt and handles size 0; from known for first two, automatically by first function after call malloc? We'll use disassembly labels: wrappers are call targets frequently with malloc@plt in first 0x100 bytes.\nfor ver,path in bins.items():\n    text=subprocess.check_output(['objdump','-d','-M','intel',path],text=True,errors='replace')\n    lines=text.splitlines()\n    # find functions by endbr64 line addresses\n    starts=[]\n    for i,l in enumerate(lines):\n        m=re.match(r'\\\\s*([0-9a-f]+):\\\\s+.*endbr64',l)\n        if m: starts.append((int(m.group(1),16),i))\n    funcs=[]\n    for idx,(addr,i) in enumerate(starts):\n        j=starts[idx+1][1] if idx+1<len(starts) else len(lines)\n        funcs.append((addr,i,j))\n    # detect malloc wrapper target: contains cmp [rbp-0x18],0; call malloc@plt; returns pointer; small <30 lines\n    wrappers=[]\n    for addr,i,j in funcs:\n        body='\\\\n'.join(lines[i:j])\n        if 'call' in body and '<malloc@plt>' in body and len(body.splitlines())<80:\n            wrappers.append((addr, len(body.splitlines()), body[:500]))\n    print('===',ver,'malloc-like wrappers',[(hex(a),n) for a,n,_ in wrappers[:8]])\n    # pick one with only malloc not realloc\n    malloc_addr=wrappers[0][0] if wrappers else None\n    # Actually the bfd_malloc wrapper likely is first wrapper with malloc@plt and no other call besides failure; choose function with 'cmp QWORD PTR [rbp-0x18],0x0' and 'mov QWORD PTR [rbp-0x18],0x1'.\n    for a,n,b in wrappers:\n        if 'mov    QWORD PTR [rbp-0x18],0x1' in b or 'mov    QWORD PTR [rbp-0x18],0x1' in '\\\\n'.join(lines[[x[0] for x in funcs].index(a) if False else 0:0]):\n            pass\n    # use known pattern search via body full\n    for addr,i,j in funcs:\n        body='\\\\n'.join(lines[i:j])\n        if '<malloc@plt>' in body and 'QWORD PTR [rbp-0x18],0x1' in body and len(body.splitlines())<60:\n            malloc_addr=addr\n            break\n    print('malloc_addr',hex(malloc_addr) if malloc_addr else None)\n    if not malloc_addr: continue\n    callpat=f'call   {malloc_addr:x}'\n    cands=[]\n    for addr,i,j in funcs:\n        body='\\\\n'.join(lines[i:j])\n        if callpat in body:\n            # find null write after add rax,rdx within function\n            has_null='mov    BYTE PTR [rax],0x0' in body\n            # find guard patterns near top\n            top='\\\\n'.join(lines[i:i+50])\n            if has_null:\n                cands.append((addr,i,j,body.count(callpat),len(body.splitlines()),top))\n    print('cands with call malloc wrapper and byte-null',len(cands))\n    for addr,i,j,cnt,n,top in cands[:20]:\n        print(hex(addr),'lines',n,'calls',cnt)\n        print(top[:1800])\n        print('---')\nPY\""
+      },
+      {
+        "id": "item_31",
+        "kind": "objdump_scan",
+        "output_bytes": 31332,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins=['binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump','binutils-2.31-o0-objdump']\nbase='gcc_stripped/'\nfor b in bins:\n    text=subprocess.check_output(['objdump','-d','-M','intel',base+b], text=True, errors='replace')\n    lines=text.splitlines()\n    starts=[]\n    for i,l in enumerate(lines):\n        m=re.match(r'\\\\s*([0-9a-f]+):\\\\s+.*endbr64',l)\n        if m: starts.append((int(m.group(1),16),i))\n    funcs=[]\n    for idx,(addr,i) in enumerate(starts):\n        j=starts[idx+1][1] if idx+1<len(starts) else len(lines)\n        funcs.append((addr,i,j))\n    print('\\\\n===',b)\n    results=[]\n    for addr,i,j in funcs:\n        body=lines[i:j]\n        textb='\\\\n'.join(body)\n        # find stack slot storing rdx near top\n        rdxslots=[]\n        for k,l in enumerate(body[:25]):\n            m=re.search(r'mov\\\\s+QWORD PTR \\\\[rbp-(0x[0-9a-f]+)\\\\],rdx',l)\n            if m: rdxslots.append(m.group(1))\n        if not rdxslots: continue\n        if 'mov    BYTE PTR [rax],0x0' not in textb and 'mov    BYTE PTR [rdx],0x0' not in textb: continue\n        # require early cmp/test on rdx slot\n        score=0; evid=[]\n        for slot in rdxslots:\n            top='\\\\n'.join(body[:80])\n            if f'QWORD PTR [rbp-{slot}],0x0' in top or f'QWORD PTR [rbp-{slot}]' in top and 'test' in top:\n                score+=3; evid.append('early size ref '+slot)\n            # add size+1 pattern\n            if re.search(rf'mov\\\\s+rax,QWORD PTR \\\\[rbp-{slot}\\\\].{{0,120}}add\\\\s+rax,0x1', textb, re.S):\n                score+=3; evid.append('size+1 '+slot)\n            if re.search(rf'mov\\\\s+rdx,QWORD PTR \\\\[rbp-{slot}\\\\].{{0,100}}add\\\\s+rax,rdx', textb, re.S):\n                score+=2; evid.append('buf[size] '+slot)\n            if re.search(rf'mov\\\\s+rax,QWORD PTR \\\\[rbp-{slot}\\\\].{{0,120}}mov\\\\s+rsi,rax', textb, re.S):\n                score+=1\n        if score>=6:\n            call_count=sum(1 for l in body if '\\\\tcall' in l or ' call ' in l)\n            results.append((score,addr,j-i,call_count,evid,body[:120]))\n    results=sorted(results, reverse=True)[:30]\n    for score,addr,n,calls,evid,body in results:\n        print(hex(addr),'score',score,'lines',n,'calls',calls,evid)\n        print('\\\\n'.join(body[:70]))\n        print('---')\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-12967",
+    "commands": [
+      {
+        "id": "item_14",
+        "kind": "addr_convert",
+        "output_bytes": 204,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nvals=[2082880,2084424,2084605,2087040,2088584,2088765,2095808,2097336,2097517,1975668,1976993,1977113]\nfor v in vals:\n print(v, hex(v))\nPY\""
+      },
+      {
+        "id": "item_18",
+        "kind": "objdump_scan",
+        "output_bytes": 47811,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re,sys\nbins=['binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump','binutils-2.31-o0-objdump']\nfor b in bins:\n p='gcc_stripped/'+b\n print('====',b)\n out=subprocess.check_output(['objdump','-d','--no-show-raw-insn',p],text=True,errors='ignore')\n lines=out.splitlines()\n # find copy loop lines movzbl (%rax),... and mov %dl,(%rax) within 10 lines, addl \"'$0x1, cmp/jb nearby\n hits=[]\n for i,l in enumerate(lines):\n  if '\"'movzbl (%rax)' in l:\n   win='\\\\n'.join(lines[max(0,i-15):i+30])\n   if ('mov    %dl,(%rax)' in win or 'mov    %dl,(%rdx)' in win or 'mov    %al,(%rdx)' in win) and 'addl   \"'$0x1'\"' in win:\n    if re.search(r'cmp.*%rax|cmp.*\\\\(%rbp\\\\)',win) and re.search(r'\\\\bj[abeglns][a-z]*\\\\b',win):\n     addr=re.match(r'\\\\s*([0-9a-f]+):',l)\n     hits.append((int(addr.group(1),16) if addr else 0,win))\n print('hits',len(hits))\n for a,w in hits[:20]:\n  print('--- hit at',hex(a))\n  print(w)\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-14940",
+    "commands": [
+      {
+        "id": "item_19",
+        "kind": "objdump_scan",
+        "output_bytes": 26277,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins=['binutils-2.29-o0-objdump','binutils-2.30-o0-objdump','binutils-2.31-o0-objdump','binutils-2.31.1-o0-objdump']\nfor b in bins:\n    path='gcc_stripped/'+b\n    p=subprocess.run(['objdump','-d','-Mintel',path],capture_output=True,text=True,check=True)\n    lines=p.stdout.splitlines()\n    cand=[]\n    for i,l in enumerate(lines):\n        if 'mov' in l and 'QWORD PTR [rax+0x8]' in l:\n            win=lines[i:i+8]\n            s='\\\\n'.join(win)\n            if 'movzx' in s and 'BYTE PTR [rax]' in s and ('cmp    al,0x3' in s or 'cmp    eax,0x3' in s):\n                # check test between mov [rax+8] and movzx\n                patched=any(('test   rax,rax' in x or 'cmp    rax,0x0' in x or 'cmp    QWORD PTR' in x and ',0x0' in x) for x in win)\n                cand.append((i,patched,win))\n    print('\\\\n###',b,'candidates',len(cand))\n    for i,(idx,patched,win) in enumerate(cand[:50]):\n        print('--- cand',i,'line',idx,'patched?',patched)\n        print('\\\\n'.join(win))\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-14974",
+    "commands": [
+      {
+        "id": "item_36",
+        "kind": "objdump_scan",
+        "output_bytes": 46021,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nb='gcc_stripped/binutils-2.29-o0-objdump'\ntext=subprocess.check_output(['objdump','-d',b], text=True, errors='ignore')\nlines=text.splitlines()\nqidx=[i for i,l in enumerate(lines) if 'call' in l and '<qsort@plt>' in l]\nfor i in qidx:\n    # find preceding cmpq \"'$0x0,-... within 120 lines and print concise\n    addr=lines[i].strip().split('\"':')[0]\n    prev=[]\n    for j in range(max(0,i-120),i):\n        l=lines[j]\n        if re.search(r'call\\\\s',l) or re.search(r'cmp[qbl]?\\\\s+\\\\\"'$0x0,'\"',l) or re.search(r'\\\\b(jle|jl|js|jns|jg|jge|je|jne)\\\\b',l):\n            prev.append((j,l.strip()))\n    print('\\\\nQsort at',addr)\n    for j,l in prev[-25:]: print(l)\n    print('--- qsort ctx ---')\n    for l in lines[i-8:i+3]: print(l)\nPY\""
+      },
+      {
+        "id": "item_46",
+        "kind": "objdump_scan",
+        "output_bytes": 6166,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins=['gcc_stripped/binutils-2.29-o0-objdump','gcc_stripped/binutils-2.30-o0-objdump','gcc_stripped/binutils-2.31-o0-objdump','gcc_stripped/binutils-2.31.1-o0-objdump']\nfor b in bins:\n    text=subprocess.check_output(['objdump','-d',b], text=True, errors='ignore')\n    lines=text.splitlines()\n    # collect instruction addr lines\n    instr=[]\n    for idx,l in enumerate(lines):\n        m=re.match(r'\\\\s*([0-9a-f]+):\\\\s*(.*)',l)\n        if m:\n            instr.append((int(m.group(1),16), idx, l))\n    # starts at lines containing endbr64\n    starts=[]\n    for addr,idx,l in instr:\n        if 'endbr64' in l:\n            starts.append((addr,idx))\n    starts.append((10**18,len(lines)))\n    funcs=[]\n    for k in range(len(starts)-1):\n        saddr,sidx=starts[k]; eaddr,eidx=starts[k+1]\n        flines=lines[sidx:eidx]\n        if any('qsort@plt' in l for l in flines) and any('0x350(%rax)' in l for l in flines):\n            funcs.append((saddr,eaddr,flines))\n    print('\\\\n===',b,'functions with qsort and xvec+0x350:',len(funcs))\n    for s,e,fl in funcs:\n        q=[re.match(r'\\\\s*([0-9a-f]+):',l).group(1) for l in fl if 'qsort@plt' in l]\n        c350=[]\n        for i,l in enumerate(fl):\n            if '0x350(%rax)' in l:\n                c350.append(i)\n        print(f'func {s:x}-{e:x} qsort {q}')\n        for ci in c350[:4]:\n            print('  around 0x350:')\n            for l in fl[max(0,ci-5):min(len(fl),ci+20)]:\n                if '0x350(%rax)' in l or 'call' in l or 'cmpq' in l or 'jg' in l or 'jle' in l or 'jns' in l or 'qsort@plt' in l or 'mov    \"'$0xffff'\"' in l:\n                    print('   ',l.strip())\n        print('  qsortctx:')\n        for i,l in enumerate(fl):\n            if 'qsort@plt' in l:\n                for ll in fl[max(0,i-15):i+3]:\n                    if 'call' in ll or 'cmp' in ll or 'jg' in ll or 'jle' in ll or 'jns' in ll or 'mov    \"'$0xffff'\"' in ll or 'mov    \"'$0x0'\"' in ll or 'qsort@plt' in ll:\n                        print('   ',ll.strip())\n        print()\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-15225",
+    "commands": [
+      {
+        "id": "item_23",
+        "kind": "objdump_scan",
+        "output_bytes": 3244,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re,sys\nbins=['binutils-2.29-o0-objdump','binutils-2.30-o0-objdump','binutils-2.31-o0-objdump','binutils-2.31.1-o0-objdump']\nfor b in bins:\n    path='gcc_stripped/'+b\n    frames=subprocess.check_output(['readelf','--debug-dump=frames',path],text=True,errors='ignore')\n    fdes=[]\n    for line in frames.splitlines():\n        m=re.search(r'FDE .* pc=([0-9a-fA-F]+)\\\\.\\\\.([0-9a-fA-F]+)',line)\n        if m:\n            fdes.append((int(m.group(1),16),int(m.group(2),16)))\n    dis=subprocess.check_output(['objdump','-d',path],text=True,errors='ignore')\n    ins=[]\n    for line in dis.splitlines():\n        m=re.match(r'\\\\s*([0-9a-fA-F]+):\\\\s*(.*)',line)\n        if m:\n            ins.append((int(m.group(1),16),m.group(2)))\n    # count calls per FDE; search for clusters with free calls and internal calls\n    idx=0\n    candidates=[]\n    for start,end in fdes:\n        while idx < len(ins) and ins[idx][0] < start: idx+=1\n        j=idx\n        lines=[]\n        while j < len(ins) and ins[j][0] < end:\n            lines.append(ins[j][1]); j+=1\n        free_calls=sum('call' in x and 'free@plt' in x for x in lines)\n        close_plt=sum('call' in x and ('close@plt' in x or 'fclose@plt' in x) for x in lines)\n        total_calls=sum('\\\\tcall' in x or ' call' in x for x in lines)\n        if free_calls>=6:\n            candidates.append((start,end,free_calls,total_calls,close_plt))\n    print('\\\\n',b,'FDEs',len(fdes),'candidates',len(candidates))\n    for c in candidates[:60]:\n        print('  %x..%x free=%d calls=%d closeplt=%d len=%d'% (c[0],c[1],c[2],c[3],c[4],c[1]-c[0]))\nPY\""
+      },
+      {
+        "id": "item_32",
+        "kind": "objdump_scan",
+        "output_bytes": 102,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nfor b in ['binutils-2.29-o0-objdump','binutils-2.30-o0-objdump','binutils-2.31-o0-objdump','binutils-2.31.1-o0-objdump']:\n p='gcc_stripped/'+b\n # Use disassembly snippets already known; count calls to free in the target cleanup FDE and internal non-free calls after CU loop.\n print(b)\nPY\""
+      },
+      {
+        "id": "item_33",
+        "kind": "objdump_scan",
+        "output_bytes": 5030,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins = {\n 'binutils-2.29-o0-objdump': (0x13eef9,0x13f276),\n 'binutils-2.30-o0-objdump': (0x1468d9,0x146c93),\n 'binutils-2.31-o0-objdump': (0x136e47,0x137201),\n 'binutils-2.31.1-o0-objdump': (0x136e47,0x137201),\n}\nfor b,(start,end) in bins.items():\n    p='gcc_stripped/'+b\n    dis=subprocess.check_output(['objdump','-d',p],text=True,errors='ignore')\n    funcs=[]\n    cur=[]; cur_start=None\n    for line in dis.splitlines():\n        m=re.match(r'\"'^([0-9a-f]+) <'\"', line)\n        if m:\n            if cur_start is not None:\n                funcs.append((cur_start,cur))\n            cur_start=int(m.group(1),16); cur=[]\n        elif cur_start is not None:\n            cur.append(line)\n    if cur_start is not None: funcs.append((cur_start,cur))\n    matches=[]\n    for fs,lines in funcs:\n        s='\\\\n'.join(lines)\n        if re.search(r'mov\\\\s+0x10\\\\(%rax\\\\),%rax',s) and re.search(r'movq\\\\s+\\\\\"'$0x0,0x10'\"\\\\(%rax\\\\)',s) and re.search(r'call',s):\n            # small functions only likely\n            addrs=[]\n            for l in lines:\n                mm=re.match(r'\\\\s*([0-9a-f]+):',l)\n                if mm: addrs.append(int(mm.group(1),16))\n            if addrs and (max(addrs)-min(addrs)<0x80):\n                matches.append(fs)\n    # calls in cleanup\n    snippet=subprocess.check_output(['objdump','-d',f'--start-address=0x{start:x}',f'--stop-address=0x{end:x}',p],text=True,errors='ignore')\n    calls=[]\n    for line in snippet.splitlines():\n        if '\\\\tcall' in line:\n            calls.append(line.strip())\n    print('\\\\n'+b)\n    print('hashfree-like functions:', ', '.join(hex(x) for x in matches[:10]))\n    print('cleanup call targets:')\n    for c in calls:\n        print(' ',c)\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-17126",
+    "commands": [
+      {
+        "id": "item_15",
+        "kind": "file_or_json_helper",
+        "output_bytes": 203,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport struct\n# ELF64 little-endian executable header only, no section headers\nEI_MAG=b'\\\\x7fELF'; ei_class=2; ei_data=1; ei_version=1; ei_osabi=0; ei_abiver=0\nident=EI_MAG+bytes([ei_class,ei_data,ei_version,ei_osabi,ei_abiver])+bytes(7)\nhdr=struct.pack('<16sHHIQQQIHHHHHH', ident, 1, 62, 1, 0, 0, 0, 0, 64, 0, 0, 64, 0, 0)\nopen('/tmp/cve-2017-17126-no-shdr.elf','wb').write(hdr)\nPY\nfor b in gcc_stripped/binutils-2.29.1-o0-objdump gcc_stripped/binutils-2.30-o0-objdump gcc_stripped/binutils-2.31-o0-objdump gcc_stripped/binutils-2.31.1-o0-objdump; do printf '%s: ' \\\"\"'$b\"; \"$b\" --dwarf=info /tmp/cve-2017-17126-no-shdr.elf >/tmp/out 2>/tmp/err; printf '\"'rc=%s ' \\\"\"'$?\"; wc -c </tmp/out; wc -c </tmp/err; done'"
+      },
+      {
+        "id": "item_18",
+        "kind": "file_or_json_helper",
+        "output_bytes": 0,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport struct, os\nident=b'\\\\x7fELF'+bytes([2,1,1,0,0])+bytes(7)\nhdr=struct.pack('<16sHHIQQQIHHHHHH', ident, 1, 62, 1, 0, 0, 0, 0, 64, 0, 0, 64, 0, 0)\npath='/tmp/cve-2017-17126-no-shdr.elf'\nwith open(path,'wb') as f: f.write(hdr)\nprint(path, os.path.getsize(path))\nPY\nls -l /tmp/cve-2017-17126-no-shdr.elf\nfile /tmp/cve-2017-17126-no-shdr.elf\nfor b in gcc_stripped/binutils-2.29.1-o0-objdump gcc_stripped/binutils-2.30-o0-objdump gcc_stripped/binutils-2.31-o0-objdump gcc_stripped/binutils-2.31.1-o0-objdump; do printf '\\\\n== %s ==\\\\n' \\\"\"'$b\"; \"$b\" --dwarf=info /tmp/cve-2017-17126-no-shdr.elf >/tmp/out 2>/tmp/err; printf '\"'rc=%s out=%s err=%s\\\\n' \\\"\"'$?\" \"$(wc -c </tmp/out)\" \"$(wc -c </tmp/err)\"; head -20 /tmp/err; head -20 /tmp/out; done'"
+      },
+      {
+        "id": "item_23",
+        "kind": "file_or_json_helper",
+        "output_bytes": 685,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport struct, os\npath='/tmp/cve-2017-17126-etexec-no-shdr.elf'\nident=b'\\\\x7fELF'+bytes([2,1,1,0,0])+bytes(7)\neh=struct.pack('<16sHHIQQQIHHHHHH', ident, 2, 62, 1, 0x400078, 64, 0, 0, 64, 56, 1, 0, 0, 0)\nph=struct.pack('<IIQQQQQQ', 1, 5, 0, 0x400000, 0x400000, 0x100, 0x100, 0x1000)\nblob=eh+ph+b'\\\\x90\\\\xc3'+b'\\\\0'*(0x100-len(eh)-len(ph)-2)\nopen(path,'wb').write(blob)\nprint(path, os.path.getsize(path))\nPY\nfile /tmp/cve-2017-17126-etexec-no-shdr.elf\nfor b in gcc_stripped/binutils-2.29.1-o0-objdump gcc_stripped/binutils-2.30-o0-objdump gcc_stripped/binutils-2.31-o0-objdump gcc_stripped/binutils-2.31.1-o0-objdump; do printf '\\\\n== %s ==\\\\n' \\\"\"'$b\"; \"$b\" --dwarf=info /tmp/cve-2017-17126-etexec-no-shdr.elf >/tmp/out 2>/tmp/err; printf '\"'rc=%s out=%s err=%s\\\\n' \\\"\"'$?\" \"$(wc -c </tmp/out)\" \"$(wc -c </tmp/err)\"; head -20 /tmp/err; head -40 /tmp/out; done'"
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-8392",
+    "commands": [
+      {
+        "id": "item_20",
+        "kind": "objdump_scan",
+        "output_bytes": 4483,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins=['gcc_stripped/binutils-2.28-o0-objdump','gcc_stripped/binutils-2.29-o0-objdump','gcc_stripped/binutils-2.29.1-o0-objdump','gcc_stripped/binutils-2.30-o0-objdump']\nfor b in bins:\n    out=subprocess.check_output(['objdump','-d','-Mintel',b], text=True, errors='ignore')\n    lines=out.splitlines()\n    # collect windows that likely match asymbol scan loop: and 0x100 and and 0x2 near deref [tmp] and compares to section/offset\n    hits=[]\n    for i,l in enumerate(lines):\n        if 'and    eax,0x100' in l or 'and    eax,0x2' in l:\n            lo=max(0,i-80); hi=min(len(lines),i+80)\n            w='\\\\n'.join(lines[lo:hi])\n            score=0\n            for pat in ['and    eax,0x100','and    eax,0x2','QWORD PTR [rax+0x20]','QWORD PTR [rax+0x10]','QWORD PTR [rbp-','mov    QWORD PTR [rbp-']:\n                if pat in w: score += 1\n            # exact loop-like deref: mov rax,[tmp]; mov rax,[rax]\n            if w.count('QWORD PTR [rax]')>=4: score+=1\n            if score>=5:\n                # get center addr\n                m=re.search(r'\"'^'\"\\\\s*([0-9a-f]+):', l)\n                addr=m.group(1) if m else '?' \n                hits.append((int(addr,16) if addr\"'!='\"'?' else 0,i,score))\n    # merge nearby hits\n    merged=[]\n    for addr,i,score in hits:\n        if merged and i-merged[-1][2] < 120:\n            merged[-1]=(merged[-1][0], addr, i, max(merged[-1][3],score))\n        else:\n            merged.append((addr,addr,i,score))\n    print('\\\\n==',b,'hits',len(merged))\n    for start,end,i,score in merged[:30]:\n        print(hex(start),hex(end),'line',i,'score',score)\nPY\""
+      },
+      {
+        "id": "item_21",
+        "kind": "objdump_scan",
+        "output_bytes": 196874,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins=['gcc_stripped/binutils-2.28-o0-objdump','gcc_stripped/binutils-2.29-o0-objdump','gcc_stripped/binutils-2.29.1-o0-objdump','gcc_stripped/binutils-2.30-o0-objdump']\nfor b in bins:\n    out=subprocess.check_output(['objdump','-d','-Mintel',b], text=True, errors='ignore')\n    lines=[l for l in out.splitlines() if re.match(r'\\\\s*[0-9a-f]+:',l)]\n    starts=[i for i,l in enumerate(lines) if re.search(r'\\\\bendbr64\\\\b',l)]\n    starts.append(len(lines))\n    funcs=[]\n    for a,bidx in zip(starts, starts[1:]):\n        seg=lines[a:bidx]\n        text='\\\\n'.join(seg)\n        score=0\n        pats=['and    eax,0x100','and    eax,0x2','QWORD PTR [rax+0x20]','QWORD PTR [rax+0x10]','add    QWORD PTR [rbp-', 'mov    rax,QWORD PTR [rax]']\n        for p in pats:\n            if p in text: score+=1\n        if text.count('mov    rax,QWORD PTR [rax]') >= 4: score+=1\n        if 'and    eax,0x10' in text: score+=1\n        if score>=7:\n            m=re.match(r'\\\\s*([0-9a-f]+):', seg[0])\n            start=int(m.group(1),16)\n            funcs.append((start,score,len(seg),seg))\n    print('\\\\n==',b,'candidate funcs',len(funcs))\n    for start,score,n,seg in funcs[:20]:\n        print(hex(start),'score',score,'ninsn',n)\n        # print mini snippet around first and eax,0x100 in func\n        idx=next((i for i,l in enumerate(seg) if 'and    eax,0x100' in l), None)\n        if idx is not None:\n            for l in seg[max(0,idx-25):min(len(seg),idx+45)]:\n                print(l)\n            print('---')\nPY\""
+      },
+      {
+        "id": "item_22",
+        "kind": "objdump_scan",
+        "output_bytes": 500759,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re,sys\nbins=['gcc_stripped/binutils-2.28-o0-objdump','gcc_stripped/binutils-2.29-o0-objdump','gcc_stripped/binutils-2.29.1-o0-objdump','gcc_stripped/binutils-2.30-o0-objdump']\nfor b in bins:\n    out=subprocess.check_output(['objdump','-d','-Mintel',b], text=True, errors='ignore')\n    lines=[l for l in out.splitlines() if re.match(r'\\\\s*[0-9a-f]+:',l)]\n    starts=[i for i,l in enumerate(lines) if 'endbr64' in l]\n    starts.append(len(lines))\n    cands=[]\n    for a,bidx in zip(starts, starts[1:]):\n        seg=lines[a:bidx]; text='\\\\n'.join(seg)\n        # Pattern for _bfd_dwarf2_find_nearest_line's symbol search: compare symbol fields to abfd/section/offset + flags 0x100/0x2 and iterate pointer array by +8 until *tmp==0.\n        score=0\n        if 'and    eax,0x100' in text: score+=2\n        if 'and    eax,0x2' in text: score+=2\n        if re.search(r'cmp\\\\s+rdx,rax|cmp\\\\s+rax,rdx', text) and text.count('QWORD PTR [rbp-')>30: score+=1\n        if text.count('QWORD PTR [rax+0x20]')>=2: score+=1\n        if text.count('QWORD PTR [rax+0x10]')>=1: score+=1\n        if text.count('add    QWORD PTR [rbp-')>=1: score+=1\n        if re.search(r'add\\\\s+QWORD PTR \\\\[rbp-0x[0-9a-f]+\\\\],0x8', text): score+=2\n        # incoming many args saved at positive rbp offsets? \n        if re.search(r'QWORD PTR \\\\[rbp\\\\+0x10\\\\]', text) and re.search(r'QWORD PTR \\\\[rbp\\\\+0x18\\\\]', text) and re.search(r'QWORD PTR \\\\[rbp\\\\+0x20\\\\]', text): score+=2\n        if score>=9:\n            start=int(re.match(r'\\\\s*([0-9a-f]+):',seg[0]).group(1),16)\n            cands.append((start,score,len(seg),seg))\n    print('\\\\n==',b,'cands',len(cands))\n    for start,score,n,seg in cands[:20]:\n        print('FUNC',hex(start),'score',score,'ninsn',n)\n        # snippets around and 0x100/0x2 and add ptr\n        idxs=[]\n        for i,l in enumerate(seg):\n            if 'and    eax,0x100' in l or 'and    eax,0x2' in l or re.search(r'add\\\\s+QWORD PTR \\\\[rbp-0x[0-9a-f]+\\\\],0x8',l):\n                idxs.append(i)\n        printed=set()\n        for idx in idxs[:5]:\n            lo=max(0,idx-12); hi=min(len(seg),idx+25)\n            key=(lo,hi)\n            if key in printed: continue\n            printed.add(key)\n            print('--- around',seg[idx].strip())\n            for l in seg[lo:hi]: print(l)\nPY\""
+      },
+      {
+        "id": "item_23",
+        "kind": "objdump_scan",
+        "output_bytes": 2160,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nb='gcc_stripped/binutils-2.28-o0-objdump'\nout=subprocess.check_output(['objdump','-d','-Mintel',b], text=True, errors='ignore')\nlines=[l for l in out.splitlines() if re.match(r'\\\\s*[0-9a-f]+:',l)]\nstarts=[i for i,l in enumerate(lines) if 'endbr64' in l]\nstarts.append(len(lines))\nrows=[]\nfor a,bidx in zip(starts, starts[1:]):\n    seg=lines[a:bidx]; text='\\\\n'.join(seg)\n    c={}\n    for pat in ['DWORD PTR [rax+0x18]','QWORD PTR [rax+0x20]','QWORD PTR [rax+0x10]','and    eax,0x100','and    eax,0x2','add    QWORD PTR [rbp-']:\n        c[pat]=text.count(pat)\n    loop_add=len(re.findall(r'add\\\\s+QWORD PTR \\\\[rbp-0x[0-9a-f]+\\\\],0x8',text))\n    # incoming args pattern\n    args=sum(1 for off in ['+0x10','+0x18','+0x20','+0x28','+0x30'] if f'QWORD PTR [rbp{off}]' in text)\n    score=c['DWORD PTR [rax+0x18]']+c['QWORD PTR [rax+0x20]']+c['QWORD PTR [rax+0x10]']+3*c['and    eax,0x100']+2*c['and    eax,0x2']+2*loop_add+args\n    if c['and    eax,0x100'] and c['and    eax,0x2'] and c['DWORD PTR [rax+0x18]'] and c['QWORD PTR [rax+0x20]'] and c['QWORD PTR [rax+0x10]']:\n        start=int(re.match(r'\\\\s*([0-9a-f]+):',seg[0]).group(1),16)\n        rows.append((score,start,len(seg),c,loop_add,args))\nrows.sort(reverse=True)\nfor score,start,n,c,loop,args in rows[:80]:\n    print(hex(start),'score',score,'n',n,'loopadd',loop,'args',args,c)\nPY\""
+      },
+      {
+        "id": "item_47",
+        "kind": "objdump_scan",
+        "output_bytes": 7391,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re\nbins=['binutils-2.28-o0-objdump','binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump']\nfor b in bins:\n    p='gcc_stripped/'+b\n    out=subprocess.check_output(['objdump','-d','-Mintel',p], text=True, errors='ignore')\n    lines=out.splitlines()\n    cand=[]\n    for i,l in enumerate(lines):\n        if 'and    eax,0x100' in l:\n            win='\\\\n'.join(lines[max(0,i-35):min(len(lines),i+45)])\n            if 'and    eax,0x2' in win and ('[rbp-0x98]' in win or '[rbp-0x90]' in win) and ('add    QWORD PTR' in win):\n                # get first address in window around candidate\n                cand.append((i,win))\n    print('###',b,'candidates',len(cand))\n    for i,win in cand[:5]:\n        # print compact lines address around the and\n        print('--- candidate line',i)\n        for line in win.splitlines():\n            if any(x in line for x in ['<warn@@Base+0x8','rbp-0xa0','rbp-0x98','rbp-0xb0','rbp-0x50','and    eax,0x100','and    eax,0x2','add    QWORD PTR','jmp','jne','cmp    QWORD PTR']):\n                print(line)\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-8396",
+    "commands": [
+      {
+        "id": "item_17",
+        "kind": "other_python_helper",
+        "output_bytes": 26,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\ntry:\n import capstone\n print('capstone yes')\nexcept Exception as e:\n print('capstone no', e)\ntry:\n import elftools\n print('elftools yes')\nexcept Exception as e:\n print('elftools no', e)\nPY\""
+      },
+      {
+        "id": "item_23",
+        "kind": "addr_convert",
+        "output_bytes": 143,
+        "exit_code": 1,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom elftools.elf.elffile import ELFFile\nfrom capstone import Cs, CS_ARCH_X86, CS_MODE_64\nfrom capstone.x86 import *\nfrom pathlib import Path\n\nbins=['binutils-2.28-o0-objdump','binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump']\nstrings={\n 'binutils-2.28-o0-objdump':[0x20820c,0x20821e,0x20824c,0x1ef0a0],\n 'binutils-2.29-o0-objdump':[0x219a6c,0x219a7e,0x219aac,0x1fffe0],\n 'binutils-2.29.1-o0-objdump':[0x21ac2c,0x21ac3e,0x21ac6c,0x201048],\n 'binutils-2.30-o0-objdump':[0x21cc8c,0x21cc9e,0x21cccc,0x203388],\n}\nmd=Cs(CS_ARCH_X86,CS_MODE_64); md.detail=True\nfor b in bins[:2]:\n p='gcc_stripped/'+b\n with open(p,'rb') as f:\n  elf=ELFFile(f)\n  text=elf.get_section_by_name('.text')\n  data=text.data(); base=text['sh_addr']\n  # fde ranges\n  ranges=[]\n  eh=elf.get_section_by_name('.eh_frame')\n  if eh:\n   for entry in eh.iter_CFI_entries():\n    if entry['CIE_pointer']\"'!=0:\n     start=entry['\"'initial_location']; end=start+entry['address_range']\n     if base<=start<base+len(data): ranges.append((start,end))\n  ranges.sort()\n  def find_range(a):\n   lo=0; hi=len(ranges)\n   while lo<hi:\n    m=(lo+hi)//2\n    if ranges[m][0]<=a: lo=m+1\n    else: hi=m\n   i=lo-1\n   if i>=0 and ranges[i][0]<=a<ranges[i][1]: return ranges[i]\n   return None\n  print('\\\\nBIN',b, 'fde count',len(ranges))\n  hits=[]\n  for ins in md.disasm(data,base):\n   target=None\n   # rip-relative mem\n   for op in ins.operands:\n    if op.type==X86_OP_MEM and op.mem.base==X86_REG_RIP:\n     t=ins.address+ins.size+op.mem.disp\n     if t in strings[b]: target=t\n    if op.type==X86_OP_IMM and op.imm in strings[b]: target=op.imm\n   if target:\n    hits.append((ins.address,target,ins.mnemonic,ins.op_str,find_range(ins.address)))\n  for h in hits:\n   print('hit',hex(h[0]),'->',hex(h[1]),h[2],h[3],'range',tuple(hex(x) for x in h[4]) if h[4] else None)\nPY\""
+      },
+      {
+        "id": "item_25",
+        "kind": "file_or_json_helper",
+        "output_bytes": 214,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom elftools.elf.elffile import ELFFile\nwith open('gcc_stripped/binutils-2.28-o0-objdump','rb') as f:\n elf=ELFFile(f)\n print(hasattr(elf,'get_dwarf_info'))\n di=elf.get_dwarf_info()\n print([x for x in dir(di) if 'CFI' in x or 'cfi' in x])\n for secname in ['.eh_frame','.debug_frame']:\n  sec=elf.get_section_by_name(secname)\n  print(secname, sec, type(sec), [x for x in dir(sec) if 'CFI' in x or 'cfi' in x][:10])\nPY\""
+      },
+      {
+        "id": "item_26",
+        "kind": "addr_convert",
+        "output_bytes": 2123,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom elftools.elf.elffile import ELFFile\nfrom capstone import Cs, CS_ARCH_X86, CS_MODE_64\nfrom capstone.x86 import *\n\nbins=['binutils-2.28-o0-objdump','binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump']\nstrings={\n 'binutils-2.28-o0-objdump':[0x20820c,0x20821e,0x20824c,0x1ef0a0],\n 'binutils-2.29-o0-objdump':[0x219a6c,0x219a7e,0x219aac,0x1fffe0],\n 'binutils-2.29.1-o0-objdump':[0x21ac2c,0x21ac3e,0x21ac6c,0x201048],\n 'binutils-2.30-o0-objdump':[0x21cc8c,0x21cc9e,0x21cccc,0x203388],\n}\nmd=Cs(CS_ARCH_X86,CS_MODE_64); md.detail=True\nfor b in bins:\n p='gcc_stripped/'+b\n with open(p,'rb') as f:\n  elf=ELFFile(f); text=elf.get_section_by_name('.text'); data=text.data(); base=text['sh_addr']\n  ranges=[]\n  di=elf.get_dwarf_info()\n  try:\n   entries=di.EH_CFI_entries()\n  except Exception as e:\n   entries=[]; print('cfi err',e)\n  for entry in entries:\n   if hasattr(entry,'header') and 'initial_location' in entry.header:\n    start=entry.header['initial_location']; end=start+entry.header['address_range']\n    if base<=start<base+len(data): ranges.append((start,end))\n  ranges.sort()\n  def find_range(a):\n   lo=0; hi=len(ranges)\n   while lo<hi:\n    m=(lo+hi)//2\n    if ranges[m][0]<=a: lo=m+1\n    else: hi=m\n   i=lo-1\n   if i>=0 and ranges[i][0]<=a<ranges[i][1]: return ranges[i]\n   return None\n  print('\\\\nBIN',b, 'fde count',len(ranges))\n  hits=[]\n  for ins in md.disasm(data,base):\n   target=None\n   for op in ins.operands:\n    if op.type==X86_OP_MEM and op.mem.base==X86_REG_RIP:\n     t=ins.address+ins.size+op.mem.disp\n     if t in strings[b]: target=t\n    if op.type==X86_OP_IMM and op.imm in strings[b]: target=op.imm\n   if target:\n    hits.append((ins.address,target,ins.mnemonic,ins.op_str,find_range(ins.address)))\n  for h in hits:\n   print('hit',hex(h[0]),'->',hex(h[1]),h[2],h[3],'range',tuple(hex(x) for x in h[4]) if h[4] else None)\nPY\""
+      },
+      {
+        "id": "item_38",
+        "kind": "addr_convert",
+        "output_bytes": 10645,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\n# list FDE ranges around reloc funcs for all bins, useful to locate neighboring functions\nfrom elftools.elf.elffile import ELFFile\nfor b in ['binutils-2.28-o0-objdump','binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump']:\n with open('gcc_stripped/'+b,'rb') as f:\n  elf=ELFFile(f); di=elf.get_dwarf_info(); ranges=[]\n  for e in di.EH_CFI_entries():\n   if hasattr(e,'header') and 'initial_location' in e.header:\n    s=e.header['initial_location']; a=e.header['address_range']\n    if (0x190000 <= s <= 0x1b0000) or (b.startswith('binutils-2.30') and 0x1a0000<=s<=0x1b0000):\n     ranges.append((s,s+a))\n  print('\\\\n',b)\n  for s,e in ranges:\n   if any(abs(s-x)<0x3000 for x in [0x193b50,0x194295,0x1a2f23,0x1a3636,0x1a396f,0x1a4082,0x1a5262,0x1a5975]):\n    print(hex(s), hex(e), hex(e-s))\nPY\""
+      },
+      {
+        "id": "item_47",
+        "kind": "addr_convert",
+        "output_bytes": 8369,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom elftools.elf.elffile import ELFFile\nfrom capstone import *\nfrom capstone.x86 import *\nfrom collections import Counter, defaultdict\nbins=['binutils-2.28-o0-objdump','binutils-2.29-o0-objdump','binutils-2.29.1-o0-objdump','binutils-2.30-o0-objdump']\nmd=Cs(CS_ARCH_X86,CS_MODE_64); md.detail=True\nfor b in bins:\n with open('gcc_stripped/'+b,'rb') as f:\n  elf=ELFFile(f); text=elf.get_section_by_name('.text'); data=text.data(); base=text['sh_addr']\n  calls=[]\n  for ins in md.disasm(data,base):\n   if ins.mnemonic=='call' and len(ins.operands)==1 and ins.operands[0].type==X86_OP_IMM:\n    tgt=ins.operands[0].imm\n    if base<=tgt<base+len(data): calls.append((ins.address,tgt))\n  cnt=Counter(t for a,t in calls)\n  # relevant candidates: functions of 0x89 bytes called 3 times maybe\n  # get fde ranges\n  di=elf.get_dwarf_info(); ranges=[]\n  for e in di.EH_CFI_entries():\n   if hasattr(e,'header') and 'initial_location' in e.header:\n    s=e.header['initial_location']; rng=e.header['address_range']; ranges.append((s,s+rng))\n  rmap={s:(s,e) for s,e in ranges}\n  print('\\\\n',b)\n  for t,c in cnt.most_common():\n   if c>=3 and t in rmap:\n    s,e=rmap[t]\n    if e-s in (0x89,0x8a,0x90,0x80,0x9a,0x148,0x50):\n     print(hex(t), 'size',hex(e-s),'calls',c,'call_sites',[hex(a) for a,tt in calls if tt==t][:8])\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2017-9039",
+    "commands": [
+      {
+        "id": "item_13",
+        "kind": "file_or_json_helper",
+        "output_bytes": 860,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport struct\nident = b'\\\\x7fELF' + bytes([2,1,1,0]) + bytes(8)\nehdr = struct.pack('<16sHHIQQQIHHHHHH', ident, 2, 62, 1, 0, 64, 0, 0, 64, 56, 65535, 0, 0, 0)\nopen('/tmp/cve2017_9039_manyphdr.elf','wb').write(ehdr)\nprint(len(ehdr))\nPY\nfor b in gcc_stripped/binutils-2.28-o0-readelf gcc_stripped/binutils-2.29-o0-readelf gcc_stripped/binutils-2.29.1-o0-readelf gcc_stripped/binutils-2.30-o0-readelf; do printf '\\\\n=== %s ===\\\\n' \\\"\"'$b\"; \"$b\" -l /tmp/cve2017_9039_manyphdr.elf 2>&1 | head -n 8; done'"
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2018-19932",
+    "commands": [
+      {
+        "id": "item_22",
+        "kind": "addr_convert",
+        "output_bytes": 136,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfor dec in [1991120,2111728,1966096,1969832,1969640,2089320,1941960,1941704]:\n    print(dec, hex(dec))\nPY\""
+      },
+      {
+        "id": "item_27",
+        "kind": "addr_convert",
+        "output_bytes": 196,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nvals={'2.31 section cant':1989104,'2.31 allocated warn':1989168,'2.31 rewrite':1991120,'2.31 bad':1969640,'2.30 cant':2109704,'2.30 rewrite':2111728,'2.32 cant':1963768,'2.32 rewrite':1966096,'2.32 bad':1941704}\nfor k,v in vals.items(): print(k, hex(v))\nPY\""
+      },
+      {
+        "id": "item_41",
+        "kind": "addr_convert",
+        "output_bytes": 177,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfor label,dec in [('2.29.1 assert',2080650),('2.29.1 file',2096416),('2.29.1 rewrite',2102608),('2.33.1 bad',2047336),('2.33.1 assert',2047592),('2.33.1 file',2065440),('2.33.1 rewrite',2072464),('2.33.1 cant',2069928)]: print(label, hex(dec))\nPY\""
+      },
+      {
+        "id": "item_45",
+        "kind": "addr_convert",
+        "output_bytes": 1806,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport struct, os\nbins={\n'2.29.1':'gcc_stripped/binutils-2.29.1-o0-objdump',\n'2.30':'gcc_stripped/binutils-2.30-o0-objdump',\n'2.31':'gcc_stripped/binutils-2.31-o0-objdump',\n'2.32':'gcc_stripped/binutils-2.32-o0-objdump',\n'2.33.1':'gcc_stripped/binutils-2.33.1-o0-objdump',\n}\ntargets={\n'2.29.1':[0x1fbf8a,0x1ffd20,0x201550,0x200fc8,0x201008],\n'2.30':[0x1fe168,0x202060,0x2038f0,0x203108,0x203148],\n'2.31':[0x1e0de8,0x1e4920,0x1e61d0,0x1e59f0,0x1e5a30],\n'2.32':[0x1da0c8,0x1de5e0,0x1e0010,0x1df6f8,0x1df738],\n'2.33.1':[0x1f3d68,0x1f8420,0x1f9f90,0x1f95a8,0x1f95e8],\n}\nfor ver,path in bins.items():\n    data=open(path,'rb').read()\n    print('==',ver)\n    for tgt in targets[ver]:\n        refs=[]\n        # scan common rip-rel: 48 8d 05, 48 8d 15, 48 8d 0d, 48 8b 05, 4c 8d 05\n        for i in range(len(data)-7):\n            b=data[i:i+3]\n            if b in (b'\\\\x48\\\\x8d\\\\x05',b'\\\\x48\\\\x8d\\\\x15',b'\\\\x48\\\\x8d\\\\x0d',b'\\\\x48\\\\x8d\\\\x35',b'\\\\x4c\\\\x8d\\\\x05',b'\\\\x48\\\\x8b\\\\x05'):\n                disp=struct.unpack_from('<i',data,i+3)[0]\n                if i+7+disp==tgt:\n                    refs.append(i)\n        print(hex(tgt), [hex(r) for r in refs[:20]], 'count', len(refs))\nPY\""
+      },
+      {
+        "id": "item_59",
+        "kind": "addr_convert",
+        "output_bytes": 1737,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport re\nfor ver,path in [('2.32','gcc_stripped/binutils-2.32-o0-objdump'),('2.33.1','gcc_stripped/binutils-2.33.1-o0-objdump'),('2.31','gcc_stripped/binutils-2.31-o0-objdump'),('2.30','gcc_stripped/binutils-2.30-o0-objdump'),('2.29.1','gcc_stripped/binutils-2.29.1-o0-objdump')]:\n    data=open(path,'rb').read()\n    print('==',ver)\n    for m in re.finditer(b'\\\\xbf\\\\x11\\\\x00\\\\x00\\\\x00\\\\xe8', data):\n        off=m.start()\n        if 0xf0000 <= off <= 0x120000:\n            rel=int.from_bytes(data[off+6:off+10],'little',signed=True)\n            print(hex(off), 'call', hex(off+10+rel))\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2018-20651",
+    "commands": [
+      {
+        "id": "item_28",
+        "kind": "addr_convert",
+        "output_bytes": 204,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nvals=[1994032,1994128,1994168,1994392,1967408,1967504,1967544,1967768,2073776,2074056,2074096,2074320]\nfor v in vals: print(v, hex(v))\nPY\""
+      },
+      {
+        "id": "item_29",
+        "kind": "addr_convert",
+        "output_bytes": 202,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"for spec in 'gcc_stripped/binutils-2.31.1-o0-objdump 1e6d30 1e6d90 1e6db8 1e6e98' 'gcc_stripped/binutils-2.32-o0-objdump 1e0530 1e0590 1e05b8 1e0698' 'gcc_stripped/binutils-2.33.1-o0-objdump 1fa4b0 1fa5c8 1fa5f0 1fa6d0'; do set -- \"'$spec; f=$1; shift; printf '\"'%s\\\\n' \\\"\"'$f\"; for a in \"$@\"; do python3 - \"$f\" \"$a\" <<'\"'PY'",
+        "command": "/bin/zsh -lc \"for spec in 'gcc_stripped/binutils-2.31.1-o0-objdump 1e6d30 1e6d90 1e6db8 1e6e98' 'gcc_stripped/binutils-2.32-o0-objdump 1e0530 1e0590 1e05b8 1e0698' 'gcc_stripped/binutils-2.33.1-o0-objdump 1fa4b0 1fa5c8 1fa5f0 1fa6d0'; do set -- \"'$spec; f=$1; shift; printf '\"'%s\\\\n' \\\"\"'$f\"; for a in \"$@\"; do python3 - \"$f\" \"$a\" <<'\"'PY'\nimport sys\nf=sys.argv[1]; addr=int(sys.argv[2],16); off=addr\nwith open(f,'rb') as fh:\n fh.seek(off)\n data=fh.read(96)\n s=data.split(b'\\\\0')[0]\nprint(hex(addr), s.decode('utf-8','replace'))\nPY\ndone; done\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2018-20671",
+    "commands": [
+      {
+        "id": "item_22",
+        "kind": "objdump_scan",
+        "output_bytes": 874,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess, re, struct, pathlib\nfiles=['binutils-2.30-o0-objdump','binutils-2.31-o0-objdump','binutils-2.31.1-o0-objdump','binutils-2.32-o0-objdump','binutils-2.33.1-o0-objdump']\nbase=pathlib.Path('gcc_stripped')\n# parse sections from readelf -SW\nfor name in files:\n    path=base/name\n    out=subprocess.check_output(['readelf','-SW',str(path)], text=True)\n    secs={}\n    for line in out.splitlines():\n        m=re.match(r'\\\\s*\\\\[\\\\s*\\\\d+\\\\]\\\\s+(\\\\S+)\\\\s+\\\\S+\\\\s+([0-9a-fA-F]+)\\\\s+([0-9a-fA-F]+)\\\\s+([0-9a-fA-F]+)', line)\n        if m:\n            secs[m.group(1)]=tuple(int(x,16) for x in m.groups()[1:])\n    data=path.read_bytes()\n    # find strings offsets\n    for s in [b\\\"Section '%s' has an invalid size: %#llx.\\\", b\\\"Can't get contents for section '%s'.\\\"]:\n        idx=data.find(s)\n        print(name, s[:20], 'offset/va', hex(idx) if idx>=0 else 'missing')\n        if idx>=0:\n            text_va,text_off,text_size=secs['.text']\n            text=data[text_off:text_off+text_size]\n            refs=[]\n            for p in range(len(text)-4):\n                disp=struct.unpack_from('<i', text, p)[0]\n                if text_va+p+4+disp == idx:\n                    refs.append(text_va+p) # disp field address\n            print('  xrefs disp at', [hex(x) for x in refs[:20]], 'count', len(refs))\nPY\""
+      },
+      {
+        "id": "item_24",
+        "kind": "addr_convert",
+        "output_bytes": 161,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport pathlib, struct\nfor name, addr in [('2.32','0x1b7881'),('2.33.1','0x1cf999'),('2.31.1','0x1be759')]:\n p=pathlib.Path('gcc_stripped')/f'binutils-{name}-o0-objdump'\n data=p.read_bytes(); a=int(addr,16)\n pat=struct.pack('<Q',a)\n loc=[i for i in range(len(data)) if data.startswith(pat,i)]\n print(name, 'qword ptr locs', [hex(x) for x in loc[:20]], len(loc))\n pat4=struct.pack('<I',a)\n loc4=[i for i in range(len(data)) if data.startswith(pat4,i)]\n print(name, 'dword addr locs', [hex(x) for x in loc4[:20]], len(loc4))\nPY\""
+      },
+      {
+        "id": "item_28",
+        "kind": "objdump_scan",
+        "output_bytes": 980,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nimport subprocess,re,struct,pathlib\nfiles=['binutils-2.30-o0-objdump','binutils-2.31-o0-objdump','binutils-2.31.1-o0-objdump','binutils-2.32-o0-objdump','binutils-2.33.1-o0-objdump']\nbase=pathlib.Path('gcc_stripped')\npatterns=[b\\\"\\\\nSection '%s' has an invalid size: %#llx.\\\\n\\\", b\\\"\\\\nCan't get contents for section '%s'.\\\\n\\\"]\nfor name in files:\n    path=base/name; data=path.read_bytes()\n    out=subprocess.check_output(['readelf','-SW',str(path)], text=True)\n    m=re.search(r'\\\\[\\\\s*16\\\\]\\\\s+\\\\.text\\\\s+\\\\S+\\\\s+([0-9a-f]+)\\\\s+([0-9a-f]+)\\\\s+([0-9a-f]+)', out)\n    text_va,text_off,text_size=[int(x,16) for x in m.groups()]\n    text=data[text_off:text_off+text_size]\n    print('\\\\n',name,'text',hex(text_va),hex(text_off),hex(text_size))\n    for s in patterns:\n        idx=data.find(s)\n        print(' pattern',s[:18], 'idx',hex(idx) if idx>=0 else 'missing')\n        if idx<0: continue\n        refs=[]\n        for p in range(len(text)-4):\n            disp=struct.unpack_from('<i', text, p)[0]\n            if text_va+p+4+disp == idx:\n                refs.append(text_va+p)\n        print('  refs', [hex(r) for r in refs], 'count', len(refs))\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2019-17451",
+    "commands": [
+      {
+        "id": "item_39",
+        "kind": "addr_convert",
+        "output_bytes": 341,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom pathlib import Path\nbase=Path('/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped')\nfiles=['binutils-2.32-o0-objdump','binutils-2.33.1-o0-objdump','binutils-2.34-o0-objdump','binutils-2.35-o0-objdump']\npatterns={\n'patched_35_guard': bytes.fromhex('48 8b 45 d0 48 8b 50 40 48 8b 45 c8 48 01 c2 48 8b 45 c8 48 39 c2 72 1c'),\n'patched_35_guard_alt38': bytes.fromhex('48 8b 45 d0 48 8b 50 38 48 8b 45 c8 48 01 c2 48 8b 45 c8 48 39 c2 72 1c'),\n'vuln_32_sum38': bytes.fromhex('48 8b 45 d0 48 8b 50 38 48 8b 45 c8 48 01 d0 48 89 45 c8'),\n'vuln_35_like_sum40': bytes.fromhex('48 8b 45 d0 48 8b 50 40 48 8b 45 c8 48 01 d0 48 89 45 c8'),\n}\nfor f in files:\n    data=(base/f).read_bytes()\n    print(f)\n    for name,pat in patterns.items():\n        hits=[]\n        start=0\n        while True:\n            i=data.find(pat,start)\n            if i<0: break\n            hits.append(i)\n            start=i+1\n        if hits:\n            print(' ',name, [hex(h) for h in hits[:10]], 'count', len(hits))\nPY\""
+      },
+      {
+        "id": "item_40",
+        "kind": "addr_convert",
+        "output_bytes": 316,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom pathlib import Path\nbase=Path('/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped')\nfiles=['binutils-2.32-o0-objdump','binutils-2.33.1-o0-objdump','binutils-2.34-o0-objdump','binutils-2.35-o0-objdump']\n# wildcard-like search for: mov rax,[rbp-X]; mov rdx,[rax+SIZE]; mov rax,[rbp-Y]; add rdx,rax; mov rax,[rbp-Y]; cmp rdx,rax; jb\nsig = bytes.fromhex('48 8b 45')\nfor f in files:\n    data=(base/f).read_bytes()\n    print('\\\\n'+f)\n    for i in range(len(data)-40):\n        # match 48 8b 45 ?? 48 8b 50 ?? 48 8b 45 ?? 48 01 c2 48 8b 45 sameY 48 39 c2 72\n        if data[i:i+3]==b'\\\\x48\\\\x8b\\\\x45' and data[i+4:i+7]==b'\\\\x48\\\\x8b\\\\x50' and data[i+8:i+11]==b'\\\\x48\\\\x8b\\\\x45' and data[i+12:i+15]==b'\\\\x48\\\\x01\\\\xc2' and data[i+15:i+18]==b'\\\\x48\\\\x8b\\\\x45' and data[i+18]==data[i+11] and data[i+19:i+22]==b'\\\\x48\\\\x39\\\\xc2' and data[i+22]==0x72:\n            print(hex(i), data[i:i+32].hex(' '))\nPY\""
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2022-38533",
+    "commands": [
+      {
+        "id": "item_11",
+        "kind": "other_python_helper",
+        "output_bytes": 387,
+        "exit_code": 2,
+        "command_first_line": "/bin/zsh -lc 'python3 ../utils/safe_objdump.py --binary gcc_stripped/binutils-2.40-o0-objdump --start 0x13b000 --stop 0x13d500'",
+        "command": "/bin/zsh -lc 'python3 ../utils/safe_objdump.py --binary gcc_stripped/binutils-2.40-o0-objdump --start 0x13b000 --stop 0x13d500'"
+      }
+    ]
+  },
+  {
+    "cve": "CVE-2022-48064",
+    "commands": [
+      {
+        "id": "item_16",
+        "kind": "addr_convert",
+        "output_bytes": 738,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport struct\nbins=['binutils-2.39-o0-objdump','binutils-2.40-o0-objdump']\naddrs39=[0x20ffa7,0x20ffb9,0x21cb51,0x21cb5d,0x22f1f1,0x22fb07,0x22fcae,0x233317,0x233323,0x233fa8,0x235369,0x238378,0x23b539]\naddrs40=[0x21a167,0x21a179,0x226ed9,0x226ee5,0x2394f1,0x239e37,0x239fde,0x23d557,0x23d563,0x23e210,0x23f560,0x241eb7,0x24244c,0x2455b0]\nfor b,addrs in zip(bins,[addrs39,addrs40]):\n    data=Path('gcc_stripped/'+b).read_bytes()\n    print('BIN',b)\n    for a in addrs:\n        pat=struct.pack('<Q',a)\n        offs=[];i=0\n        while True:\n            j=data.find(pat,i)\n            if j<0: break\n            offs.append(j); i=j+1\n        print(hex(a), len(offs), ' '.join(hex(o) for o in offs[:20]))\nPY\""
+      },
+      {
+        "id": "item_17",
+        "kind": "objdump_scan",
+        "output_bytes": 1554,
+        "exit_code": 0,
+        "command_first_line": "/bin/zsh -lc \"python3 - <<'PY'",
+        "command": "/bin/zsh -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport struct, subprocess, re, os\nbins=['2.37','2.38','2.39','2.40','2.41','2.42']\nfor v in bins:\n    p=Path(f'gcc_stripped/binutils-{v}-o0-objdump')\n    data=p.read_bytes()\n    print('\\\\nBIN',v)\n    # collect strings of interest offsets using strings -tx external easier? do in python byte search\n    for s in [b'.gnu.linkonce.wi.', b'.debug_info\\\\0', b'.zdebug_info\\\\0']:\n        offs=[]; i=0\n        while True:\n            j=data.find(s,i)\n            if j<0: break\n            offs.append(j); i=j+1\n        print(s, [hex(o) for o in offs[:20]], 'count', len(offs))\nPY\""
+      }
+    ]
+  }
+]

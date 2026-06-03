@@ -1,0 +1,2770 @@
+# CVE-2021-20294 codex-selected command log
+# binary: /home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf
+# created_at: 2026-05-28T15:14:28+08:00
+
+===== file: confirm stripped target =====
+$ file /home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf
+/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=c419cd94d33a833cb794eb9a04a815cc8c61e4b9, for GNU/Linux 3.2.0, stripped
+
+[exit_code=0]
+
+===== readelf symbols/imports: sprintf/strlen/printf/snprintf and relevant symbols =====
+$ readelf -Ws /home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf
+
+Symbol table '.dynsym' contains 98 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND getenv@GLIBC_2.2.5 (2)
+     2: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND putchar@GLIBC_2.2.5 (2)
+     3: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __libc_start_main@GLIBC_2.34 (3)
+     4: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND abort@GLIBC_2.2.5 (2)
+     5: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __errno_location@GLIBC_2.2.5 (2)
+     6: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND unlink@GLIBC_2.2.5 (2)
+     7: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strncpy@GLIBC_2.2.5 (2)
+     8: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strncmp@GLIBC_2.2.5 (2)
+     9: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND _ITM_deregisterTMCloneTable
+    10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strcpy@GLIBC_2.2.5 (2)
+    11: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __isoc99_fscanf@GLIBC_2.7 (4)
+    12: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND puts@GLIBC_2.2.5 (2)
+    13: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND ferror@GLIBC_2.2.5 (2)
+    14: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND qsort@GLIBC_2.2.5 (2)
+    15: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fread@GLIBC_2.2.5 (2)
+    16: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND vsnprintf@GLIBC_2.2.5 (2)
+    17: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND write@GLIBC_2.2.5 (2)
+    18: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND textdomain@GLIBC_2.2.5 (2)
+    19: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND vasprintf@GLIBC_2.2.5 (2)
+    20: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fclose@GLIBC_2.2.5 (2)
+    21: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND bindtextdomain@GLIBC_2.2.5 (2)
+    22: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND stpcpy@GLIBC_2.2.5 (2)
+    23: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND msync@GLIBC_2.2.5 (2)
+    24: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __ctype_get_mb_cur_max@GLIBC_2.2.5 (2)
+    25: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strlen@GLIBC_2.2.5 (2)
+    26: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __stack_chk_fail@GLIBC_2.4 (5)
+    27: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND mmap@GLIBC_2.2.5 (2)
+    28: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND getopt_long@GLIBC_2.2.5 (2)
+    29: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND mbrtowc@GLIBC_2.2.5 (2)
+    30: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND gettext@GLIBC_2.2.5 (2)
+    31: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strchr@GLIBC_2.2.5 (2)
+    32: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND printf@GLIBC_2.2.5 (2)
+    33: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND rewind@GLIBC_2.2.5 (2)
+    34: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND snprintf@GLIBC_2.2.5 (2)
+    35: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strrchr@GLIBC_2.2.5 (2)
+    36: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND lseek@GLIBC_2.2.5 (2)
+    37: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __assert_fail@GLIBC_2.2.5 (2)
+    38: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fputs@GLIBC_2.2.5 (2)
+    39: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND memset@GLIBC_2.2.5 (2)
+    40: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strnlen@GLIBC_2.2.5 (2)
+    41: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strncat@GLIBC_2.2.5 (2)
+    42: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND close@GLIBC_2.2.5 (2)
+    43: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fputc@GLIBC_2.2.5 (2)
+    44: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND memcmp@GLIBC_2.2.5 (2)
+    45: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND sbrk@GLIBC_2.2.5 (2)
+    46: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND tmpfile@GLIBC_2.2.5 (2)
+    47: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strcmp@GLIBC_2.2.5 (2)
+    48: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND putc@GLIBC_2.2.5 (2)
+    49: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fprintf@GLIBC_2.2.5 (2)
+    50: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND ftell@GLIBC_2.2.5 (2)
+    51: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND feof@GLIBC_2.2.5 (2)
+    52: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND __gmon_start__
+    53: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND stat@GLIBC_2.33 (6)
+    54: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND realpath@GLIBC_2.3 (7)
+    55: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND memcpy@GLIBC_2.14 (8)
+    56: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fileno@GLIBC_2.2.5 (2)
+    57: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND qsort_r@GLIBC_2.8 (9)
+    58: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND malloc@GLIBC_2.2.5 (2)
+    59: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fflush@GLIBC_2.2.5 (2)
+    60: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strpbrk@GLIBC_2.2.5 (2)
+    61: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fseek@GLIBC_2.2.5 (2)
+    62: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND realloc@GLIBC_2.2.5 (2)
+    63: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND asprintf@GLIBC_2.2.5 (2)
+    64: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND munmap@GLIBC_2.2.5 (2)
+    65: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND setlocale@GLIBC_2.2.5 (2)
+    66: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND memmove@GLIBC_2.2.5 (2)
+    67: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND open@GLIBC_2.2.5 (2)
+    68: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fopen@GLIBC_2.2.5 (2)
+    69: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND gmtime@GLIBC_2.2.5 (2)
+    70: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND vfprintf@GLIBC_2.2.5 (2)
+    71: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strtoul@GLIBC_2.2.5 (2)
+    72: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND pread@GLIBC_2.2.5 (2)
+    73: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strcat@GLIBC_2.2.5 (2)
+    74: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND sprintf@GLIBC_2.2.5 (2)
+    75: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND exit@GLIBC_2.2.5 (2)
+    76: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fwrite@GLIBC_2.2.5 (2)
+    77: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND bsearch@GLIBC_2.2.5 (2)
+    78: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND _ITM_registerTMCloneTable
+    79: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND ngettext@GLIBC_2.2.5 (2)
+    80: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strdup@GLIBC_2.2.5 (2)
+    81: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strerror@GLIBC_2.2.5 (2)
+    82: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fstat@GLIBC_2.33 (6)
+    83: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND getc@GLIBC_2.2.5 (2)
+    84: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strstr@GLIBC_2.2.5 (2)
+    85: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND __ctype_b_loc@GLIBC_2.3 (7)
+    86: 00000000000f5640     8 OBJECT  GLOBAL DEFAULT   27 stdout@GLIBC_2.2.5 (2)
+    87: 00000000000f5660     8 OBJECT  WEAK   DEFAULT   27 _environ@GLIBC_2.2.5 (2)
+    88: 00000000000f5660     8 OBJECT  WEAK   DEFAULT   27 environ@GLIBC_2.2.5 (2)
+    89: 0000000000000000     0 FUNC    WEAK   DEFAULT  UND __cxa_finalize@GLIBC_2.2.5 (2)
+    90: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND free@GLIBC_2.2.5 (2)
+    91: 000000000007bf0a   288 FUNC    GLOBAL DEFAULT   16 warn
+    92: 00000000000f5660     8 OBJECT  GLOBAL DEFAULT   27 __environ@GLIBC_2.2.5 (2)
+    93: 00000000000f56a0     8 OBJECT  GLOBAL DEFAULT   27 stderr@GLIBC_2.2.5 (2)
+    94: 000000000007bdea   288 FUNC    GLOBAL DEFAULT   16 error
+    95: 00000000000f5648     4 OBJECT  GLOBAL DEFAULT   27 optind@GLIBC_2.2.5 (2)
+    96: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND calloc@GLIBC_2.2.5 (2)
+    97: 00000000000f5680     8 OBJECT  GLOBAL DEFAULT   27 optarg@GLIBC_2.2.5 (2)
+
+[exit_code=0]
+
+===== filtered readelf symbols/imports =====
+$ readelf -Ws '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf' 2>/dev/null | rg 'sprintf|strlen|printf|snprintf|print_dynamic_symbol|get_symbol_version_string'
+    16: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND vsnprintf@GLIBC_2.2.5 (2)
+    19: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND vasprintf@GLIBC_2.2.5 (2)
+    25: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND strlen@GLIBC_2.2.5 (2)
+    32: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND printf@GLIBC_2.2.5 (2)
+    34: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND snprintf@GLIBC_2.2.5 (2)
+    49: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND fprintf@GLIBC_2.2.5 (2)
+    63: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND asprintf@GLIBC_2.2.5 (2)
+    70: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND vfprintf@GLIBC_2.2.5 (2)
+    74: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND sprintf@GLIBC_2.2.5 (2)
+
+[exit_code=0]
+
+===== readelf relocations for imported calls =====
+$ readelf -r '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf' | rg 'sprintf|strlen|printf|snprintf'
+0000000f2da0  001000000007 R_X86_64_JUMP_SLO 0000000000000000 vsnprintf@GLIBC_2.2.5 + 0
+0000000f2db8  001300000007 R_X86_64_JUMP_SLO 0000000000000000 vasprintf@GLIBC_2.2.5 + 0
+0000000f2de8  001900000007 R_X86_64_JUMP_SLO 0000000000000000 strlen@GLIBC_2.2.5 + 0
+0000000f2e20  002000000007 R_X86_64_JUMP_SLO 0000000000000000 printf@GLIBC_2.2.5 + 0
+0000000f2e30  002200000007 R_X86_64_JUMP_SLO 0000000000000000 snprintf@GLIBC_2.2.5 + 0
+0000000f2ea8  003100000007 R_X86_64_JUMP_SLO 0000000000000000 fprintf@GLIBC_2.2.5 + 0
+0000000f2f10  003f00000007 R_X86_64_JUMP_SLO 0000000000000000 asprintf@GLIBC_2.2.5 + 0
+0000000f2f48  004600000007 R_X86_64_JUMP_SLO 0000000000000000 vfprintf@GLIBC_2.2.5 + 0
+0000000f2f68  004a00000007 R_X86_64_JUMP_SLO 0000000000000000 sprintf@GLIBC_2.2.5 + 0
+
+[exit_code=0]
+
+===== readelf sections: text/rodata/plt/dynstr/rela.plt =====
+$ readelf -S --wide '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf' | rg '\.(text|rodata|plt|dynstr|rela.plt)'
+  [ 7] .dynstr           STRTAB          0000000000000d40 000d40 00032a 00   A  0   0  1
+  [11] .rela.plt         RELA            0000000000007e98 007e98 000798 18  AI  6  25  8
+  [13] .plt              PROGBITS        0000000000009020 009020 000520 10  AX  0   0 16
+  [14] .plt.got          PROGBITS        0000000000009540 009540 000030 10  AX  0   0 16
+  [15] .plt.sec          PROGBITS        0000000000009570 009570 000510 10  AX  0   0 16
+  [16] .text             PROGBITS        0000000000009a80 009a80 09f739 00  AX  0   0 16
+  [18] .rodata           PROGBITS        00000000000aa000 0aa000 03bb50 00   A  0   0 32
+
+[exit_code=0]
+
+===== strings anchors: @%s / @@%s / (%d) / dynamic symbol strings =====
+$ strings -a -t x '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf' | rg '@%s|@@%s| \(%d\)|<corrupt>|dynsym|DYNAMIC SYMBOL TABLE|Symbol table' | head -120
+  c001a <corrupt>
+  c0406 @@%s
+  c74dc        [<corrupt>]
+  c89a4   [reserved (%d)]
+  c8eb0 the .dynsym section doesn't match the DT_SYMTAB and DT_SYMENT tags
+  c8fa0 Bad value (%d) for SYMINENT entry
+  c9bb8  (%d)
+  c9bbe @%s (%d)
+  c9c09 Symbol table for image contains %lu entries:
+  c9c39 Symbol table for image contains %lu entry:
+  c9cf1 Symbol table '%s' has a sh_entsize of zero!
+  c9d21 Symbol table '%s' contains %lu entries:
+  c9d51 Symbol table '%s' contains %lu entry:
+  cb153 <corrupt>
+  cbece ??? (%d)
+  cce0b %s (%d)
+  d29ad <corrupt>
+  d3b38 Invalid pointer size (%d) in compunit header, using %d instead
+  d56d8 Invalid pointer size (%d) in debug info for entry %d
+  d6200 Corrupt pointer size (%d) in debug entry at offset %8.8lx
+  d8638 Invalid pointer size (%d) in CIE data
+  d8660 Invalid segment size (%d) in CIE data
+  d9782 Symbol table:
+  d9ab8 Symbol table offset (%x) is less then Address table offset (%x)
+  da0d2   Unsupported version (%d)
+  dba81 <corrupt>
+  dc730 Symbol table uses invalid entry size
+  dc758 Symbol table data buffer is not valid
+  dc818 Symbol table information is not available
+  dcaa0 Symbol table entry or type is not a function
+  dcb00 Symbol table entry is not a data object
+  f46b4 .dynsym
+
+[exit_code=0]
+
+===== objdump grep: rodata anchors and PLT calls =====
+$ objdump -d -M intel '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf' | rg -n 'c0406|c9bbe|c9bb8|sprintf@plt|strlen@plt|printf@plt'
+432:0000000000009640 <vsnprintf@plt>:
+447:0000000000009670 <vasprintf@plt>:
+477:00000000000096d0 <strlen@plt>:
+512:0000000000009740 <printf@plt>:
+522:0000000000009760 <snprintf@plt>:
+597:0000000000009850 <fprintf@plt>:
+662:0000000000009920 <asprintf@plt>:
+697:0000000000009990 <vfprintf@plt>:
+717:00000000000099d0 <sprintf@plt>:
+9168:   1455f:	e8 6c 54 ff ff       	call   99d0 <sprintf@plt>
+9175:   1457d:	e8 de 51 ff ff       	call   9760 <snprintf@plt>
+9409:   14910:	e8 2b 4e ff ff       	call   9740 <printf@plt>
+9419:   14938:	e8 03 4e ff ff       	call   9740 <printf@plt>
+9430:   14966:	e8 e5 4e ff ff       	call   9850 <fprintf@plt>
+9442:   14996:	e8 a5 4d ff ff       	call   9740 <printf@plt>
+9447:   149ac:	e8 8f 4d ff ff       	call   9740 <printf@plt>
+9454:   149ca:	e8 71 4d ff ff       	call   9740 <printf@plt>
+9464:   149ee:	e8 4d 4d ff ff       	call   9740 <printf@plt>
+9471:   14a0b:	e8 30 4d ff ff       	call   9740 <printf@plt>
+9510:   14a9c:	e8 2f 4c ff ff       	call   96d0 <strlen@plt>
+9550:   14b3a:	e8 01 4c ff ff       	call   9740 <printf@plt>
+9576:   14b9d:	e8 9e 4b ff ff       	call   9740 <printf@plt>
+9610:   14c1a:	e8 21 4b ff ff       	call   9740 <printf@plt>
+9624:   14c4e:	e8 ed 4a ff ff       	call   9740 <printf@plt>
+10985:   1610b:	e8 30 36 ff ff       	call   9740 <printf@plt>
+10992:   1612c:	e8 0f 36 ff ff       	call   9740 <printf@plt>
+11002:   16157:	e8 e4 35 ff ff       	call   9740 <printf@plt>
+11009:   16178:	e8 c3 35 ff ff       	call   9740 <printf@plt>
+11021:   161a9:	e8 92 35 ff ff       	call   9740 <printf@plt>
+11028:   161c7:	e8 74 35 ff ff       	call   9740 <printf@plt>
+11038:   161ef:	e8 4c 35 ff ff       	call   9740 <printf@plt>
+11045:   1620d:	e8 2e 35 ff ff       	call   9740 <printf@plt>
+11089:   162d9:	e8 62 34 ff ff       	call   9740 <printf@plt>
+11102:   16313:	e8 28 34 ff ff       	call   9740 <printf@plt>
+11624:   16dc5:	e8 76 29 ff ff       	call   9740 <printf@plt>
+11636:   16df8:	e8 43 29 ff ff       	call   9740 <printf@plt>
+11702:   16f36:	e8 05 28 ff ff       	call   9740 <printf@plt>
+11720:   16f86:	e8 b5 27 ff ff       	call   9740 <printf@plt>
+11812:   17116:	48 8d 05 e9 92 0a 00 	lea    rax,[rip+0xa92e9]        # c0406 <warn@@Base+0x444fc>
+11819:   17135:	e8 06 26 ff ff       	call   9740 <printf@plt>
+11833:   17176:	e8 c5 25 ff ff       	call   9740 <printf@plt>
+11848:   171b3:	e8 88 25 ff ff       	call   9740 <printf@plt>
+12025:   174a0:	e8 2b 25 ff ff       	call   99d0 <sprintf@plt>
+12044:   174f5:	e8 46 22 ff ff       	call   9740 <printf@plt>
+12074:   17571:	48 8d 05 8e 8e 0a 00 	lea    rax,[rip+0xa8e8e]        # c0406 <warn@@Base+0x444fc>
+12081:   17590:	e8 ab 21 ff ff       	call   9740 <printf@plt>
+12102:   175e7:	e8 54 21 ff ff       	call   9740 <printf@plt>
+12109:   17607:	e8 34 21 ff ff       	call   9740 <printf@plt>
+12133:   1766d:	e8 ce 20 ff ff       	call   9740 <printf@plt>
+12143:   17694:	e8 a7 20 ff ff       	call   9740 <printf@plt>
+12150:   176b1:	e8 8a 20 ff ff       	call   9740 <printf@plt>
+12174:   1771c:	e8 1f 20 ff ff       	call   9740 <printf@plt>
+12203:   177a5:	e8 96 1f ff ff       	call   9740 <printf@plt>
+12214:   177d1:	e8 6a 1f ff ff       	call   9740 <printf@plt>
+12221:   177ee:	e8 4d 1f ff ff       	call   9740 <printf@plt>
+12225:   17802:	e8 39 1f ff ff       	call   9740 <printf@plt>
+12236:   1782e:	e8 0d 1f ff ff       	call   9740 <printf@plt>
+12243:   1784b:	e8 f0 1e ff ff       	call   9740 <printf@plt>
+13233:   18a27:	e8 34 0d ff ff       	call   9760 <snprintf@plt>
+13295:   18b0f:	e8 4c 0c ff ff       	call   9760 <snprintf@plt>
+13307:   18b43:	e8 18 0c ff ff       	call   9760 <snprintf@plt>
+13361:   18c2f:	e8 2c 0b ff ff       	call   9760 <snprintf@plt>
+13377:   18c73:	e8 e8 0a ff ff       	call   9760 <snprintf@plt>
+13389:   18ca5:	e8 b6 0a ff ff       	call   9760 <snprintf@plt>
+13906:   19896:	e8 c5 fe fe ff       	call   9760 <snprintf@plt>
+13932:   198f3:	e8 d8 fd fe ff       	call   96d0 <strlen@plt>
+13943:   1991f:	e8 ac fd fe ff       	call   96d0 <strlen@plt>
+13954:   1994b:	e8 80 fd fe ff       	call   96d0 <strlen@plt>
+13965:   19977:	e8 54 fd fe ff       	call   96d0 <strlen@plt>
+13976:   199a3:	e8 28 fd fe ff       	call   96d0 <strlen@plt>
+13989:   199d2:	e8 f9 fc fe ff       	call   96d0 <strlen@plt>
+14003:   19a0c:	e8 bf fc fe ff       	call   96d0 <strlen@plt>
+14030:   19a81:	e8 4a fc fe ff       	call   96d0 <strlen@plt>
+14043:   19aba:	e8 11 fc fe ff       	call   96d0 <strlen@plt>
+14055:   19aec:	e8 df fb fe ff       	call   96d0 <strlen@plt>
+14072:   19b34:	e8 97 fb fe ff       	call   96d0 <strlen@plt>
+14083:   19b5d:	e8 6e fb fe ff       	call   96d0 <strlen@plt>
+14119:   19be3:	e8 e8 fa fe ff       	call   96d0 <strlen@plt>
+14140:   19c34:	e8 97 fa fe ff       	call   96d0 <strlen@plt>
+14176:   19ce5:	e8 e6 f9 fe ff       	call   96d0 <strlen@plt>
+14194:   19d39:	e8 92 f9 fe ff       	call   96d0 <strlen@plt>
+14216:   19d85:	e8 46 f9 fe ff       	call   96d0 <strlen@plt>
+14237:   19ddc:	e8 ef f8 fe ff       	call   96d0 <strlen@plt>
+14266:   19e4a:	e8 81 f8 fe ff       	call   96d0 <strlen@plt>
+14282:   19e91:	e8 3a f8 fe ff       	call   96d0 <strlen@plt>
+14302:   19ee7:	e8 e4 f7 fe ff       	call   96d0 <strlen@plt>
+14327:   19f51:	e8 7a f7 fe ff       	call   96d0 <strlen@plt>
+14340:   19f87:	e8 44 f7 fe ff       	call   96d0 <strlen@plt>
+14364:   19fdf:	e8 ec f6 fe ff       	call   96d0 <strlen@plt>
+14373:   1a003:	e8 c8 f6 fe ff       	call   96d0 <strlen@plt>
+14387:   1a03a:	e8 91 f6 fe ff       	call   96d0 <strlen@plt>
+14420:   1a0ca:	e8 01 f6 fe ff       	call   96d0 <strlen@plt>
+14429:   1a0f1:	e8 da f5 fe ff       	call   96d0 <strlen@plt>
+14438:   1a115:	e8 b6 f5 fe ff       	call   96d0 <strlen@plt>
+14452:   1a14c:	e8 7f f5 fe ff       	call   96d0 <strlen@plt>
+14471:   1a19a:	e8 31 f5 fe ff       	call   96d0 <strlen@plt>
+14527:   1a2ae:	e8 1d f4 fe ff       	call   96d0 <strlen@plt>
+14543:   1a2f5:	e8 d6 f3 fe ff       	call   96d0 <strlen@plt>
+14556:   1a32e:	e8 9d f3 fe ff       	call   96d0 <strlen@plt>
+14570:   1a36a:	e8 61 f3 fe ff       	call   96d0 <strlen@plt>
+14586:   1a3b1:	e8 1a f3 fe ff       	call   96d0 <strlen@plt>
+14603:   1a3fc:	e8 cf f2 fe ff       	call   96d0 <strlen@plt>
+14616:   1a435:	e8 96 f2 fe ff       	call   96d0 <strlen@plt>
+14629:   1a46e:	e8 5d f2 fe ff       	call   96d0 <strlen@plt>
+14641:   1a4a0:	e8 2b f2 fe ff       	call   96d0 <strlen@plt>
+14650:   1a4c4:	e8 07 f2 fe ff       	call   96d0 <strlen@plt>
+14835:   1a7c0:	e8 0b ef fe ff       	call   96d0 <strlen@plt>
+14915:   1a8de:	e8 7d ee fe ff       	call   9760 <snprintf@plt>
+14929:   1a911:	e8 4a ee fe ff       	call   9760 <snprintf@plt>
+14950:   1a960:	e8 fb ed fe ff       	call   9760 <snprintf@plt>
+14964:   1a993:	e8 c8 ed fe ff       	call   9760 <snprintf@plt>
+14980:   1a9cb:	e8 90 ed fe ff       	call   9760 <snprintf@plt>
+14995:   1aa09:	e8 52 ed fe ff       	call   9760 <snprintf@plt>
+15028:   1aa95:	e8 c6 ec fe ff       	call   9760 <snprintf@plt>
+15045:   1aad6:	e8 85 ec fe ff       	call   9760 <snprintf@plt>
+15063:   1ab18:	e8 43 ec fe ff       	call   9760 <snprintf@plt>
+15080:   1ab55:	e8 06 ec fe ff       	call   9760 <snprintf@plt>
+15097:   1ab92:	e8 c9 eb fe ff       	call   9760 <snprintf@plt>
+15114:   1abd3:	e8 88 eb fe ff       	call   9760 <snprintf@plt>
+15134:   1ac1b:	e8 40 eb fe ff       	call   9760 <snprintf@plt>
+15148:   1ac4e:	e8 0d eb fe ff       	call   9760 <snprintf@plt>
+15165:   1ac8b:	e8 d0 ea fe ff       	call   9760 <snprintf@plt>
+15182:   1acc8:	e8 93 ea fe ff       	call   9760 <snprintf@plt>
+15201:   1ad0b:	e8 50 ea fe ff       	call   9760 <snprintf@plt>
+15215:   1ad3e:	e8 1d ea fe ff       	call   9760 <snprintf@plt>
+15232:   1ad7b:	e8 e0 e9 fe ff       	call   9760 <snprintf@plt>
+15249:   1adb8:	e8 a3 e9 fe ff       	call   9760 <snprintf@plt>
+15267:   1adfc:	e8 5f e9 fe ff       	call   9760 <snprintf@plt>
+15285:   1ae40:	e8 1b e9 fe ff       	call   9760 <snprintf@plt>
+15303:   1ae84:	e8 d7 e8 fe ff       	call   9760 <snprintf@plt>
+15334:   1aefa:	e8 61 e8 fe ff       	call   9760 <snprintf@plt>
+15348:   1af30:	e8 2b e8 fe ff       	call   9760 <snprintf@plt>
+15362:   1af63:	e8 f8 e7 fe ff       	call   9760 <snprintf@plt>
+15376:   1af96:	e8 c5 e7 fe ff       	call   9760 <snprintf@plt>
+15394:   1afd4:	e8 87 e7 fe ff       	call   9760 <snprintf@plt>
+15411:   1b011:	e8 4a e7 fe ff       	call   9760 <snprintf@plt>
+15428:   1b04e:	e8 0d e7 fe ff       	call   9760 <snprintf@plt>
+15447:   1b091:	e8 ca e6 fe ff       	call   9760 <snprintf@plt>
+15461:   1b0c4:	e8 97 e6 fe ff       	call   9760 <snprintf@plt>
+15478:   1b101:	e8 5a e6 fe ff       	call   9760 <snprintf@plt>
+15495:   1b13e:	e8 1d e6 fe ff       	call   9760 <snprintf@plt>
+15575:   1b291:	e8 3a e4 fe ff       	call   96d0 <strlen@plt>
+15587:   1b2c3:	e8 08 e4 fe ff       	call   96d0 <strlen@plt>
+15600:   1b2f6:	e8 d5 e3 fe ff       	call   96d0 <strlen@plt>
+15615:   1b338:	e8 93 e3 fe ff       	call   96d0 <strlen@plt>
+15661:   1b406:	e8 c5 e2 fe ff       	call   96d0 <strlen@plt>
+15671:   1b434:	e8 97 e2 fe ff       	call   96d0 <strlen@plt>
+15681:   1b462:	e8 69 e2 fe ff       	call   96d0 <strlen@plt>
+15691:   1b490:	e8 3b e2 fe ff       	call   96d0 <strlen@plt>
+15701:   1b4be:	e8 0d e2 fe ff       	call   96d0 <strlen@plt>
+15711:   1b4ec:	e8 df e1 fe ff       	call   96d0 <strlen@plt>
+15721:   1b51a:	e8 b1 e1 fe ff       	call   96d0 <strlen@plt>
+15731:   1b545:	e8 86 e1 fe ff       	call   96d0 <strlen@plt>
+15742:   1b574:	e8 57 e1 fe ff       	call   96d0 <strlen@plt>
+15759:   1b5b8:	e8 13 e1 fe ff       	call   96d0 <strlen@plt>
+15774:   1b5f9:	e8 d2 e0 fe ff       	call   96d0 <strlen@plt>
+15788:   1b636:	e8 95 e0 fe ff       	call   96d0 <strlen@plt>
+15849:   1b743:	e8 88 df fe ff       	call   96d0 <strlen@plt>
+15876:   1b7b3:	e8 18 df fe ff       	call   96d0 <strlen@plt>
+15914:   1b83c:	e8 8f de fe ff       	call   96d0 <strlen@plt>
+15951:   1b8ec:	e8 df dd fe ff       	call   96d0 <strlen@plt>
+15963:   1b927:	e8 a4 dd fe ff       	call   96d0 <strlen@plt>
+15974:   1b959:	e8 72 dd fe ff       	call   96d0 <strlen@plt>
+15985:   1b98b:	e8 40 dd fe ff       	call   96d0 <strlen@plt>
+15996:   1b9bd:	e8 0e dd fe ff       	call   96d0 <strlen@plt>
+16007:   1b9ec:	e8 df dc fe ff       	call   96d0 <strlen@plt>
+16044:   1ba96:	e8 35 dc fe ff       	call   96d0 <strlen@plt>
+16058:   1bad8:	e8 f3 db fe ff       	call   96d0 <strlen@plt>
+16073:   1bb1e:	e8 ad db fe ff       	call   96d0 <strlen@plt>
+16088:   1bb61:	e8 6a db fe ff       	call   96d0 <strlen@plt>
+16116:   1bbd4:	e8 f7 da fe ff       	call   96d0 <strlen@plt>
+16135:   1bc22:	e8 a9 da fe ff       	call   96d0 <strlen@plt>
+16143:   1bc45:	e8 86 dd fe ff       	call   99d0 <sprintf@plt>
+16157:   1bc80:	e8 4b da fe ff       	call   96d0 <strlen@plt>
+16164:   1bc9c:	e8 2f dd fe ff       	call   99d0 <sprintf@plt>
+16171:   1bcb7:	e8 14 da fe ff       	call   96d0 <strlen@plt>
+16225:   1bd99:	e8 32 d9 fe ff       	call   96d0 <strlen@plt>
+16239:   1bdd5:	e8 f6 d8 fe ff       	call   96d0 <strlen@plt>
+16256:   1be1c:	e8 af d8 fe ff       	call   96d0 <strlen@plt>
+16272:   1be60:	e8 6b d8 fe ff       	call   96d0 <strlen@plt>
+16289:   1bea9:	e8 22 d8 fe ff       	call   96d0 <strlen@plt>
+16304:   1beeb:	e8 e0 d7 fe ff       	call   96d0 <strlen@plt>
+16320:   1bf31:	e8 9a d7 fe ff       	call   96d0 <strlen@plt>
+16335:   1bf73:	e8 58 d7 fe ff       	call   96d0 <strlen@plt>
+16396:   1c0a0:	e8 2b d6 fe ff       	call   96d0 <strlen@plt>
+16412:   1c0ed:	e8 de d5 fe ff       	call   96d0 <strlen@plt>
+16428:   1c13a:	e8 91 d5 fe ff       	call   96d0 <strlen@plt>
+16440:   1c173:	e8 58 d5 fe ff       	call   96d0 <strlen@plt>
+16452:   1c1ac:	e8 1f d5 fe ff       	call   96d0 <strlen@plt>
+16464:   1c1e4:	e8 e7 d4 fe ff       	call   96d0 <strlen@plt>
+16475:   1c218:	e8 b3 d4 fe ff       	call   96d0 <strlen@plt>
+16486:   1c24d:	e8 7e d4 fe ff       	call   96d0 <strlen@plt>
+16498:   1c285:	e8 46 d4 fe ff       	call   96d0 <strlen@plt>
+16510:   1c2bd:	e8 0e d4 fe ff       	call   96d0 <strlen@plt>
+16521:   1c2ee:	e8 dd d3 fe ff       	call   96d0 <strlen@plt>
+16533:   1c323:	e8 a8 d3 fe ff       	call   96d0 <strlen@plt>
+16574:   1c3e1:	e8 ea d2 fe ff       	call   96d0 <strlen@plt>
+16586:   1c419:	e8 b2 d2 fe ff       	call   96d0 <strlen@plt>
+16598:   1c451:	e8 7a d2 fe ff       	call   96d0 <strlen@plt>
+16609:   1c483:	e8 48 d2 fe ff       	call   96d0 <strlen@plt>
+16620:   1c4b2:	e8 19 d2 fe ff       	call   96d0 <strlen@plt>
+16630:   1c4dd:	e8 ee d1 fe ff       	call   96d0 <strlen@plt>
+16653:   1c542:	e8 89 d1 fe ff       	call   96d0 <strlen@plt>
+16667:   1c57d:	e8 4e d1 fe ff       	call   96d0 <strlen@plt>
+16681:   1c5b7:	e8 14 d1 fe ff       	call   96d0 <strlen@plt>
+16693:   1c5e9:	e8 e2 d0 fe ff       	call   96d0 <strlen@plt>
+16706:   1c61f:	e8 ac d0 fe ff       	call   96d0 <strlen@plt>
+16722:   1c660:	e8 6b d0 fe ff       	call   96d0 <strlen@plt>
+16735:   1c698:	e8 33 d0 fe ff       	call   96d0 <strlen@plt>
+16749:   1c6d4:	e8 f7 cf fe ff       	call   96d0 <strlen@plt>
+16763:   1c710:	e8 bb cf fe ff       	call   96d0 <strlen@plt>
+16777:   1c74b:	e8 80 cf fe ff       	call   96d0 <strlen@plt>
+16872:   1c946:	e8 85 cd fe ff       	call   96d0 <strlen@plt>
+16882:   1c977:	e8 54 cd fe ff       	call   96d0 <strlen@plt>
+16892:   1c9a8:	e8 23 cd fe ff       	call   96d0 <strlen@plt>
+16902:   1c9d9:	e8 f2 cc fe ff       	call   96d0 <strlen@plt>
+16912:   1ca0a:	e8 c1 cc fe ff       	call   96d0 <strlen@plt>
+16922:   1ca3b:	e8 90 cc fe ff       	call   96d0 <strlen@plt>
+16932:   1ca6c:	e8 5f cc fe ff       	call   96d0 <strlen@plt>
+16942:   1ca9d:	e8 2e cc fe ff       	call   96d0 <strlen@plt>
+16952:   1cace:	e8 fd cb fe ff       	call   96d0 <strlen@plt>
+16962:   1caff:	e8 cc cb fe ff       	call   96d0 <strlen@plt>
+16971:   1cb2c:	e8 9f cb fe ff       	call   96d0 <strlen@plt>
+16981:   1cb5d:	e8 6e cb fe ff       	call   96d0 <strlen@plt>
+16993:   1cb98:	e8 33 cb fe ff       	call   96d0 <strlen@plt>
+17005:   1cbd3:	e8 f8 ca fe ff       	call   96d0 <strlen@plt>
+17015:   1cc01:	e8 ca ca fe ff       	call   96d0 <strlen@plt>
+17026:   1cc33:	e8 98 ca fe ff       	call   96d0 <strlen@plt>
+17037:   1cc65:	e8 66 ca fe ff       	call   96d0 <strlen@plt>
+17048:   1cc97:	e8 34 ca fe ff       	call   96d0 <strlen@plt>
+17059:   1cccb:	e8 00 ca fe ff       	call   96d0 <strlen@plt>
+17070:   1ccff:	e8 cc c9 fe ff       	call   96d0 <strlen@plt>
+17079:   1cd29:	e8 a2 c9 fe ff       	call   96d0 <strlen@plt>
+17120:   1cde3:	e8 e8 c8 fe ff       	call   96d0 <strlen@plt>
+17129:   1ce10:	e8 bb c8 fe ff       	call   96d0 <strlen@plt>
+17138:   1ce3d:	e8 8e c8 fe ff       	call   96d0 <strlen@plt>
+17149:   1ce6c:	e8 5f c8 fe ff       	call   96d0 <strlen@plt>
+17173:   1cecb:	e8 00 c8 fe ff       	call   96d0 <strlen@plt>
+17186:   1cf03:	e8 c8 c7 fe ff       	call   96d0 <strlen@plt>
+17200:   1cf3c:	e8 8f c7 fe ff       	call   96d0 <strlen@plt>
+17253:   1d046:	e8 85 c6 fe ff       	call   96d0 <strlen@plt>
+17263:   1d074:	e8 57 c6 fe ff       	call   96d0 <strlen@plt>
+17273:   1d0a2:	e8 29 c6 fe ff       	call   96d0 <strlen@plt>
+17283:   1d0d0:	e8 fb c5 fe ff       	call   96d0 <strlen@plt>
+17293:   1d0fe:	e8 cd c5 fe ff       	call   96d0 <strlen@plt>
+17303:   1d12c:	e8 9f c5 fe ff       	call   96d0 <strlen@plt>
+17314:   1d15e:	e8 6d c5 fe ff       	call   96d0 <strlen@plt>
+17326:   1d196:	e8 35 c5 fe ff       	call   96d0 <strlen@plt>
+17338:   1d1ce:	e8 fd c4 fe ff       	call   96d0 <strlen@plt>
+17349:   1d200:	e8 cb c4 fe ff       	call   96d0 <strlen@plt>
+17361:   1d235:	e8 96 c4 fe ff       	call   96d0 <strlen@plt>
+17397:   1d2cb:	e8 00 c4 fe ff       	call   96d0 <strlen@plt>
+17409:   1d300:	e8 cb c3 fe ff       	call   96d0 <strlen@plt>
+17426:   1d343:	e8 88 c3 fe ff       	call   96d0 <strlen@plt>
+17438:   1d375:	e8 56 c3 fe ff       	call   96d0 <strlen@plt>
+17461:   1d3d5:	e8 f6 c2 fe ff       	call   96d0 <strlen@plt>
+17475:   1d415:	e8 b6 c2 fe ff       	call   96d0 <strlen@plt>
+17490:   1d458:	e8 73 c2 fe ff       	call   96d0 <strlen@plt>
+17505:   1d49b:	e8 30 c2 fe ff       	call   96d0 <strlen@plt>
+17533:   1d50e:	e8 bd c1 fe ff       	call   96d0 <strlen@plt>
+17542:   1d53b:	e8 90 c1 fe ff       	call   96d0 <strlen@plt>
+17551:   1d568:	e8 63 c1 fe ff       	call   96d0 <strlen@plt>
+17560:   1d595:	e8 36 c1 fe ff       	call   96d0 <strlen@plt>
+17571:   1d5c7:	e8 04 c1 fe ff       	call   96d0 <strlen@plt>
+17582:   1d5fb:	e8 d0 c0 fe ff       	call   96d0 <strlen@plt>
+17593:   1d630:	e8 9b c0 fe ff       	call   96d0 <strlen@plt>
+17603:   1d661:	e8 6a c0 fe ff       	call   96d0 <strlen@plt>
+17612:   1d68e:	e8 3d c0 fe ff       	call   96d0 <strlen@plt>
+17621:   1d6bb:	e8 10 c0 fe ff       	call   96d0 <strlen@plt>
+17631:   1d6ec:	e8 df bf fe ff       	call   96d0 <strlen@plt>
+17641:   1d71d:	e8 ae bf fe ff       	call   96d0 <strlen@plt>
+17651:   1d74e:	e8 7d bf fe ff       	call   96d0 <strlen@plt>
+17662:   1d783:	e8 48 bf fe ff       	call   96d0 <strlen@plt>
+17674:   1d7bc:	e8 0f bf fe ff       	call   96d0 <strlen@plt>
+17686:   1d7f5:	e8 d6 be fe ff       	call   96d0 <strlen@plt>
+17697:   1d82a:	e8 a1 be fe ff       	call   96d0 <strlen@plt>
+17711:   1d86c:	e8 5f be fe ff       	call   96d0 <strlen@plt>
+17730:   1d8c4:	e8 07 be fe ff       	call   96d0 <strlen@plt>
+17747:   1d914:	e8 b7 bd fe ff       	call   96d0 <strlen@plt>
+17759:   1d94c:	e8 7f bd fe ff       	call   96d0 <strlen@plt>
+17784:   1d9b6:	e8 15 bd fe ff       	call   96d0 <strlen@plt>
+17796:   1d9ee:	e8 dd bc fe ff       	call   96d0 <strlen@plt>
+17810:   1da2b:	e8 a0 bc fe ff       	call   96d0 <strlen@plt>
+17826:   1da6f:	e8 5c bc fe ff       	call   96d0 <strlen@plt>
+17838:   1daa3:	e8 28 bc fe ff       	call   96d0 <strlen@plt>
+17853:   1dae5:	e8 e6 bb fe ff       	call   96d0 <strlen@plt>
+17869:   1db28:	e8 a3 bb fe ff       	call   96d0 <strlen@plt>
+17882:   1db5d:	e8 6e bb fe ff       	call   96d0 <strlen@plt>
+17896:   1db94:	e8 37 bb fe ff       	call   96d0 <strlen@plt>
+17908:   1dbc7:	e8 04 bb fe ff       	call   96d0 <strlen@plt>
+17920:   1dbfe:	e8 cd ba fe ff       	call   96d0 <strlen@plt>
+17969:   1dcd2:	e8 f9 b9 fe ff       	call   96d0 <strlen@plt>
+17983:   1dd0d:	e8 be b9 fe ff       	call   96d0 <strlen@plt>
+17995:   1dd41:	e8 8a b9 fe ff       	call   96d0 <strlen@plt>
+18007:   1dd75:	e8 56 b9 fe ff       	call   96d0 <strlen@plt>
+18020:   1ddad:	e8 1e b9 fe ff       	call   96d0 <strlen@plt>
+18034:   1ddec:	e8 df b8 fe ff       	call   96d0 <strlen@plt>
+18050:   1de2e:	e8 9d b8 fe ff       	call   96d0 <strlen@plt>
+18070:   1de85:	e8 46 b8 fe ff       	call   96d0 <strlen@plt>
+18091:   1dedd:	e8 ee b7 fe ff       	call   96d0 <strlen@plt>
+18102:   1df0c:	e8 bf b7 fe ff       	call   96d0 <strlen@plt>
+18116:   1df43:	e8 88 b7 fe ff       	call   96d0 <strlen@plt>
+18134:   1df90:	e8 3b b7 fe ff       	call   96d0 <strlen@plt>
+18160:   1e000:	e8 cb b6 fe ff       	call   96d0 <strlen@plt>
+18175:   1e042:	e8 89 b6 fe ff       	call   96d0 <strlen@plt>
+18194:   1e08f:	e8 3c b6 fe ff       	call   96d0 <strlen@plt>
+18220:   1e100:	e8 cb b5 fe ff       	call   96d0 <strlen@plt>
+18231:   1e134:	e8 97 b5 fe ff       	call   96d0 <strlen@plt>
+18241:   1e162:	e8 69 b5 fe ff       	call   96d0 <strlen@plt>
+18261:   1e1b3:	e8 18 b5 fe ff       	call   96d0 <strlen@plt>
+18278:   1e1f8:	e8 d3 b4 fe ff       	call   96d0 <strlen@plt>
+18292:   1e233:	e8 98 b4 fe ff       	call   96d0 <strlen@plt>
+18306:   1e272:	e8 59 b4 fe ff       	call   96d0 <strlen@plt>
+18321:   1e2b0:	e8 1b b4 fe ff       	call   96d0 <strlen@plt>
+18334:   1e2e4:	e8 e7 b3 fe ff       	call   96d0 <strlen@plt>
+18347:   1e31b:	e8 b0 b3 fe ff       	call   96d0 <strlen@plt>
+18370:   1e377:	e8 54 b3 fe ff       	call   96d0 <strlen@plt>
+18379:   1e3a1:	e8 2a b3 fe ff       	call   96d0 <strlen@plt>
+18388:   1e3cb:	e8 00 b3 fe ff       	call   96d0 <strlen@plt>
+18402:   1e404:	e8 c7 b2 fe ff       	call   96d0 <strlen@plt>
+18420:   1e44e:	e8 7d b2 fe ff       	call   96d0 <strlen@plt>
+18437:   1e493:	e8 38 b2 fe ff       	call   96d0 <strlen@plt>
+18449:   1e4c5:	e8 06 b2 fe ff       	call   96d0 <strlen@plt>
+18461:   1e4f7:	e8 d4 b1 fe ff       	call   96d0 <strlen@plt>
+18490:   1e568:	e8 63 b1 fe ff       	call   96d0 <strlen@plt>
+18502:   1e59e:	e8 2d b1 fe ff       	call   96d0 <strlen@plt>
+18515:   1e5d7:	e8 f4 b0 fe ff       	call   96d0 <strlen@plt>
+18531:   1e61d:	e8 ae b0 fe ff       	call   96d0 <strlen@plt>
+18567:   1e6ba:	e8 11 b0 fe ff       	call   96d0 <strlen@plt>
+18578:   1e6ee:	e8 dd af fe ff       	call   96d0 <strlen@plt>
+18590:   1e727:	e8 a4 af fe ff       	call   96d0 <strlen@plt>
+18601:   1e75b:	e8 70 af fe ff       	call   96d0 <strlen@plt>
+18612:   1e78f:	e8 3c af fe ff       	call   96d0 <strlen@plt>
+18623:   1e7c3:	e8 08 af fe ff       	call   96d0 <strlen@plt>
+18634:   1e7f7:	e8 d4 ae fe ff       	call   96d0 <strlen@plt>
+18645:   1e82b:	e8 a0 ae fe ff       	call   96d0 <strlen@plt>
+18656:   1e85f:	e8 6c ae fe ff       	call   96d0 <strlen@plt>
+18667:   1e893:	e8 38 ae fe ff       	call   96d0 <strlen@plt>
+18678:   1e8c7:	e8 04 ae fe ff       	call   96d0 <strlen@plt>
+18689:   1e8fb:	e8 d0 ad fe ff       	call   96d0 <strlen@plt>
+18700:   1e92f:	e8 9c ad fe ff       	call   96d0 <strlen@plt>
+18711:   1e960:	e8 6b ad fe ff       	call   96d0 <strlen@plt>
+18722:   1e991:	e8 3a ad fe ff       	call   96d0 <strlen@plt>
+18772:   1ea60:	e8 6b ac fe ff       	call   96d0 <strlen@plt>
+18781:   1ea8d:	e8 3e ac fe ff       	call   96d0 <strlen@plt>
+18791:   1eabe:	e8 0d ac fe ff       	call   96d0 <strlen@plt>
+18801:   1eaef:	e8 dc ab fe ff       	call   96d0 <strlen@plt>
+18811:   1eb20:	e8 ab ab fe ff       	call   96d0 <strlen@plt>
+18822:   1eb52:	e8 79 ab fe ff       	call   96d0 <strlen@plt>
+18832:   1eb7d:	e8 4e ab fe ff       	call   96d0 <strlen@plt>
+19015:   1ee20:	e8 3b a9 fe ff       	call   9760 <snprintf@plt>
+19431:   1f4a1:	e8 2a a5 fe ff       	call   99d0 <sprintf@plt>
+19470:   1f53a:	e8 91 a4 fe ff       	call   99d0 <sprintf@plt>
+19503:   1f5b4:	e8 17 a4 fe ff       	call   99d0 <sprintf@plt>
+19515:   1f5e8:	e8 73 a1 fe ff       	call   9760 <snprintf@plt>
+20164:   200d5:	e8 f6 98 fe ff       	call   99d0 <sprintf@plt>
+20232:   201e9:	e8 e2 97 fe ff       	call   99d0 <sprintf@plt>
+20268:   20266:	e8 65 97 fe ff       	call   99d0 <sprintf@plt>
+20280:   20298:	e8 c3 94 fe ff       	call   9760 <snprintf@plt>
+20297:   202d7:	e8 74 95 fe ff       	call   9850 <fprintf@plt>
+20306:   202fd:	e8 4e 95 fe ff       	call   9850 <fprintf@plt>
+20315:   20323:	e8 28 95 fe ff       	call   9850 <fprintf@plt>
+20324:   20349:	e8 02 95 fe ff       	call   9850 <fprintf@plt>
+20333:   2036f:	e8 dc 94 fe ff       	call   9850 <fprintf@plt>
+20342:   20395:	e8 b6 94 fe ff       	call   9850 <fprintf@plt>
+20358:   203db:	e8 70 94 fe ff       	call   9850 <fprintf@plt>
+20916:   20d3a:	e8 21 8a fe ff       	call   9760 <snprintf@plt>
+20956:   20dcf:	e8 8c 89 fe ff       	call   9760 <snprintf@plt>
+21007:   20e88:	e8 b3 88 fe ff       	call   9740 <printf@plt>
+21013:   20ea4:	e8 97 88 fe ff       	call   9740 <printf@plt>
+21024:   20ed1:	e8 6a 88 fe ff       	call   9740 <printf@plt>
+21042:   20f19:	e8 22 88 fe ff       	call   9740 <printf@plt>
+21055:   20f4d:	e8 ee 87 fe ff       	call   9740 <printf@plt>
+21085:   20fc2:	e8 79 87 fe ff       	call   9740 <printf@plt>
+21100:   20ffd:	e8 3e 87 fe ff       	call   9740 <printf@plt>
+21110:   21026:	e8 15 87 fe ff       	call   9740 <printf@plt>
+21123:   2105a:	e8 e1 86 fe ff       	call   9740 <printf@plt>
+21136:   2108e:	e8 ad 86 fe ff       	call   9740 <printf@plt>
+21145:   210b5:	e8 86 86 fe ff       	call   9740 <printf@plt>
+21151:   210d1:	e8 6a 86 fe ff       	call   9740 <printf@plt>
+21162:   21102:	e8 39 86 fe ff       	call   9740 <printf@plt>
+21173:   21133:	e8 08 86 fe ff       	call   9740 <printf@plt>
+21184:   21164:	e8 d7 85 fe ff       	call   9740 <printf@plt>
+21205:   211b4:	e8 87 85 fe ff       	call   9740 <printf@plt>
+21214:   211d9:	e8 62 85 fe ff       	call   9740 <printf@plt>
+21223:   211fe:	e8 3d 85 fe ff       	call   9740 <printf@plt>
+21232:   21223:	e8 18 85 fe ff       	call   9740 <printf@plt>
+21257:   2127c:	e8 bf 84 fe ff       	call   9740 <printf@plt>
+21270:   212b5:	e8 86 84 fe ff       	call   9740 <printf@plt>
+21279:   212da:	e8 61 84 fe ff       	call   9740 <printf@plt>
+21300:   21324:	e8 17 84 fe ff       	call   9740 <printf@plt>
+21313:   2135d:	e8 de 83 fe ff       	call   9740 <printf@plt>
+21333:   213a7:	e8 94 83 fe ff       	call   9740 <printf@plt>
+21351:   213eb:	e8 50 83 fe ff       	call   9740 <printf@plt>
+21820:   21b0f:	e8 2c 7c fe ff       	call   9740 <printf@plt>
+21841:   21b6c:	e8 cf 7b fe ff       	call   9740 <printf@plt>
+21855:   21bab:	e8 90 7b fe ff       	call   9740 <printf@plt>
+21878:   21c0f:	e8 2c 7b fe ff       	call   9740 <printf@plt>
+21898:   21c65:	e8 d6 7a fe ff       	call   9740 <printf@plt>
+21905:   21c83:	e8 b8 7a fe ff       	call   9740 <printf@plt>
+21914:   21ca9:	e8 92 7a fe ff       	call   9740 <printf@plt>
+21924:   21cd1:	e8 6a 7a fe ff       	call   9740 <printf@plt>
+21931:   21cef:	e8 4c 7a fe ff       	call   9740 <printf@plt>
+21937:   21d0b:	e8 30 7a fe ff       	call   9740 <printf@plt>
+21956:   21d64:	e8 d7 79 fe ff       	call   9740 <printf@plt>
+21966:   21d91:	e8 aa 79 fe ff       	call   9740 <printf@plt>
+21973:   21db0:	e8 8b 79 fe ff       	call   9740 <printf@plt>
+21980:   21dcf:	e8 6c 79 fe ff       	call   9740 <printf@plt>
+21987:   21dee:	e8 4d 79 fe ff       	call   9740 <printf@plt>
+21994:   21e0d:	e8 2e 79 fe ff       	call   9740 <printf@plt>
+22023:   21e77:	e8 c4 78 fe ff       	call   9740 <printf@plt>
+22030:   21e96:	e8 a5 78 fe ff       	call   9740 <printf@plt>
+22041:   21ec8:	e8 73 78 fe ff       	call   9740 <printf@plt>
+22062:   21f25:	e8 16 78 fe ff       	call   9740 <printf@plt>
+22069:   21f44:	e8 f7 77 fe ff       	call   9740 <printf@plt>
+22098:   21fae:	e8 8d 77 fe ff       	call   9740 <printf@plt>
+22105:   21fcd:	e8 6e 77 fe ff       	call   9740 <printf@plt>
+22129:   22039:	e8 02 77 fe ff       	call   9740 <printf@plt>
+22170:   220d7:	e8 64 76 fe ff       	call   9740 <printf@plt>
+22431:   22567:	e8 f4 71 fe ff       	call   9760 <snprintf@plt>
+22473:   22624:	e8 17 71 fe ff       	call   9740 <printf@plt>
+22504:   226a1:	e8 9a 70 fe ff       	call   9740 <printf@plt>
+22510:   226bd:	e8 7e 70 fe ff       	call   9740 <printf@plt>
+22528:   2270e:	e8 2d 70 fe ff       	call   9740 <printf@plt>
+22771:   22ab7:	e8 84 6c fe ff       	call   9740 <printf@plt>
+24275:   240c9:	e8 02 59 fe ff       	call   99d0 <sprintf@plt>
+24798:   2494c:	e8 7f 50 fe ff       	call   99d0 <sprintf@plt>
+24844:   24a03:	e8 c8 4f fe ff       	call   99d0 <sprintf@plt>
+24893:   24ac2:	e8 09 4f fe ff       	call   99d0 <sprintf@plt>
+25075:   24ddd:	e8 5e 49 fe ff       	call   9740 <printf@plt>
+25101:   24e4a:	e8 f1 48 fe ff       	call   9740 <printf@plt>
+25346:   25280:	e8 4b 47 fe ff       	call   99d0 <sprintf@plt>
+25476:   2550d:	e8 be 44 fe ff       	call   99d0 <sprintf@plt>
+25513:   255b9:	e8 12 44 fe ff       	call   99d0 <sprintf@plt>
+25555:   25677:	e8 54 43 fe ff       	call   99d0 <sprintf@plt>
+25613:   2577a:	e8 51 42 fe ff       	call   99d0 <sprintf@plt>
+26191:   260e9:	e8 52 36 fe ff       	call   9740 <printf@plt>
+26198:   26107:	e8 34 36 fe ff       	call   9740 <printf@plt>
+26210:   26137:	e8 04 36 fe ff       	call   9740 <printf@plt>
+26216:   26153:	e8 e8 35 fe ff       	call   9740 <printf@plt>
+26223:   26174:	e8 c7 35 fe ff       	call   9740 <printf@plt>
+26236:   261a9:	e8 92 35 fe ff       	call   9740 <printf@plt>
+26242:   261c5:	e8 76 35 fe ff       	call   9740 <printf@plt>
+26249:   261e6:	e8 55 35 fe ff       	call   9740 <printf@plt>
+26259:   26211:	e8 2a 35 fe ff       	call   9740 <printf@plt>
+26265:   2622d:	e8 0e 35 fe ff       	call   9740 <printf@plt>
+26271:   26249:	e8 f2 34 fe ff       	call   9740 <printf@plt>
+26278:   26267:	e8 d4 34 fe ff       	call   9740 <printf@plt>
+26284:   26283:	e8 b8 34 fe ff       	call   9740 <printf@plt>
+26293:   262a9:	e8 92 34 fe ff       	call   9740 <printf@plt>
+26721:   2697f:	e8 bc 2d fe ff       	call   9740 <printf@plt>
+26734:   269b9:	e8 82 2d fe ff       	call   9740 <printf@plt>
+26787:   26a9d:	e8 9e 2c fe ff       	call   9740 <printf@plt>
+26810:   26b0c:	e8 2f 2c fe ff       	call   9740 <printf@plt>
+26832:   26b6f:	e8 cc 2b fe ff       	call   9740 <printf@plt>
+26894:   26c65:	e8 d6 2a fe ff       	call   9740 <printf@plt>
+26902:   26c87:	e8 b4 2a fe ff       	call   9740 <printf@plt>
+26911:   26cb2:	e8 89 2a fe ff       	call   9740 <printf@plt>
+26923:   26ce9:	e8 52 2a fe ff       	call   9740 <printf@plt>
+26958:   26d89:	e8 b2 29 fe ff       	call   9740 <printf@plt>
+26965:   26dab:	e8 90 29 fe ff       	call   9740 <printf@plt>
+26972:   26dcd:	e8 6e 29 fe ff       	call   9740 <printf@plt>
+26994:   26e30:	e8 0b 29 fe ff       	call   9740 <printf@plt>
+27003:   26e5a:	e8 e1 28 fe ff       	call   9740 <printf@plt>
+27010:   26e7c:	e8 bf 28 fe ff       	call   9740 <printf@plt>
+27028:   26ed3:	e8 68 28 fe ff       	call   9740 <printf@plt>
+27035:   26ef3:	e8 48 28 fe ff       	call   9740 <printf@plt>
+27056:   26f58:	e8 e3 27 fe ff       	call   9740 <printf@plt>
+27071:   26fa1:	e8 9a 27 fe ff       	call   9740 <printf@plt>
+27075:   26fb5:	e8 86 27 fe ff       	call   9740 <printf@plt>
+27084:   26fe1:	e8 5a 27 fe ff       	call   9740 <printf@plt>
+27100:   2702d:	e8 0e 27 fe ff       	call   9740 <printf@plt>
+27111:   27062:	e8 d9 26 fe ff       	call   9740 <printf@plt>
+27125:   270a4:	e8 97 26 fe ff       	call   9740 <printf@plt>
+27161:   27142:	e8 f9 25 fe ff       	call   9740 <printf@plt>
+27169:   27160:	e8 db 25 fe ff       	call   9740 <printf@plt>
+27178:   27183:	e8 b8 25 fe ff       	call   9740 <printf@plt>
+27188:   271af:	e8 8c 25 fe ff       	call   9740 <printf@plt>
+27204:   271fe:	e8 3d 25 fe ff       	call   9740 <printf@plt>
+27222:   2724d:	e8 ee 24 fe ff       	call   9740 <printf@plt>
+27233:   2727c:	e8 bf 24 fe ff       	call   9740 <printf@plt>
+27244:   272ab:	e8 90 24 fe ff       	call   9740 <printf@plt>
+27430:   27576:	e8 e5 21 fe ff       	call   9760 <snprintf@plt>
+27470:   27606:	e8 35 21 fe ff       	call   9740 <printf@plt>
+27546:   2776e:	e8 cd 1f fe ff       	call   9740 <printf@plt>
+27948:   27e23:	e8 18 19 fe ff       	call   9740 <printf@plt>
+27954:   27e3f:	e8 fc 18 fe ff       	call   9740 <printf@plt>
+28091:   280bb:	e8 80 16 fe ff       	call   9740 <printf@plt>
+28215:   282a1:	e8 9a 14 fe ff       	call   9740 <printf@plt>
+28221:   282bd:	e8 7e 14 fe ff       	call   9740 <printf@plt>
+28239:   28307:	e8 34 14 fe ff       	call   9740 <printf@plt>
+28255:   2834b:	e8 00 15 fe ff       	call   9850 <fprintf@plt>
+28278:   283a4:	e8 97 13 fe ff       	call   9740 <printf@plt>
+28285:   283c1:	e8 7a 13 fe ff       	call   9740 <printf@plt>
+28300:   283fe:	e8 3d 13 fe ff       	call   9740 <printf@plt>
+28315:   2843b:	e8 00 13 fe ff       	call   9740 <printf@plt>
+28364:   284fc:	e8 3f 12 fe ff       	call   9740 <printf@plt>
+28370:   28518:	e8 23 12 fe ff       	call   9740 <printf@plt>
+28391:   2856c:	e8 cf 11 fe ff       	call   9740 <printf@plt>
+28408:   285b0:	e8 8b 11 fe ff       	call   9740 <printf@plt>
+28434:   28613:	e8 28 11 fe ff       	call   9740 <printf@plt>
+28441:   28630:	e8 0b 11 fe ff       	call   9740 <printf@plt>
+28475:   286b5:	e8 86 10 fe ff       	call   9740 <printf@plt>
+28493:   286fd:	e8 3e 10 fe ff       	call   9740 <printf@plt>
+28770:   28b5e:	e8 dd 0b fe ff       	call   9740 <printf@plt>
+28821:   28c4f:	e8 ec 0a fe ff       	call   9740 <printf@plt>
+28852:   28cd5:	e8 66 0a fe ff       	call   9740 <printf@plt>
+28863:   28d04:	e8 37 0a fe ff       	call   9740 <printf@plt>
+28874:   28d33:	e8 08 0a fe ff       	call   9740 <printf@plt>
+28894:   28d86:	e8 b5 09 fe ff       	call   9740 <printf@plt>
+29027:   28f8d:	e8 ae 07 fe ff       	call   9740 <printf@plt>
+29033:   28fa9:	e8 92 07 fe ff       	call   9740 <printf@plt>
+29045:   28fda:	e8 61 07 fe ff       	call   9740 <printf@plt>
+29332:   293f3:	e8 48 03 fe ff       	call   9740 <printf@plt>
+29364:   29481:	e8 ba 02 fe ff       	call   9740 <printf@plt>
+29507:   296b1:	e8 8a 00 fe ff       	call   9740 <printf@plt>
+29517:   296db:	e8 60 00 fe ff       	call   9740 <printf@plt>
+30164:   2a091:	e8 aa f6 fd ff       	call   9740 <printf@plt>
+30667:   2a95c:	e8 df ed fd ff       	call   9740 <printf@plt>
+30678:   2a98e:	e8 ad ed fd ff       	call   9740 <printf@plt>
+30689:   2a9c3:	e8 78 ed fd ff       	call   9740 <printf@plt>
+30725:   2aa63:	e8 d8 ec fd ff       	call   9740 <printf@plt>
+30736:   2aa95:	e8 a6 ec fd ff       	call   9740 <printf@plt>
+30747:   2aac7:	e8 74 ec fd ff       	call   9740 <printf@plt>
+30769:   2ab1e:	e8 1d ec fd ff       	call   9740 <printf@plt>
+30943:   2adcd:	e8 6e e9 fd ff       	call   9740 <printf@plt>
+30968:   2ae42:	e8 f9 e8 fd ff       	call   9740 <printf@plt>
+30977:   2ae65:	e8 d6 e8 fd ff       	call   9740 <printf@plt>
+30986:   2ae88:	e8 b3 e8 fd ff       	call   9740 <printf@plt>
+30995:   2aeab:	e8 90 e8 fd ff       	call   9740 <printf@plt>
+31004:   2aece:	e8 6d e8 fd ff       	call   9740 <printf@plt>
+31019:   2af07:	e8 34 e8 fd ff       	call   9740 <printf@plt>
+31033:   2af3a:	e8 01 e8 fd ff       	call   9740 <printf@plt>
+31042:   2af5d:	e8 de e7 fd ff       	call   9740 <printf@plt>
+31051:   2af80:	e8 bb e7 fd ff       	call   9740 <printf@plt>
+31060:   2afa3:	e8 98 e7 fd ff       	call   9740 <printf@plt>
+31069:   2afc6:	e8 75 e7 fd ff       	call   9740 <printf@plt>
+31078:   2afe9:	e8 52 e7 fd ff       	call   9740 <printf@plt>
+31087:   2b00c:	e8 2f e7 fd ff       	call   9740 <printf@plt>
+31096:   2b02f:	e8 0c e7 fd ff       	call   9740 <printf@plt>
+31105:   2b052:	e8 e9 e6 fd ff       	call   9740 <printf@plt>
+31114:   2b075:	e8 c6 e6 fd ff       	call   9740 <printf@plt>
+31123:   2b098:	e8 a3 e6 fd ff       	call   9740 <printf@plt>
+31132:   2b0bb:	e8 80 e6 fd ff       	call   9740 <printf@plt>
+31141:   2b0de:	e8 5d e6 fd ff       	call   9740 <printf@plt>
+31150:   2b101:	e8 3a e6 fd ff       	call   9740 <printf@plt>
+31159:   2b124:	e8 17 e6 fd ff       	call   9740 <printf@plt>
+31168:   2b147:	e8 f4 e5 fd ff       	call   9740 <printf@plt>
+31177:   2b16a:	e8 d1 e5 fd ff       	call   9740 <printf@plt>
+31186:   2b18d:	e8 ae e5 fd ff       	call   9740 <printf@plt>
+31195:   2b1b0:	e8 8b e5 fd ff       	call   9740 <printf@plt>
+31204:   2b1d3:	e8 68 e5 fd ff       	call   9740 <printf@plt>
+31217:   2b201:	e8 3a e5 fd ff       	call   9740 <printf@plt>
+32081:   2bebd:	e8 7e d8 fd ff       	call   9740 <printf@plt>
+32151:   2bfe2:	e8 59 d7 fd ff       	call   9740 <printf@plt>
+32271:   2c1b4:	e8 87 d5 fd ff       	call   9740 <printf@plt>
+32871:   2cab9:	e8 82 cc fd ff       	call   9740 <printf@plt>
+32886:   2caed:	e8 4e cc fd ff       	call   9740 <printf@plt>
+32902:   2cb27:	e8 14 cc fd ff       	call   9740 <printf@plt>
+32947:   2cbf9:	e8 42 cb fd ff       	call   9740 <printf@plt>
+32956:   2cc20:	e8 1b cb fd ff       	call   9740 <printf@plt>
+32966:   2cc4c:	e8 ef ca fd ff       	call   9740 <printf@plt>
+32978:   2cc80:	e8 bb ca fd ff       	call   9740 <printf@plt>
+32998:   2cccd:	e8 6e ca fd ff       	call   9740 <printf@plt>
+33005:   2ccec:	e8 4f ca fd ff       	call   9740 <printf@plt>
+33025:   2cd48:	e8 f3 c9 fd ff       	call   9740 <printf@plt>
+33033:   2cd69:	e8 d2 c9 fd ff       	call   9740 <printf@plt>
+33048:   2cdab:	e8 90 c9 fd ff       	call   9740 <printf@plt>
+33060:   2cde0:	e8 5b c9 fd ff       	call   9740 <printf@plt>
+33066:   2cdfc:	e8 3f c9 fd ff       	call   9740 <printf@plt>
+33080:   2ce35:	e8 06 c9 fd ff       	call   9740 <printf@plt>
+33084:   2ce49:	e8 f2 c8 fd ff       	call   9740 <printf@plt>
+33095:   2ce7d:	e8 be c8 fd ff       	call   9740 <printf@plt>
+33138:   2cf49:	e8 f2 c7 fd ff       	call   9740 <printf@plt>
+33147:   2cf6d:	e8 ce c7 fd ff       	call   9740 <printf@plt>
+33159:   2cf9f:	e8 9c c7 fd ff       	call   9740 <printf@plt>
+33169:   2cfcb:	e8 70 c7 fd ff       	call   9740 <printf@plt>
+33188:   2d012:	e8 29 c7 fd ff       	call   9740 <printf@plt>
+33194:   2d02b:	e8 10 c7 fd ff       	call   9740 <printf@plt>
+33248:   2d125:	e8 16 c6 fd ff       	call   9740 <printf@plt>
+33259:   2d14f:	e8 ec c5 fd ff       	call   9740 <printf@plt>
+33310:   2d231:	e8 0a c5 fd ff       	call   9740 <printf@plt>
+33357:   2d30f:	e8 2c c4 fd ff       	call   9740 <printf@plt>
+33372:   2d348:	e8 f3 c3 fd ff       	call   9740 <printf@plt>
+33381:   2d36f:	e8 cc c3 fd ff       	call   9740 <printf@plt>
+33391:   2d393:	e8 a8 c3 fd ff       	call   9740 <printf@plt>
+33409:   2d3dd:	e8 5e c3 fd ff       	call   9740 <printf@plt>
+33418:   2d3ff:	e8 3c c3 fd ff       	call   9740 <printf@plt>
+33432:   2d43d:	e8 fe c2 fd ff       	call   9740 <printf@plt>
+33441:   2d45f:	e8 dc c2 fd ff       	call   9740 <printf@plt>
+33486:   2d535:	e8 06 c2 fd ff       	call   9740 <printf@plt>
+33498:   2d560:	e8 db c1 fd ff       	call   9740 <printf@plt>
+33507:   2d584:	e8 b7 c1 fd ff       	call   9740 <printf@plt>
+33517:   2d5ac:	e8 8f c1 fd ff       	call   9740 <printf@plt>
+33562:   2d682:	e8 b9 c0 fd ff       	call   9740 <printf@plt>
+33571:   2d6a6:	e8 95 c0 fd ff       	call   9740 <printf@plt>
+33583:   2d6d8:	e8 63 c0 fd ff       	call   9740 <printf@plt>
+33592:   2d701:	e8 3a c0 fd ff       	call   9740 <printf@plt>
+33610:   2d742:	e8 f9 bf fd ff       	call   9740 <printf@plt>
+33616:   2d75b:	e8 e0 bf fd ff       	call   9740 <printf@plt>
+33628:   2d78d:	e8 ae bf fd ff       	call   9740 <printf@plt>
+33700:   2d8e6:	e8 55 be fd ff       	call   9740 <printf@plt>
+33715:   2d928:	e8 13 be fd ff       	call   9740 <printf@plt>
+33760:   2da06:	e8 35 bd fd ff       	call   9740 <printf@plt>
+33770:   2da30:	e8 0b bd fd ff       	call   9740 <printf@plt>
+33780:   2da5f:	e8 dc bc fd ff       	call   9740 <printf@plt>
+33794:   2da9f:	e8 9c bc fd ff       	call   9740 <printf@plt>
+33799:   2dab5:	e8 86 bc fd ff       	call   9740 <printf@plt>
+33854:   2dbc3:	e8 78 bb fd ff       	call   9740 <printf@plt>
+33866:   2dbf9:	e8 42 bb fd ff       	call   9740 <printf@plt>
+33901:   2dcb5:	e8 86 ba fd ff       	call   9740 <printf@plt>
+33909:   2dcda:	e8 61 ba fd ff       	call   9740 <printf@plt>
+33948:   2dd9a:	e8 a1 b9 fd ff       	call   9740 <printf@plt>
+33961:   2dddd:	e8 5e b9 fd ff       	call   9740 <printf@plt>
+33969:   2de02:	e8 39 b9 fd ff       	call   9740 <printf@plt>
+34020:   2def7:	e8 44 b8 fd ff       	call   9740 <printf@plt>
+34031:   2df24:	e8 17 b8 fd ff       	call   9740 <printf@plt>
+34084:   2e027:	e8 14 b7 fd ff       	call   9740 <printf@plt>
+34097:   2e060:	e8 db b6 fd ff       	call   9740 <printf@plt>
+34110:   2e097:	e8 a4 b6 fd ff       	call   9740 <printf@plt>
+34117:   2e0b5:	e8 86 b6 fd ff       	call   9740 <printf@plt>
+34219:   2e23f:	e8 fc b4 fd ff       	call   9740 <printf@plt>
+34343:   2e449:	e8 f2 b2 fd ff       	call   9740 <printf@plt>
+34386:   2e4f1:	e8 4a b2 fd ff       	call   9740 <printf@plt>
+34443:   2e5d3:	e8 68 b1 fd ff       	call   9740 <printf@plt>
+34477:   2e660:	e8 db b0 fd ff       	call   9740 <printf@plt>
+34489:   2e68d:	e8 ae b0 fd ff       	call   9740 <printf@plt>
+34495:   2e6a9:	e8 92 b0 fd ff       	call   9740 <printf@plt>
+34501:   2e6c3:	e8 78 b0 fd ff       	call   9740 <printf@plt>
+34522:   2e719:	e8 22 b0 fd ff       	call   9740 <printf@plt>
+34532:   2e73f:	e8 fc af fd ff       	call   9740 <printf@plt>
+35057:   2f056:	e8 e5 a6 fd ff       	call   9740 <printf@plt>
+35099:   2f103:	e8 38 a6 fd ff       	call   9740 <printf@plt>
+35210:   2f2be:	e8 7d a4 fd ff       	call   9740 <printf@plt>
+35302:   2f42f:	e8 0c a3 fd ff       	call   9740 <printf@plt>
+35334:   2f4bc:	e8 7f a2 fd ff       	call   9740 <printf@plt>
+35362:   2f54c:	e8 ef a1 fd ff       	call   9740 <printf@plt>
+35371:   2f57a:	e8 51 a4 fd ff       	call   99d0 <sprintf@plt>
+35380:   2f5a3:	e8 98 a1 fd ff       	call   9740 <printf@plt>
+35400:   2f605:	e8 56 a1 fd ff       	call   9760 <snprintf@plt>
+35428:   2f67c:	e8 df a0 fd ff       	call   9760 <snprintf@plt>
+35438:   2f6a9:	e8 92 a0 fd ff       	call   9740 <printf@plt>
+35591:   2f90c:	e8 2f 9e fd ff       	call   9740 <printf@plt>
+35625:   2f990:	e8 ab 9d fd ff       	call   9740 <printf@plt>
+35651:   2f9fc:	e8 3f 9d fd ff       	call   9740 <printf@plt>
+35660:   2fa20:	e8 1b 9d fd ff       	call   9740 <printf@plt>
+35669:   2fa44:	e8 f7 9c fd ff       	call   9740 <printf@plt>
+35678:   2fa68:	e8 d3 9c fd ff       	call   9740 <printf@plt>
+35687:   2fa8c:	e8 af 9c fd ff       	call   9740 <printf@plt>
+35696:   2fab0:	e8 8b 9c fd ff       	call   9740 <printf@plt>
+35705:   2fad4:	e8 67 9c fd ff       	call   9740 <printf@plt>
+35714:   2fafa:	e8 41 9c fd ff       	call   9740 <printf@plt>
+35723:   2fb20:	e8 1b 9c fd ff       	call   9740 <printf@plt>
+35732:   2fb46:	e8 f5 9b fd ff       	call   9740 <printf@plt>
+35741:   2fb6c:	e8 cf 9b fd ff       	call   9740 <printf@plt>
+35750:   2fb92:	e8 a9 9b fd ff       	call   9740 <printf@plt>
+35759:   2fbb8:	e8 83 9b fd ff       	call   9740 <printf@plt>
+35768:   2fbde:	e8 5d 9b fd ff       	call   9740 <printf@plt>
+35777:   2fc04:	e8 37 9b fd ff       	call   9740 <printf@plt>
+36905:   30f64:	e8 d7 87 fd ff       	call   9740 <printf@plt>
+37475:   31a8b:	e8 b0 7c fd ff       	call   9740 <printf@plt>
+37484:   31ab1:	e8 8a 7c fd ff       	call   9740 <printf@plt>
+37514:   31b42:	e8 89 7b fd ff       	call   96d0 <strlen@plt>
+37523:   31b6b:	e8 d0 7b fd ff       	call   9740 <printf@plt>
+37659:   31e04:	e8 37 79 fd ff       	call   9740 <printf@plt>
+37666:   31e22:	e8 19 79 fd ff       	call   9740 <printf@plt>
+37673:   31e40:	e8 fb 78 fd ff       	call   9740 <printf@plt>
+37680:   31e5e:	e8 dd 78 fd ff       	call   9740 <printf@plt>
+37687:   31e7c:	e8 bf 78 fd ff       	call   9740 <printf@plt>
+37708:   31ee1:	e8 5a 78 fd ff       	call   9740 <printf@plt>
+37713:   31efa:	e8 41 78 fd ff       	call   9740 <printf@plt>
+37730:   31f4b:	e8 f0 77 fd ff       	call   9740 <printf@plt>
+37740:   31f77:	e8 c4 77 fd ff       	call   9740 <printf@plt>
+37752:   31fb1:	e8 8a 77 fd ff       	call   9740 <printf@plt>
+37762:   31fdc:	e8 5f 77 fd ff       	call   9740 <printf@plt>
+37773:   3200c:	e8 2f 77 fd ff       	call   9740 <printf@plt>
+37786:   3204a:	e8 f1 76 fd ff       	call   9740 <printf@plt>
+37796:   32076:	e8 c5 76 fd ff       	call   9740 <printf@plt>
+37808:   320b0:	e8 8b 76 fd ff       	call   9740 <printf@plt>
+37818:   320db:	e8 60 76 fd ff       	call   9740 <printf@plt>
+37829:   3210b:	e8 30 76 fd ff       	call   9740 <printf@plt>
+37842:   32149:	e8 f2 75 fd ff       	call   9740 <printf@plt>
+37852:   32175:	e8 c6 75 fd ff       	call   9740 <printf@plt>
+37864:   321af:	e8 8c 75 fd ff       	call   9740 <printf@plt>
+37874:   321da:	e8 61 75 fd ff       	call   9740 <printf@plt>
+37884:   32205:	e8 36 75 fd ff       	call   9740 <printf@plt>
+37894:   32230:	e8 0b 75 fd ff       	call   9740 <printf@plt>
+37904:   3225b:	e8 e0 74 fd ff       	call   9740 <printf@plt>
+37914:   32286:	e8 b5 74 fd ff       	call   9740 <printf@plt>
+37924:   322b1:	e8 8a 74 fd ff       	call   9740 <printf@plt>
+37934:   322de:	e8 5d 74 fd ff       	call   9740 <printf@plt>
+37944:   3230e:	e8 2d 74 fd ff       	call   9740 <printf@plt>
+37954:   3233e:	e8 fd 73 fd ff       	call   9740 <printf@plt>
+37964:   3236e:	e8 cd 73 fd ff       	call   9740 <printf@plt>
+37974:   3239e:	e8 9d 73 fd ff       	call   9740 <printf@plt>
+37984:   323ce:	e8 6d 73 fd ff       	call   9740 <printf@plt>
+37994:   323fe:	e8 3d 73 fd ff       	call   9740 <printf@plt>
+38004:   3242e:	e8 0d 73 fd ff       	call   9740 <printf@plt>
+38014:   3245e:	e8 dd 72 fd ff       	call   9740 <printf@plt>
+38024:   3248e:	e8 ad 72 fd ff       	call   9740 <printf@plt>
+38034:   324be:	e8 7d 72 fd ff       	call   9740 <printf@plt>
+38044:   324ee:	e8 4d 72 fd ff       	call   9740 <printf@plt>
+38054:   3251e:	e8 1d 72 fd ff       	call   9740 <printf@plt>
+38064:   3254e:	e8 ed 71 fd ff       	call   9740 <printf@plt>
+38074:   3257e:	e8 bd 71 fd ff       	call   9740 <printf@plt>
+38084:   325ae:	e8 8d 71 fd ff       	call   9740 <printf@plt>
+38094:   325de:	e8 5d 71 fd ff       	call   9740 <printf@plt>
+38104:   3260e:	e8 2d 71 fd ff       	call   9740 <printf@plt>
+38114:   3263e:	e8 fd 70 fd ff       	call   9740 <printf@plt>
+38124:   3266e:	e8 cd 70 fd ff       	call   9740 <printf@plt>
+38134:   3269e:	e8 9d 70 fd ff       	call   9740 <printf@plt>
+38144:   326ce:	e8 6d 70 fd ff       	call   9740 <printf@plt>
+38154:   326fe:	e8 3d 70 fd ff       	call   9740 <printf@plt>
+38164:   3272e:	e8 0d 70 fd ff       	call   9740 <printf@plt>
+38175:   32761:	e8 da 6f fd ff       	call   9740 <printf@plt>
+38254:   328e6:	e8 55 6e fd ff       	call   9740 <printf@plt>
+38268:   3292a:	e8 11 6e fd ff       	call   9740 <printf@plt>
+38278:   32958:	e8 e3 6d fd ff       	call   9740 <printf@plt>
+38288:   32986:	e8 b5 6d fd ff       	call   9740 <printf@plt>
+38298:   329b1:	e8 8a 6d fd ff       	call   9740 <printf@plt>
+38336:   32a61:	e8 da 6c fd ff       	call   9740 <printf@plt>
+38384:   32b41:	e8 fa 6b fd ff       	call   9740 <printf@plt>
+38420:   32be4:	e8 57 6b fd ff       	call   9740 <printf@plt>
+38444:   32c3d:	e8 fe 6a fd ff       	call   9740 <printf@plt>
+38596:   32e70:	e8 5b 68 fd ff       	call   96d0 <strlen@plt>
+38612:   32eaa:	e8 21 68 fd ff       	call   96d0 <strlen@plt>
+38619:   32ecc:	e8 ff 67 fd ff       	call   96d0 <strlen@plt>
+38635:   32f06:	e8 c5 67 fd ff       	call   96d0 <strlen@plt>
+38642:   32f28:	e8 a3 67 fd ff       	call   96d0 <strlen@plt>
+38658:   32f62:	e8 69 67 fd ff       	call   96d0 <strlen@plt>
+38732:   330a9:	e8 92 66 fd ff       	call   9740 <printf@plt>
+38738:   330c5:	e8 76 66 fd ff       	call   9740 <printf@plt>
+38746:   330ee:	e8 5d 67 fd ff       	call   9850 <fprintf@plt>
+38768:   3314b:	e8 f0 65 fd ff       	call   9740 <printf@plt>
+38874:   3335f:	e8 dc 63 fd ff       	call   9740 <printf@plt>
+38886:   33395:	e8 a6 63 fd ff       	call   9740 <printf@plt>
+38932:   3348e:	e8 ad 62 fd ff       	call   9740 <printf@plt>
+38941:   334b6:	e8 85 62 fd ff       	call   9740 <printf@plt>
+39022:   3365d:	e8 de 60 fd ff       	call   9740 <printf@plt>
+39034:   33695:	e8 a6 60 fd ff       	call   9740 <printf@plt>
+39053:   336e6:	e8 55 60 fd ff       	call   9740 <printf@plt>
+39114:   337e5:	e8 56 5f fd ff       	call   9740 <printf@plt>
+39142:   33863:	e8 d8 5e fd ff       	call   9740 <printf@plt>
+39148:   3387f:	e8 bc 5e fd ff       	call   9740 <printf@plt>
+39156:   338a8:	e8 a3 5f fd ff       	call   9850 <fprintf@plt>
+39178:   33905:	e8 36 5e fd ff       	call   9740 <printf@plt>
+39265:   33abf:	e8 7c 5c fd ff       	call   9740 <printf@plt>
+39285:   33b24:	e8 17 5c fd ff       	call   9740 <printf@plt>
+39294:   33b4c:	e8 ef 5b fd ff       	call   9740 <printf@plt>
+39303:   33b74:	e8 c7 5b fd ff       	call   9740 <printf@plt>
+39380:   33d0a:	e8 31 5a fd ff       	call   9740 <printf@plt>
+39392:   33d3f:	e8 fc 59 fd ff       	call   9740 <printf@plt>
+39407:   33d7e:	e8 bd 59 fd ff       	call   9740 <printf@plt>
+39626:   3415f:	e8 dc 55 fd ff       	call   9740 <printf@plt>
+39632:   3417b:	e8 c0 55 fd ff       	call   9740 <printf@plt>
+39640:   341a4:	e8 a7 56 fd ff       	call   9850 <fprintf@plt>
+39660:   341fc:	e8 3f 55 fd ff       	call   9740 <printf@plt>
+39735:   3436a:	e8 d1 53 fd ff       	call   9740 <printf@plt>
+39796:   34465:	e8 d6 52 fd ff       	call   9740 <printf@plt>
+40102:   349ff:	e8 cc 4c fd ff       	call   96d0 <strlen@plt>
+40113:   34a2f:	e8 0c 4d fd ff       	call   9740 <printf@plt>
+40124:   34a64:	e8 d7 4c fd ff       	call   9740 <printf@plt>
+40175:   34b3e:	e8 fd 4b fd ff       	call   9740 <printf@plt>
+40223:   34bf2:	e8 69 4b fd ff       	call   9760 <snprintf@plt>
+40247:   34c4e:	e8 0d 4b fd ff       	call   9760 <snprintf@plt>
+40259:   34c80:	e8 db 4a fd ff       	call   9760 <snprintf@plt>
+40336:   34dda:	e8 81 49 fd ff       	call   9760 <snprintf@plt>
+40376:   34e7c:	e8 df 48 fd ff       	call   9760 <snprintf@plt>
+40388:   34eae:	e8 ad 48 fd ff       	call   9760 <snprintf@plt>
+40507:   35058:	e8 03 47 fd ff       	call   9760 <snprintf@plt>
+40590:   3518c:	e8 3f 45 fd ff       	call   96d0 <strlen@plt>
+40598:   351b3:	e8 18 45 fd ff       	call   96d0 <strlen@plt>
+40607:   351de:	e8 ed 44 fd ff       	call   96d0 <strlen@plt>
+40615:   35205:	e8 c6 44 fd ff       	call   96d0 <strlen@plt>
+40635:   35256:	e8 75 44 fd ff       	call   96d0 <strlen@plt>
+40665:   352c4:	e8 07 44 fd ff       	call   96d0 <strlen@plt>
+40674:   352ef:	e8 dc 43 fd ff       	call   96d0 <strlen@plt>
+40683:   3531a:	e8 b1 43 fd ff       	call   96d0 <strlen@plt>
+40692:   35345:	e8 86 43 fd ff       	call   96d0 <strlen@plt>
+40712:   35396:	e8 35 43 fd ff       	call   96d0 <strlen@plt>
+40763:   3544f:	e8 0c 43 fd ff       	call   9760 <snprintf@plt>
+40845:   35566:	e8 f5 41 fd ff       	call   9760 <snprintf@plt>
+40932:   356c3:	e8 08 43 fd ff       	call   99d0 <sprintf@plt>
+40946:   35700:	e8 cb 42 fd ff       	call   99d0 <sprintf@plt>
+40958:   35734:	e8 97 42 fd ff       	call   99d0 <sprintf@plt>
+40978:   3577b:	e8 50 42 fd ff       	call   99d0 <sprintf@plt>
+40987:   357a0:	e8 2b 42 fd ff       	call   99d0 <sprintf@plt>
+41397:   35ee6:	e8 55 38 fd ff       	call   9740 <printf@plt>
+41423:   35f4e:	e8 ed 37 fd ff       	call   9740 <printf@plt>
+41436:   35f81:	e8 ba 37 fd ff       	call   9740 <printf@plt>
+41450:   35fb6:	e8 85 37 fd ff       	call   9740 <printf@plt>
+41464:   35fea:	e8 51 37 fd ff       	call   9740 <printf@plt>
+41483:   3602f:	e8 0c 37 fd ff       	call   9740 <printf@plt>
+41494:   3605b:	e8 e0 36 fd ff       	call   9740 <printf@plt>
+41551:   36137:	e8 94 35 fd ff       	call   96d0 <strlen@plt>
+41563:   3615a:	48 8d 0d 57 3a 09 00 	lea    rcx,[rip+0x93a57]        # c9bb8 <warn@@Base+0x4dcae>
+41567:   3616c:	e8 5f 38 fd ff       	call   99d0 <sprintf@plt>
+41588:   361af:	48 8d 05 08 3a 09 00 	lea    rax,[rip+0x93a08]        # c9bbe <warn@@Base+0x4dcb4>
+41591:   361be:	e8 7d 35 fd ff       	call   9740 <printf@plt>
+41598:   361d6:	48 8d 05 29 a2 08 00 	lea    rax,[rip+0x8a229]        # c0406 <warn@@Base+0x444fc>
+41603:   361ec:	e8 4f 35 fd ff       	call   9740 <printf@plt>
+41712:   363a4:	e8 97 33 fd ff       	call   9740 <printf@plt>
+41721:   363ca:	e8 71 33 fd ff       	call   9740 <printf@plt>
+41728:   363e8:	e8 53 33 fd ff       	call   9740 <printf@plt>
+41806:   3655f:	e8 dc 31 fd ff       	call   9740 <printf@plt>
+41833:   365e2:	e8 59 31 fd ff       	call   9740 <printf@plt>
+41842:   36608:	e8 33 31 fd ff       	call   9740 <printf@plt>
+41849:   36626:	e8 15 31 fd ff       	call   9740 <printf@plt>
+41973:   3685d:	e8 de 2e fd ff       	call   9740 <printf@plt>
+42000:   368eb:	e8 50 2e fd ff       	call   9740 <printf@plt>
+42033:   3698c:	e8 af 2d fd ff       	call   9740 <printf@plt>
+42184:   36c25:	e8 16 2b fd ff       	call   9740 <printf@plt>
+42278:   36d9f:	e8 9c 29 fd ff       	call   9740 <printf@plt>
+42341:   36ee0:	e8 5b 28 fd ff       	call   9740 <printf@plt>
+42362:   36f43:	e8 f8 27 fd ff       	call   9740 <printf@plt>
+42507:   371b9:	e8 82 25 fd ff       	call   9740 <printf@plt>
+42600:   37318:	e8 23 24 fd ff       	call   9740 <printf@plt>
+42742:   375ce:	e8 6d 21 fd ff       	call   9740 <printf@plt>
+42748:   375ea:	e8 51 21 fd ff       	call   9740 <printf@plt>
+42763:   3762c:	e8 0f 21 fd ff       	call   9740 <printf@plt>
+42774:   3765b:	e8 e0 20 fd ff       	call   9740 <printf@plt>
+42815:   37707:	e8 34 20 fd ff       	call   9740 <printf@plt>
+42916:   378b8:	e8 83 1e fd ff       	call   9740 <printf@plt>
+42925:   378d8:	e8 63 1e fd ff       	call   9740 <printf@plt>
+42933:   378f7:	e8 44 1e fd ff       	call   9740 <printf@plt>
+42941:   37916:	e8 25 1e fd ff       	call   9740 <printf@plt>
+42949:   37935:	e8 06 1e fd ff       	call   9740 <printf@plt>
+45678:   3a309:	e8 32 f4 fc ff       	call   9740 <printf@plt>
+45850:   3a5ed:	e8 4e f1 fc ff       	call   9740 <printf@plt>
+46039:   3a92e:	e8 0d ee fc ff       	call   9740 <printf@plt>
+46099:   3aa22:	e8 19 ed fc ff       	call   9740 <printf@plt>
+46110:   3aa53:	e8 e8 ec fc ff       	call   9740 <printf@plt>
+46149:   3ab00:	e8 3b ec fc ff       	call   9740 <printf@plt>
+46171:   3ab59:	e8 e2 eb fc ff       	call   9740 <printf@plt>
+46208:   3abe6:	e8 55 eb fc ff       	call   9740 <printf@plt>
+46223:   3ac2b:	e8 10 eb fc ff       	call   9740 <printf@plt>
+46297:   3ad5a:	e8 e1 e9 fc ff       	call   9740 <printf@plt>
+46499:   3b093:	e8 a8 e6 fc ff       	call   9740 <printf@plt>
+46533:   3b11f:	e8 1c e6 fc ff       	call   9740 <printf@plt>
+46550:   3b162:	e8 d9 e5 fc ff       	call   9740 <printf@plt>
+46555:   3b178:	e8 c3 e5 fc ff       	call   9740 <printf@plt>
+46694:   3b383:	e8 98 e5 fc ff       	call   9920 <asprintf@plt>
+46753:   3b486:	e8 b5 e2 fc ff       	call   9740 <printf@plt>
+46772:   3b4da:	e8 61 e2 fc ff       	call   9740 <printf@plt>
+47146:   3bbb0:	e8 8b db fc ff       	call   9740 <printf@plt>
+47248:   3bd62:	e8 f9 d9 fc ff       	call   9760 <snprintf@plt>
+47745:   3c5a6:	e8 95 d1 fc ff       	call   9740 <printf@plt>
+47760:   3c5e2:	e8 59 d1 fc ff       	call   9740 <printf@plt>
+47909:   3c803:	e8 38 cf fc ff       	call   9740 <printf@plt>
+48179:   3cbf6:	e8 45 cb fc ff       	call   9740 <printf@plt>
+48194:   3cc34:	e8 07 cb fc ff       	call   9740 <printf@plt>
+48209:   3cc72:	e8 c9 ca fc ff       	call   9740 <printf@plt>
+48224:   3ccb0:	e8 8b ca fc ff       	call   9740 <printf@plt>
+48251:   3cd0e:	e8 2d ca fc ff       	call   9740 <printf@plt>
+48293:   3cdb5:	e8 86 c9 fc ff       	call   9740 <printf@plt>
+48333:   3ce54:	e8 e7 c8 fc ff       	call   9740 <printf@plt>
+48433:   3cfe8:	e8 53 c7 fc ff       	call   9740 <printf@plt>
+48450:   3d032:	e8 09 c7 fc ff       	call   9740 <printf@plt>
+48457:   3d053:	e8 e8 c6 fc ff       	call   9740 <printf@plt>
+48464:   3d071:	e8 ca c6 fc ff       	call   9740 <printf@plt>
+48471:   3d08f:	e8 ac c6 fc ff       	call   9740 <printf@plt>
+48478:   3d0ad:	e8 8e c6 fc ff       	call   9740 <printf@plt>
+48485:   3d0cb:	e8 70 c6 fc ff       	call   9740 <printf@plt>
+48518:   3d150:	e8 eb c5 fc ff       	call   9740 <printf@plt>
+48536:   3d190:	e8 ab c5 fc ff       	call   9740 <printf@plt>
+48585:   3d259:	e8 e2 c4 fc ff       	call   9740 <printf@plt>
+48597:   3d284:	e8 b7 c4 fc ff       	call   9740 <printf@plt>
+48608:   3d2b3:	e8 88 c4 fc ff       	call   9740 <printf@plt>
+48614:   3d2cd:	e8 6e c4 fc ff       	call   9740 <printf@plt>
+48662:   3d39c:	e8 9f c3 fc ff       	call   9740 <printf@plt>
+48696:   3d425:	e8 16 c3 fc ff       	call   9740 <printf@plt>
+48732:   3d4b8:	e8 83 c2 fc ff       	call   9740 <printf@plt>
+48747:   3d4ee:	e8 4d c2 fc ff       	call   9740 <printf@plt>
+48762:   3d52e:	e8 0d c2 fc ff       	call   9740 <printf@plt>
+48801:   3d5cc:	e8 6f c1 fc ff       	call   9740 <printf@plt>
+48843:   3d679:	e8 c2 c0 fc ff       	call   9740 <printf@plt>
+48885:   3d726:	e8 15 c0 fc ff       	call   9740 <printf@plt>
+48919:   3d7af:	e8 8c bf fc ff       	call   9740 <printf@plt>
+48924:   3d7c8:	e8 73 bf fc ff       	call   9740 <printf@plt>
+48935:   3d803:	e8 38 bf fc ff       	call   9740 <printf@plt>
+48975:   3d8ae:	e8 8d be fc ff       	call   9740 <printf@plt>
+49009:   3d937:	e8 04 be fc ff       	call   9740 <printf@plt>
+49095:   3da88:	e8 b3 bc fc ff       	call   9740 <printf@plt>
+49177:   3dbe4:	e8 57 bb fc ff       	call   9740 <printf@plt>
+49184:   3dc05:	e8 36 bb fc ff       	call   9740 <printf@plt>
+49191:   3dc23:	e8 18 bb fc ff       	call   9740 <printf@plt>
+49198:   3dc41:	e8 fa ba fc ff       	call   9740 <printf@plt>
+49205:   3dc5f:	e8 dc ba fc ff       	call   9740 <printf@plt>
+49212:   3dc7a:	e8 c1 ba fc ff       	call   9740 <printf@plt>
+49260:   3dd35:	e8 06 ba fc ff       	call   9740 <printf@plt>
+49267:   3dd56:	e8 e5 b9 fc ff       	call   9740 <printf@plt>
+49274:   3dd74:	e8 c7 b9 fc ff       	call   9740 <printf@plt>
+49293:   3ddb9:	e8 82 b9 fc ff       	call   9740 <printf@plt>
+49300:   3ddd4:	e8 67 b9 fc ff       	call   9740 <printf@plt>
+49348:   3de8f:	e8 ac b8 fc ff       	call   9740 <printf@plt>
+49355:   3deb0:	e8 8b b8 fc ff       	call   9740 <printf@plt>
+49362:   3dece:	e8 6d b8 fc ff       	call   9740 <printf@plt>
+49381:   3df13:	e8 28 b8 fc ff       	call   9740 <printf@plt>
+49388:   3df2e:	e8 0d b8 fc ff       	call   9740 <printf@plt>
+49426:   3dfc3:	e8 78 b7 fc ff       	call   9740 <printf@plt>
+49454:   3e043:	e8 f8 b6 fc ff       	call   9740 <printf@plt>
+49470:   3e094:	e8 a7 b6 fc ff       	call   9740 <printf@plt>
+49535:   3e198:	e8 a3 b5 fc ff       	call   9740 <printf@plt>
+49567:   3e219:	e8 22 b5 fc ff       	call   9740 <printf@plt>
+49636:   3e339:	e8 02 b4 fc ff       	call   9740 <printf@plt>
+49737:   3e4af:	e8 8c b2 fc ff       	call   9740 <printf@plt>
+49746:   3e4d5:	e8 66 b2 fc ff       	call   9740 <printf@plt>
+49781:   3e55e:	e8 dd b1 fc ff       	call   9740 <printf@plt>
+49831:   3e60f:	e8 2c b1 fc ff       	call   9740 <printf@plt>
+49840:   3e635:	e8 06 b1 fc ff       	call   9740 <printf@plt>
+49877:   3e6bf:	e8 7c b0 fc ff       	call   9740 <printf@plt>
+49894:   3e6f6:	e8 45 b0 fc ff       	call   9740 <printf@plt>
+49901:   3e714:	e8 27 b0 fc ff       	call   9740 <printf@plt>
+49908:   3e732:	e8 09 b0 fc ff       	call   9740 <printf@plt>
+49943:   3e7ad:	e8 8e af fc ff       	call   9740 <printf@plt>
+49952:   3e7d3:	e8 68 af fc ff       	call   9740 <printf@plt>
+49989:   3e85d:	e8 de ae fc ff       	call   9740 <printf@plt>
+50010:   3e8a6:	e8 95 ae fc ff       	call   9740 <printf@plt>
+50017:   3e8c4:	e8 77 ae fc ff       	call   9740 <printf@plt>
+50024:   3e8e2:	e8 59 ae fc ff       	call   9740 <printf@plt>
+50031:   3e900:	e8 3b ae fc ff       	call   9740 <printf@plt>
+50053:   3e94a:	e8 f1 ad fc ff       	call   9740 <printf@plt>
+50060:   3e968:	e8 d3 ad fc ff       	call   9740 <printf@plt>
+50067:   3e986:	e8 b5 ad fc ff       	call   9740 <printf@plt>
+50074:   3e9a4:	e8 97 ad fc ff       	call   9740 <printf@plt>
+50083:   3e9cc:	e8 6f ad fc ff       	call   9740 <printf@plt>
+50092:   3e9f2:	e8 49 ad fc ff       	call   9740 <printf@plt>
+50129:   3ea7c:	e8 bf ac fc ff       	call   9740 <printf@plt>
+50150:   3eabd:	e8 7e ac fc ff       	call   9740 <printf@plt>
+50157:   3eadb:	e8 60 ac fc ff       	call   9740 <printf@plt>
+50174:   3eb25:	e8 16 ac fc ff       	call   9740 <printf@plt>
+50183:   3eb4b:	e8 f0 ab fc ff       	call   9740 <printf@plt>
+50220:   3ebd5:	e8 66 ab fc ff       	call   9740 <printf@plt>
+50241:   3ec16:	e8 25 ab fc ff       	call   9740 <printf@plt>
+50252:   3ec45:	e8 f6 aa fc ff       	call   9740 <printf@plt>
+50291:   3ecd1:	e8 6a aa fc ff       	call   9740 <printf@plt>
+50333:   3ed69:	e8 d2 a9 fc ff       	call   9740 <printf@plt>
+50340:   3ed87:	e8 b4 a9 fc ff       	call   9740 <printf@plt>
+50347:   3eda5:	e8 96 a9 fc ff       	call   9740 <printf@plt>
+50354:   3edc0:	e8 7b a9 fc ff       	call   9740 <printf@plt>
+50406:   3ee82:	e8 b9 a8 fc ff       	call   9740 <printf@plt>
+50421:   3eec0:	e8 7b a8 fc ff       	call   9740 <printf@plt>
+50436:   3eefe:	e8 3d a8 fc ff       	call   9740 <printf@plt>
+50451:   3ef3c:	e8 ff a7 fc ff       	call   9740 <printf@plt>
+50466:   3ef7a:	e8 c1 a7 fc ff       	call   9740 <printf@plt>
+50481:   3efb8:	e8 83 a7 fc ff       	call   9740 <printf@plt>
+50496:   3eff8:	e8 43 a7 fc ff       	call   9740 <printf@plt>
+50511:   3f038:	e8 03 a7 fc ff       	call   9740 <printf@plt>
+50526:   3f078:	e8 c3 a6 fc ff       	call   9740 <printf@plt>
+50541:   3f0b8:	e8 83 a6 fc ff       	call   9740 <printf@plt>
+50556:   3f0f8:	e8 43 a6 fc ff       	call   9740 <printf@plt>
+50571:   3f138:	e8 03 a6 fc ff       	call   9740 <printf@plt>
+50586:   3f178:	e8 c3 a5 fc ff       	call   9740 <printf@plt>
+50601:   3f1b8:	e8 83 a5 fc ff       	call   9740 <printf@plt>
+50616:   3f1f8:	e8 43 a5 fc ff       	call   9740 <printf@plt>
+50663:   3f2b7:	e8 84 a4 fc ff       	call   9740 <printf@plt>
+50678:   3f2f5:	e8 46 a4 fc ff       	call   9740 <printf@plt>
+50693:   3f333:	e8 08 a4 fc ff       	call   9740 <printf@plt>
+50708:   3f371:	e8 ca a3 fc ff       	call   9740 <printf@plt>
+50723:   3f3af:	e8 8c a3 fc ff       	call   9740 <printf@plt>
+50738:   3f3ed:	e8 4e a3 fc ff       	call   9740 <printf@plt>
+50753:   3f42d:	e8 0e a3 fc ff       	call   9740 <printf@plt>
+50768:   3f46d:	e8 ce a2 fc ff       	call   9740 <printf@plt>
+50783:   3f4ad:	e8 8e a2 fc ff       	call   9740 <printf@plt>
+50798:   3f4ed:	e8 4e a2 fc ff       	call   9740 <printf@plt>
+50855:   3f5c7:	e8 74 a1 fc ff       	call   9740 <printf@plt>
+50893:   3f65a:	e8 e1 a0 fc ff       	call   9740 <printf@plt>
+50933:   3f6ee:	e8 4d a0 fc ff       	call   9740 <printf@plt>
+50940:   3f70f:	e8 2c a0 fc ff       	call   9740 <printf@plt>
+50947:   3f730:	e8 0b a0 fc ff       	call   9740 <printf@plt>
+50954:   3f751:	e8 ea 9f fc ff       	call   9740 <printf@plt>
+50961:   3f772:	e8 c9 9f fc ff       	call   9740 <printf@plt>
+50968:   3f793:	e8 a8 9f fc ff       	call   9740 <printf@plt>
+50975:   3f7b1:	e8 8a 9f fc ff       	call   9740 <printf@plt>
+50982:   3f7cf:	e8 6c 9f fc ff       	call   9740 <printf@plt>
+50989:   3f7ed:	e8 4e 9f fc ff       	call   9740 <printf@plt>
+50996:   3f808:	e8 33 9f fc ff       	call   9740 <printf@plt>
+51017:   3f850:	e8 eb 9e fc ff       	call   9740 <printf@plt>
+51055:   3f8e3:	e8 58 9e fc ff       	call   9740 <printf@plt>
+51093:   3f96f:	e8 cc 9d fc ff       	call   9740 <printf@plt>
+51100:   3f98d:	e8 ae 9d fc ff       	call   9740 <printf@plt>
+51107:   3f9a8:	e8 93 9d fc ff       	call   9740 <printf@plt>
+51179:   3fabc:	e8 7f 9c fc ff       	call   9740 <printf@plt>
+51223:   3fb71:	e8 ca 9b fc ff       	call   9740 <printf@plt>
+51254:   3fbf5:	e8 46 9b fc ff       	call   9740 <printf@plt>
+51261:   3fc16:	e8 25 9b fc ff       	call   9740 <printf@plt>
+51303:   3fcb7:	e8 84 9a fc ff       	call   9740 <printf@plt>
+51310:   3fcd5:	e8 66 9a fc ff       	call   9740 <printf@plt>
+51317:   3fcf3:	e8 48 9a fc ff       	call   9740 <printf@plt>
+51324:   3fd0e:	e8 2d 9a fc ff       	call   9740 <printf@plt>
+51331:   3fd2f:	e8 0c 9a fc ff       	call   9740 <printf@plt>
+51369:   3fdc4:	e8 77 99 fc ff       	call   9740 <printf@plt>
+51376:   3fde2:	e8 59 99 fc ff       	call   9740 <printf@plt>
+51383:   3fdfd:	e8 3e 99 fc ff       	call   9740 <printf@plt>
+51417:   3fe89:	e8 b2 98 fc ff       	call   9740 <printf@plt>
+51428:   3feb3:	e8 88 98 fc ff       	call   9740 <printf@plt>
+51435:   3fed1:	e8 6a 98 fc ff       	call   9740 <printf@plt>
+51442:   3feec:	e8 4f 98 fc ff       	call   9740 <printf@plt>
+51476:   3ff78:	e8 c3 97 fc ff       	call   9740 <printf@plt>
+51487:   3ffa2:	e8 99 97 fc ff       	call   9740 <printf@plt>
+51494:   3ffc0:	e8 7b 97 fc ff       	call   9740 <printf@plt>
+51501:   3ffdb:	e8 60 97 fc ff       	call   9740 <printf@plt>
+51535:   40067:	e8 d4 96 fc ff       	call   9740 <printf@plt>
+51550:   4009d:	e8 9e 96 fc ff       	call   9740 <printf@plt>
+51557:   400bb:	e8 80 96 fc ff       	call   9740 <printf@plt>
+51564:   400d9:	e8 62 96 fc ff       	call   9740 <printf@plt>
+51571:   400f4:	e8 47 96 fc ff       	call   9740 <printf@plt>
+51605:   40180:	e8 bb 95 fc ff       	call   9740 <printf@plt>
+51616:   401aa:	e8 91 95 fc ff       	call   9740 <printf@plt>
+51623:   401c8:	e8 73 95 fc ff       	call   9740 <printf@plt>
+51630:   401e3:	e8 58 95 fc ff       	call   9740 <printf@plt>
+51664:   4026f:	e8 cc 94 fc ff       	call   9740 <printf@plt>
+51679:   402a5:	e8 96 94 fc ff       	call   9740 <printf@plt>
+51686:   402c3:	e8 78 94 fc ff       	call   9740 <printf@plt>
+51693:   402e1:	e8 5a 94 fc ff       	call   9740 <printf@plt>
+51700:   402fc:	e8 3f 94 fc ff       	call   9740 <printf@plt>
+51734:   40388:	e8 b3 93 fc ff       	call   9740 <printf@plt>
+51749:   403be:	e8 7d 93 fc ff       	call   9740 <printf@plt>
+51756:   403dc:	e8 5f 93 fc ff       	call   9740 <printf@plt>
+51763:   403fa:	e8 41 93 fc ff       	call   9740 <printf@plt>
+51770:   40415:	e8 26 93 fc ff       	call   9740 <printf@plt>
+51804:   404a1:	e8 9a 92 fc ff       	call   9740 <printf@plt>
+51813:   404c5:	e8 76 92 fc ff       	call   9740 <printf@plt>
+51841:   40545:	e8 f6 91 fc ff       	call   9740 <printf@plt>
+51851:   4057d:	e8 be 91 fc ff       	call   9740 <printf@plt>
+51879:   405fd:	e8 3e 91 fc ff       	call   9740 <printf@plt>
+51932:   406e0:	e8 5b 90 fc ff       	call   9740 <printf@plt>
+51948:   4071a:	e8 21 90 fc ff       	call   9740 <printf@plt>
+51953:   40730:	e8 0b 90 fc ff       	call   9740 <printf@plt>
+52053:   4089b:	e8 a0 8e fc ff       	call   9740 <printf@plt>
+52095:   40933:	e8 08 8e fc ff       	call   9740 <printf@plt>
+52102:   40951:	e8 ea 8d fc ff       	call   9740 <printf@plt>
+52109:   4096f:	e8 cc 8d fc ff       	call   9740 <printf@plt>
+52116:   4098a:	e8 b1 8d fc ff       	call   9740 <printf@plt>
+52122:   409a4:	e8 97 8d fc ff       	call   9740 <printf@plt>
+52164:   40a3c:	e8 ff 8c fc ff       	call   9740 <printf@plt>
+52171:   40a5a:	e8 e1 8c fc ff       	call   9740 <printf@plt>
+52178:   40a78:	e8 c3 8c fc ff       	call   9740 <printf@plt>
+52185:   40a93:	e8 a8 8c fc ff       	call   9740 <printf@plt>
+52191:   40aad:	e8 8e 8c fc ff       	call   9740 <printf@plt>
+52237:   40b5d:	e8 de 8b fc ff       	call   9740 <printf@plt>
+52244:   40b7b:	e8 c0 8b fc ff       	call   9740 <printf@plt>
+52251:   40b99:	e8 a2 8b fc ff       	call   9740 <printf@plt>
+52258:   40bb7:	e8 84 8b fc ff       	call   9740 <printf@plt>
+52265:   40bd2:	e8 69 8b fc ff       	call   9740 <printf@plt>
+52276:   40bfc:	e8 3f 8b fc ff       	call   9740 <printf@plt>
+52310:   40c7f:	e8 bc 8a fc ff       	call   9740 <printf@plt>
+52350:   40d16:	e8 25 8a fc ff       	call   9740 <printf@plt>
+52387:   40da7:	e8 94 89 fc ff       	call   9740 <printf@plt>
+52424:   40e31:	e8 0a 89 fc ff       	call   9740 <printf@plt>
+52431:   40e4f:	e8 ec 88 fc ff       	call   9740 <printf@plt>
+52438:   40e6a:	e8 d1 88 fc ff       	call   9740 <printf@plt>
+52522:   40f98:	e8 a3 87 fc ff       	call   9740 <printf@plt>
+52579:   4106c:	e8 cf 86 fc ff       	call   9740 <printf@plt>
+52618:   41100:	e8 3b 86 fc ff       	call   9740 <printf@plt>
+52625:   4111e:	e8 1d 86 fc ff       	call   9740 <printf@plt>
+52663:   411aa:	e8 91 85 fc ff       	call   9740 <printf@plt>
+52757:   41325:	e8 16 84 fc ff       	call   9740 <printf@plt>
+52843:   41491:	e8 aa 82 fc ff       	call   9740 <printf@plt>
+52971:   416a2:	e8 99 80 fc ff       	call   9740 <printf@plt>
+52978:   416c3:	e8 78 80 fc ff       	call   9740 <printf@plt>
+52985:   416e1:	e8 5a 80 fc ff       	call   9740 <printf@plt>
+53020:   41762:	e8 d9 7f fc ff       	call   9740 <printf@plt>
+53034:   41798:	e8 a3 7f fc ff       	call   9740 <printf@plt>
+53099:   4189f:	e8 9c 7e fc ff       	call   9740 <printf@plt>
+53153:   4196d:	e8 ce 7d fc ff       	call   9740 <printf@plt>
+53175:   419c3:	e8 78 7d fc ff       	call   9740 <printf@plt>
+53182:   419e3:	e8 58 7d fc ff       	call   9740 <printf@plt>
+53201:   41a32:	e8 09 7d fc ff       	call   9740 <printf@plt>
+53239:   41aca:	e8 71 7c fc ff       	call   9740 <printf@plt>
+53282:   41b69:	e8 d2 7b fc ff       	call   9740 <printf@plt>
+53305:   41bc9:	e8 72 7b fc ff       	call   9740 <printf@plt>
+53585:   42048:	e8 03 78 fc ff       	call   9850 <fprintf@plt>
+53603:   4208f:	e8 bc 77 fc ff       	call   9850 <fprintf@plt>
+53796:   42421:	e8 2a 74 fc ff       	call   9850 <fprintf@plt>
+54005:   427d7:	e8 64 6f fc ff       	call   9740 <printf@plt>
+54012:   427f7:	e8 44 6f fc ff       	call   9740 <printf@plt>
+54022:   42822:	e8 19 6f fc ff       	call   9740 <printf@plt>
+54031:   42849:	e8 f2 6e fc ff       	call   9740 <printf@plt>
+54040:   42870:	e8 cb 6e fc ff       	call   9740 <printf@plt>
+54049:   42897:	e8 a4 6e fc ff       	call   9740 <printf@plt>
+54086:   4294b:	e8 f0 6d fc ff       	call   9740 <printf@plt>
+54092:   42969:	e8 d2 6d fc ff       	call   9740 <printf@plt>
+54160:   42ac2:	e8 79 6c fc ff       	call   9740 <printf@plt>
+54166:   42ade:	e8 5d 6c fc ff       	call   9740 <printf@plt>
+54205:   42b9c:	e8 9f 6b fc ff       	call   9740 <printf@plt>
+54232:   42c0f:	e8 2c 6b fc ff       	call   9740 <printf@plt>
+54300:   42d63:	e8 d8 69 fc ff       	call   9740 <printf@plt>
+54324:   42dca:	e8 71 69 fc ff       	call   9740 <printf@plt>
+54517:   43170:	e8 cb 65 fc ff       	call   9740 <printf@plt>
+54627:   4335e:	e8 fd 63 fc ff       	call   9760 <snprintf@plt>
+54634:   43380:	e8 bb 63 fc ff       	call   9740 <printf@plt>
+54659:   433fa:	e8 41 63 fc ff       	call   9740 <printf@plt>
+54667:   43426:	e8 15 63 fc ff       	call   9740 <printf@plt>
+54717:   4350a:	e8 31 62 fc ff       	call   9740 <printf@plt>
+54850:   4378f:	e8 ac 5f fc ff       	call   9740 <printf@plt>
+54905:   43898:	e8 a3 5e fc ff       	call   9740 <printf@plt>
+54910:   438b1:	e8 8a 5e fc ff       	call   9740 <printf@plt>
+54923:   438ed:	e8 4e 5e fc ff       	call   9740 <printf@plt>
+54983:   43a14:	e8 27 5d fc ff       	call   9740 <printf@plt>
+54993:   43a45:	e8 f6 5c fc ff       	call   9740 <printf@plt>
+55003:   43a71:	e8 ca 5c fc ff       	call   9740 <printf@plt>
+55063:   43b9a:	e8 a1 5b fc ff       	call   9740 <printf@plt>
+55073:   43bcb:	e8 70 5b fc ff       	call   9740 <printf@plt>
+55328:   44069:	e8 d2 56 fc ff       	call   9740 <printf@plt>
+55339:   44095:	e8 a6 56 fc ff       	call   9740 <printf@plt>
+55350:   440c7:	e8 74 56 fc ff       	call   9740 <printf@plt>
+55387:   4414c:	e8 ef 55 fc ff       	call   9740 <printf@plt>
+55573:   444c2:	e8 79 52 fc ff       	call   9740 <printf@plt>
+55593:   44523:	e8 18 52 fc ff       	call   9740 <printf@plt>
+55609:   4456e:	e8 cd 51 fc ff       	call   9740 <printf@plt>
+55656:   44652:	e8 e9 50 fc ff       	call   9740 <printf@plt>
+55763:   44869:	e8 d2 4e fc ff       	call   9740 <printf@plt>
+55769:   44885:	e8 b6 4e fc ff       	call   9740 <printf@plt>
+55783:   448ca:	e8 71 4e fc ff       	call   9740 <printf@plt>
+55810:   4493d:	e8 fe 4d fc ff       	call   9740 <printf@plt>
+55823:   44984:	e8 b7 4d fc ff       	call   9740 <printf@plt>
+55869:   44a5f:	e8 dc 4c fc ff       	call   9740 <printf@plt>
+55886:   44ab5:	e8 86 4c fc ff       	call   9740 <printf@plt>
+55910:   44b1c:	e8 1f 4c fc ff       	call   9740 <printf@plt>
+55940:   44bb9:	e8 82 4b fc ff       	call   9740 <printf@plt>
+55991:   44c99:	e8 a2 4a fc ff       	call   9740 <printf@plt>
+56028:   44d44:	e8 f7 49 fc ff       	call   9740 <printf@plt>
+56066:   44dfa:	e8 41 49 fc ff       	call   9740 <printf@plt>
+56095:   44e83:	e8 b8 48 fc ff       	call   9740 <printf@plt>
+56105:   44eae:	e8 8d 48 fc ff       	call   9740 <printf@plt>
+56231:   450f7:	e8 44 46 fc ff       	call   9740 <printf@plt>
+56253:   45155:	e8 e6 45 fc ff       	call   9740 <printf@plt>
+56266:   45198:	e8 a3 45 fc ff       	call   9740 <printf@plt>
+56279:   451db:	e8 60 45 fc ff       	call   9740 <printf@plt>
+56287:   45201:	e8 3a 45 fc ff       	call   9740 <printf@plt>
+56330:   452bf:	e8 7c 44 fc ff       	call   9740 <printf@plt>
+56381:   453a5:	e8 96 43 fc ff       	call   9740 <printf@plt>
+56415:   45440:	e8 fb 42 fc ff       	call   9740 <printf@plt>
+56444:   454c9:	e8 72 42 fc ff       	call   9740 <printf@plt>
+56691:   458e7:	e8 54 3e fc ff       	call   9740 <printf@plt>
+56799:   45acb:	e8 90 3c fc ff       	call   9760 <snprintf@plt>
+56806:   45aed:	e8 4e 3c fc ff       	call   9740 <printf@plt>
+56824:   45b40:	e8 fb 3b fc ff       	call   9740 <printf@plt>
+56840:   45b8b:	e8 b0 3b fc ff       	call   9740 <printf@plt>
+56850:   45bc1:	e8 7a 3b fc ff       	call   9740 <printf@plt>
+57233:   4630c:	e8 4f 34 fc ff       	call   9760 <snprintf@plt>
+57364:   464f9:	e8 42 32 fc ff       	call   9740 <printf@plt>
+57407:   465a2:	e8 99 31 fc ff       	call   9740 <printf@plt>
+57460:   4666e:	e8 cd 30 fc ff       	call   9740 <printf@plt>
+57468:   46693:	e8 a8 30 fc ff       	call   9740 <printf@plt>
+57476:   466b8:	e8 83 30 fc ff       	call   9740 <printf@plt>
+57486:   466e4:	e8 57 30 fc ff       	call   9740 <printf@plt>
+57489:   466f0:	e8 db 2f fc ff       	call   96d0 <strlen@plt>
+57571:   46840:	e8 1b 2f fc ff       	call   9760 <snprintf@plt>
+57653:   469ef:	e8 4c 2d fc ff       	call   9740 <printf@plt>
+57658:   46a08:	e8 33 2d fc ff       	call   9740 <printf@plt>
+57663:   46a21:	e8 1a 2d fc ff       	call   9740 <printf@plt>
+57668:   46a3a:	e8 01 2d fc ff       	call   9740 <printf@plt>
+57673:   46a53:	e8 e8 2c fc ff       	call   9740 <printf@plt>
+57678:   46a6c:	e8 cf 2c fc ff       	call   9740 <printf@plt>
+57683:   46a85:	e8 b6 2c fc ff       	call   9740 <printf@plt>
+57688:   46a9e:	e8 9d 2c fc ff       	call   9740 <printf@plt>
+57693:   46ab7:	e8 84 2c fc ff       	call   9740 <printf@plt>
+57698:   46ad0:	e8 6b 2c fc ff       	call   9740 <printf@plt>
+57703:   46ae9:	e8 52 2c fc ff       	call   9740 <printf@plt>
+57708:   46b02:	e8 39 2c fc ff       	call   9740 <printf@plt>
+57713:   46b1b:	e8 20 2c fc ff       	call   9740 <printf@plt>
+57718:   46b34:	e8 07 2c fc ff       	call   9740 <printf@plt>
+57723:   46b4a:	e8 f1 2b fc ff       	call   9740 <printf@plt>
+57728:   46b60:	e8 db 2b fc ff       	call   9740 <printf@plt>
+57733:   46b76:	e8 c5 2b fc ff       	call   9740 <printf@plt>
+57738:   46b8c:	e8 af 2b fc ff       	call   9740 <printf@plt>
+57748:   46bb2:	e8 89 2b fc ff       	call   9740 <printf@plt>
+57755:   46bcd:	e8 6e 2b fc ff       	call   9740 <printf@plt>
+57774:   46c10:	e8 2b 2b fc ff       	call   9740 <printf@plt>
+57876:   46e5d:	e8 de 28 fc ff       	call   9740 <printf@plt>
+57881:   46e76:	e8 c5 28 fc ff       	call   9740 <printf@plt>
+57886:   46e8f:	e8 ac 28 fc ff       	call   9740 <printf@plt>
+57891:   46ea8:	e8 93 28 fc ff       	call   9740 <printf@plt>
+57896:   46ec1:	e8 7a 28 fc ff       	call   9740 <printf@plt>
+57901:   46eda:	e8 61 28 fc ff       	call   9740 <printf@plt>
+57906:   46ef3:	e8 48 28 fc ff       	call   9740 <printf@plt>
+57911:   46f0c:	e8 2f 28 fc ff       	call   9740 <printf@plt>
+57916:   46f25:	e8 16 28 fc ff       	call   9740 <printf@plt>
+57921:   46f3e:	e8 fd 27 fc ff       	call   9740 <printf@plt>
+57926:   46f57:	e8 e4 27 fc ff       	call   9740 <printf@plt>
+57931:   46f70:	e8 cb 27 fc ff       	call   9740 <printf@plt>
+57936:   46f89:	e8 b2 27 fc ff       	call   9740 <printf@plt>
+57941:   46fa2:	e8 99 27 fc ff       	call   9740 <printf@plt>
+57946:   46fbb:	e8 80 27 fc ff       	call   9740 <printf@plt>
+57951:   46fd4:	e8 67 27 fc ff       	call   9740 <printf@plt>
+57956:   46fed:	e8 4e 27 fc ff       	call   9740 <printf@plt>
+57961:   47006:	e8 35 27 fc ff       	call   9740 <printf@plt>
+57966:   4701f:	e8 1c 27 fc ff       	call   9740 <printf@plt>
+57971:   47038:	e8 03 27 fc ff       	call   9740 <printf@plt>
+57976:   47051:	e8 ea 26 fc ff       	call   9740 <printf@plt>
+57981:   47067:	e8 d4 26 fc ff       	call   9740 <printf@plt>
+57986:   4707d:	e8 be 26 fc ff       	call   9740 <printf@plt>
+57991:   47093:	e8 a8 26 fc ff       	call   9740 <printf@plt>
+57996:   470a9:	e8 92 26 fc ff       	call   9740 <printf@plt>
+58006:   470cf:	e8 6c 26 fc ff       	call   9740 <printf@plt>
+58013:   470ea:	e8 51 26 fc ff       	call   9740 <printf@plt>
+58030:   4712b:	e8 10 26 fc ff       	call   9740 <printf@plt>
+58047:   47165:	e8 d6 25 fc ff       	call   9740 <printf@plt>
+58052:   4717b:	e8 c0 25 fc ff       	call   9740 <printf@plt>
+58062:   471a1:	e8 9a 25 fc ff       	call   9740 <printf@plt>
+58069:   471bc:	e8 7f 25 fc ff       	call   9740 <printf@plt>
+58086:   471fd:	e8 3e 25 fc ff       	call   9740 <printf@plt>
+58128:   472c4:	e8 77 24 fc ff       	call   9740 <printf@plt>
+58133:   472dd:	e8 5e 24 fc ff       	call   9740 <printf@plt>
+58138:   472f6:	e8 45 24 fc ff       	call   9740 <printf@plt>
+58143:   4730f:	e8 2c 24 fc ff       	call   9740 <printf@plt>
+58148:   47328:	e8 13 24 fc ff       	call   9740 <printf@plt>
+58153:   47341:	e8 fa 23 fc ff       	call   9740 <printf@plt>
+58158:   47357:	e8 e4 23 fc ff       	call   9740 <printf@plt>
+58163:   4736d:	e8 ce 23 fc ff       	call   9740 <printf@plt>
+58168:   47383:	e8 b8 23 fc ff       	call   9740 <printf@plt>
+58173:   47399:	e8 a2 23 fc ff       	call   9740 <printf@plt>
+58183:   473bf:	e8 7c 23 fc ff       	call   9740 <printf@plt>
+58190:   473da:	e8 61 23 fc ff       	call   9740 <printf@plt>
+58216:   4742f:	e8 0c 23 fc ff       	call   9740 <printf@plt>
+58221:   47445:	e8 f6 22 fc ff       	call   9740 <printf@plt>
+58231:   4746b:	e8 d0 22 fc ff       	call   9740 <printf@plt>
+58238:   47486:	e8 b5 22 fc ff       	call   9740 <printf@plt>
+58272:   474fd:	e8 3e 22 fc ff       	call   9740 <printf@plt>
+58293:   47551:	e8 ea 21 fc ff       	call   9740 <printf@plt>
+58307:   4758b:	e8 b0 21 fc ff       	call   9740 <printf@plt>
+58337:   47600:	e8 3b 21 fc ff       	call   9740 <printf@plt>
+58400:   4773b:	e8 00 20 fc ff       	call   9740 <printf@plt>
+58405:   47754:	e8 e7 1f fc ff       	call   9740 <printf@plt>
+58420:   4778d:	e8 ae 1f fc ff       	call   9740 <printf@plt>
+58425:   477a6:	e8 95 1f fc ff       	call   9740 <printf@plt>
+58440:   477df:	e8 5c 1f fc ff       	call   9740 <printf@plt>
+58445:   477f8:	e8 43 1f fc ff       	call   9740 <printf@plt>
+58460:   47831:	e8 0a 1f fc ff       	call   9740 <printf@plt>
+58465:   4784a:	e8 f1 1e fc ff       	call   9740 <printf@plt>
+58480:   47883:	e8 b8 1e fc ff       	call   9740 <printf@plt>
+58485:   4789c:	e8 9f 1e fc ff       	call   9740 <printf@plt>
+58500:   478d5:	e8 66 1e fc ff       	call   9740 <printf@plt>
+58505:   478ee:	e8 4d 1e fc ff       	call   9740 <printf@plt>
+58520:   47927:	e8 14 1e fc ff       	call   9740 <printf@plt>
+58525:   47940:	e8 fb 1d fc ff       	call   9740 <printf@plt>
+58542:   47989:	e8 b2 1d fc ff       	call   9740 <printf@plt>
+58553:   479b3:	e8 88 1d fc ff       	call   9740 <printf@plt>
+58573:   47a0a:	e8 31 1d fc ff       	call   9740 <printf@plt>
+58585:   47a36:	e8 05 1d fc ff       	call   9740 <printf@plt>
+58597:   47a67:	e8 d4 1c fc ff       	call   9740 <printf@plt>
+58602:   47a80:	e8 bb 1c fc ff       	call   9740 <printf@plt>
+58613:   47aae:	e8 8d 1c fc ff       	call   9740 <printf@plt>
+58626:   47ae1:	e8 5a 1c fc ff       	call   9740 <printf@plt>
+58638:   47b10:	e8 2b 1c fc ff       	call   9740 <printf@plt>
+58648:   47b36:	e8 05 1c fc ff       	call   9740 <printf@plt>
+58660:   47b65:	e8 d6 1b fc ff       	call   9740 <printf@plt>
+58687:   47bbe:	e8 7d 1b fc ff       	call   9740 <printf@plt>
+58692:   47bd4:	e8 67 1b fc ff       	call   9740 <printf@plt>
+58726:   47c58:	e8 e3 1a fc ff       	call   9740 <printf@plt>
+58741:   47c90:	e8 ab 1a fc ff       	call   9740 <printf@plt>
+58759:   47cdc:	e8 5f 1a fc ff       	call   9740 <printf@plt>
+58838:   47e2a:	e8 11 19 fc ff       	call   9740 <printf@plt>
+58845:   47e4b:	e8 f0 18 fc ff       	call   9740 <printf@plt>
+58877:   47ec5:	e8 76 18 fc ff       	call   9740 <printf@plt>
+58914:   47f61:	e8 da 17 fc ff       	call   9740 <printf@plt>
+58927:   47f97:	e8 a4 17 fc ff       	call   9740 <printf@plt>
+58942:   47fcf:	e8 6c 17 fc ff       	call   9740 <printf@plt>
+59004:   480ca:	e8 91 16 fc ff       	call   9760 <snprintf@plt>
+59036:   48140:	e8 fb 15 fc ff       	call   9740 <printf@plt>
+59064:   481b8:	e8 83 15 fc ff       	call   9740 <printf@plt>
+59072:   481de:	e8 5d 15 fc ff       	call   9740 <printf@plt>
+59085:   48215:	e8 26 15 fc ff       	call   9740 <printf@plt>
+59093:   4823b:	e8 00 15 fc ff       	call   9740 <printf@plt>
+59106:   4826f:	e8 cc 14 fc ff       	call   9740 <printf@plt>
+59114:   48292:	e8 a9 14 fc ff       	call   9740 <printf@plt>
+59124:   482bb:	e8 80 14 fc ff       	call   9740 <printf@plt>
+59138:   482ea:	e8 51 14 fc ff       	call   9740 <printf@plt>
+59244:   48462:	e8 d9 12 fc ff       	call   9740 <printf@plt>
+59286:   484fb:	e8 40 12 fc ff       	call   9740 <printf@plt>
+59297:   48529:	e8 12 12 fc ff       	call   9740 <printf@plt>
+59309:   48558:	e8 e3 11 fc ff       	call   9740 <printf@plt>
+59422:   4871d:	e8 3e 10 fc ff       	call   9760 <snprintf@plt>
+59512:   48874:	e8 e7 0e fc ff       	call   9760 <snprintf@plt>
+59538:   488d4:	e8 87 0e fc ff       	call   9760 <snprintf@plt>
+59669:   48ad3:	e8 68 0c fc ff       	call   9740 <printf@plt>
+59678:   48af9:	e8 42 0c fc ff       	call   9740 <printf@plt>
+59684:   48b15:	e8 26 0c fc ff       	call   9740 <printf@plt>
+59694:   48b42:	e8 f9 0b fc ff       	call   9740 <printf@plt>
+59704:   48b6f:	e8 cc 0b fc ff       	call   9740 <printf@plt>
+59719:   48bb0:	e8 8b 0b fc ff       	call   9740 <printf@plt>
+59743:   48bef:	e8 4c 0b fc ff       	call   9740 <printf@plt>
+59827:   48d65:	e8 f6 09 fc ff       	call   9760 <snprintf@plt>
+59895:   48e70:	e8 cb 08 fc ff       	call   9740 <printf@plt>
+59905:   48e9b:	e8 a0 08 fc ff       	call   9740 <printf@plt>
+59919:   48ed5:	e8 66 08 fc ff       	call   9740 <printf@plt>
+59936:   48f14:	e8 27 08 fc ff       	call   9740 <printf@plt>
+59943:   48f35:	e8 06 08 fc ff       	call   9740 <printf@plt>
+59950:   48f56:	e8 e5 07 fc ff       	call   9740 <printf@plt>
+59956:   48f72:	e8 c9 07 fc ff       	call   9740 <printf@plt>
+59969:   48fa6:	e8 95 07 fc ff       	call   9740 <printf@plt>
+59976:   48fc7:	e8 74 07 fc ff       	call   9740 <printf@plt>
+59989:   49001:	e8 3a 07 fc ff       	call   9740 <printf@plt>
+59996:   49022:	e8 19 07 fc ff       	call   9740 <printf@plt>
+60015:   49078:	e8 c3 06 fc ff       	call   9740 <printf@plt>
+60053:   49118:	e8 23 06 fc ff       	call   9740 <printf@plt>
+60059:   49134:	e8 07 06 fc ff       	call   9740 <printf@plt>
+60074:   49175:	e8 c6 05 fc ff       	call   9740 <printf@plt>
+60086:   491a9:	e8 92 05 fc ff       	call   9740 <printf@plt>
+60101:   491e6:	e8 55 05 fc ff       	call   9740 <printf@plt>
+60114:   49219:	e8 22 05 fc ff       	call   9740 <printf@plt>
+60127:   4924d:	e8 ee 04 fc ff       	call   9740 <printf@plt>
+60140:   49281:	e8 ba 04 fc ff       	call   9740 <printf@plt>
+60153:   492b2:	e8 89 04 fc ff       	call   9740 <printf@plt>
+60166:   492e3:	e8 58 04 fc ff       	call   9740 <printf@plt>
+60188:   4931f:	e8 1c 04 fc ff       	call   9740 <printf@plt>
+60489:   49782:	e8 b9 ff fb ff       	call   9740 <printf@plt>
+60498:   497ad:	e8 8e ff fb ff       	call   9740 <printf@plt>
+60513:   497f2:	e8 49 ff fb ff       	call   9740 <printf@plt>
+60522:   4981a:	e8 21 ff fb ff       	call   9740 <printf@plt>
+60594:   49948:	e8 f3 fd fb ff       	call   9740 <printf@plt>
+60674:   49a89:	e8 b2 fc fb ff       	call   9740 <printf@plt>
+60687:   49ac5:	e8 76 fc fb ff       	call   9740 <printf@plt>
+60699:   49af8:	e8 43 fc fb ff       	call   9740 <printf@plt>
+60712:   49b30:	e8 0b fc fb ff       	call   9740 <printf@plt>
+60727:   49b6e:	e8 cd fb fb ff       	call   9740 <printf@plt>
+60813:   49cbe:	e8 7d fa fb ff       	call   9740 <printf@plt>
+60979:   49f70:	e8 cb f7 fb ff       	call   9740 <printf@plt>
+61007:   49fdb:	e8 f0 f9 fb ff       	call   99d0 <sprintf@plt>
+61021:   4a019:	e8 22 f7 fb ff       	call   9740 <printf@plt>
+61214:   4a2f8:	e8 43 f4 fb ff       	call   9740 <printf@plt>
+61225:   4a326:	e8 15 f4 fb ff       	call   9740 <printf@plt>
+61234:   4a34b:	e8 f0 f3 fb ff       	call   9740 <printf@plt>
+61282:   4a3e4:	e8 57 f3 fb ff       	call   9740 <printf@plt>
+61451:   4a662:	e8 d9 f0 fb ff       	call   9740 <printf@plt>
+61508:   4a73d:	e8 fe ef fb ff       	call   9740 <printf@plt>
+61517:   4a762:	e8 d9 ef fb ff       	call   9740 <printf@plt>
+61625:   4a909:	e8 32 ee fb ff       	call   9740 <printf@plt>
+61640:   4a941:	e8 fa ed fb ff       	call   9740 <printf@plt>
+61746:   4ab1b:	e8 20 ec fb ff       	call   9740 <printf@plt>
+61757:   4ab4d:	e8 ee eb fb ff       	call   9740 <printf@plt>
+61798:   4abfd:	e8 3e eb fb ff       	call   9740 <printf@plt>
+62192:   4b278:	e8 c3 e4 fb ff       	call   9740 <printf@plt>
+62322:   4b47f:	e8 bc e2 fb ff       	call   9740 <printf@plt>
+62336:   4b4b8:	e8 83 e2 fb ff       	call   9740 <printf@plt>
+62469:   4b69c:	e8 9f e0 fb ff       	call   9740 <printf@plt>
+62487:   4b6dd:	e8 5e e0 fb ff       	call   9740 <printf@plt>
+63194:   4c205:	e8 36 d5 fb ff       	call   9740 <printf@plt>
+63601:   4c8e1:	e8 5a ce fb ff       	call   9740 <printf@plt>
+63663:   4ca0e:	e8 2d cd fb ff       	call   9740 <printf@plt>
+63710:   4cae5:	e8 56 cc fb ff       	call   9740 <printf@plt>
+63942:   4cf13:	e8 b8 c7 fb ff       	call   96d0 <strlen@plt>
+64524:   4d98a:	e8 b1 bd fb ff       	call   9740 <printf@plt>
+64530:   4d9a6:	e8 95 bd fb ff       	call   9740 <printf@plt>
+64536:   4d9c2:	e8 79 bd fb ff       	call   9740 <printf@plt>
+64730:   4dc4a:	e8 81 bd fb ff       	call   99d0 <sprintf@plt>
+64740:   4dc6f:	e8 5c bd fb ff       	call   99d0 <sprintf@plt>
+64750:   4dc94:	e8 37 bd fb ff       	call   99d0 <sprintf@plt>
+64797:   4dd23:	e8 a8 bc fb ff       	call   99d0 <sprintf@plt>
+64807:   4dd48:	e8 83 bc fb ff       	call   99d0 <sprintf@plt>
+64817:   4dd6d:	e8 5e bc fb ff       	call   99d0 <sprintf@plt>
+64887:   4de5e:	e8 dd b8 fb ff       	call   9740 <printf@plt>
+64913:   4debb:	e8 80 b8 fb ff       	call   9740 <printf@plt>
+64957:   4df63:	e8 d8 b7 fb ff       	call   9740 <printf@plt>
+64977:   4dfb2:	e8 89 b7 fb ff       	call   9740 <printf@plt>
+65008:   4e023:	e8 18 b7 fb ff       	call   9740 <printf@plt>
+65054:   4e0ce:	e8 6d b6 fb ff       	call   9740 <printf@plt>
+65078:   4e12b:	e8 10 b6 fb ff       	call   9740 <printf@plt>
+65109:   4e19c:	e8 9f b5 fb ff       	call   9740 <printf@plt>
+65163:   4e266:	e8 d5 b4 fb ff       	call   9740 <printf@plt>
+65185:   4e2bb:	e8 80 b4 fb ff       	call   9740 <printf@plt>
+65216:   4e32c:	e8 0f b4 fb ff       	call   9740 <printf@plt>
+65272:   4e3f9:	e8 42 b3 fb ff       	call   9740 <printf@plt>
+65298:   4e45c:	e8 df b2 fb ff       	call   9740 <printf@plt>
+65342:   4e4fe:	e8 3d b2 fb ff       	call   9740 <printf@plt>
+65368:   4e570:	e8 cb b1 fb ff       	call   9740 <printf@plt>
+65406:   4e612:	e8 b9 b0 fb ff       	call   96d0 <strlen@plt>
+65425:   4e65a:	e8 71 b0 fb ff       	call   96d0 <strlen@plt>
+65445:   4e6a9:	e8 22 b0 fb ff       	call   96d0 <strlen@plt>
+65463:   4e6ee:	e8 dd af fb ff       	call   96d0 <strlen@plt>
+65475:   4e720:	e8 ab b2 fb ff       	call   99d0 <sprintf@plt>
+65487:   4e753:	e8 e8 af fb ff       	call   9740 <printf@plt>
+65534:   4e805:	e8 36 af fb ff       	call   9740 <printf@plt>
+65565:   4e875:	e8 c6 ae fb ff       	call   9740 <printf@plt>
+65601:   4e90b:	e8 30 ae fb ff       	call   9740 <printf@plt>
+65633:   4e998:	e8 a3 ad fb ff       	call   9740 <printf@plt>
+65648:   4e9dd:	e8 5e ad fb ff       	call   9740 <printf@plt>
+65688:   4ea97:	e8 a4 ac fb ff       	call   9740 <printf@plt>
+65699:   4eacd:	e8 6e ac fb ff       	call   9740 <printf@plt>
+65710:   4eb03:	e8 38 ac fb ff       	call   9740 <printf@plt>
+65721:   4eb39:	e8 02 ac fb ff       	call   9740 <printf@plt>
+65732:   4eb6f:	e8 cc ab fb ff       	call   9740 <printf@plt>
+65743:   4eba5:	e8 96 ab fb ff       	call   9740 <printf@plt>
+65752:   4ebd1:	e8 6a ab fb ff       	call   9740 <printf@plt>
+65763:   4ec07:	e8 34 ab fb ff       	call   9740 <printf@plt>
+65774:   4ec3d:	e8 fe aa fb ff       	call   9740 <printf@plt>
+65785:   4ec73:	e8 c8 aa fb ff       	call   9740 <printf@plt>
+65796:   4eca9:	e8 92 aa fb ff       	call   9740 <printf@plt>
+65805:   4ecd5:	e8 66 aa fb ff       	call   9740 <printf@plt>
+65814:   4ecff:	e8 3c aa fb ff       	call   9740 <printf@plt>
+65845:   4ed97:	e8 a4 a9 fb ff       	call   9740 <printf@plt>
+65852:   4edba:	e8 81 a9 fb ff       	call   9740 <printf@plt>
+65924:   4eef1:	e8 4a a8 fb ff       	call   9740 <printf@plt>
+65979:   4f004:	e8 37 a7 fb ff       	call   9740 <printf@plt>
+65989:   4f02d:	e8 0e a7 fb ff       	call   9740 <printf@plt>
+66036:   4f0fc:	e8 3f a6 fb ff       	call   9740 <printf@plt>
+66050:   4f13e:	e8 fd a5 fb ff       	call   9740 <printf@plt>
+66114:   4f22e:	e8 0d a5 fb ff       	call   9740 <printf@plt>
+66123:   4f258:	e8 e3 a4 fb ff       	call   9740 <printf@plt>
+66133:   4f286:	e8 b5 a4 fb ff       	call   9740 <printf@plt>
+66145:   4f2be:	e8 7d a4 fb ff       	call   9740 <printf@plt>
+66156:   4f2f2:	e8 49 a4 fb ff       	call   9740 <printf@plt>
+66168:   4f32a:	e8 11 a4 fb ff       	call   9740 <printf@plt>
+66179:   4f35e:	e8 dd a3 fb ff       	call   9740 <printf@plt>
+66191:   4f396:	e8 a5 a3 fb ff       	call   9740 <printf@plt>
+66202:   4f3ca:	e8 71 a3 fb ff       	call   9740 <printf@plt>
+66214:   4f402:	e8 39 a3 fb ff       	call   9740 <printf@plt>
+66225:   4f436:	e8 05 a3 fb ff       	call   9740 <printf@plt>
+66237:   4f46e:	e8 cd a2 fb ff       	call   9740 <printf@plt>
+66248:   4f4a2:	e8 99 a2 fb ff       	call   9740 <printf@plt>
+66260:   4f4da:	e8 61 a2 fb ff       	call   9740 <printf@plt>
+66271:   4f50e:	e8 2d a2 fb ff       	call   9740 <printf@plt>
+66283:   4f546:	e8 f5 a1 fb ff       	call   9740 <printf@plt>
+66292:   4f56d:	e8 ce a1 fb ff       	call   9740 <printf@plt>
+66317:   4f5d1:	e8 6a a1 fb ff       	call   9740 <printf@plt>
+66353:   4f666:	e8 d5 a0 fb ff       	call   9740 <printf@plt>
+66365:   4f69e:	e8 9d a0 fb ff       	call   9740 <printf@plt>
+66377:   4f6d6:	e8 65 a0 fb ff       	call   9740 <printf@plt>
+66389:   4f70e:	e8 2d a0 fb ff       	call   9740 <printf@plt>
+66401:   4f746:	e8 f5 9f fb ff       	call   9740 <printf@plt>
+66413:   4f77e:	e8 bd 9f fb ff       	call   9740 <printf@plt>
+66424:   4f7b2:	e8 89 9f fb ff       	call   9740 <printf@plt>
+66436:   4f7ea:	e8 51 9f fb ff       	call   9740 <printf@plt>
+66448:   4f822:	e8 19 9f fb ff       	call   9740 <printf@plt>
+66459:   4f856:	e8 e5 9e fb ff       	call   9740 <printf@plt>
+66471:   4f88e:	e8 ad 9e fb ff       	call   9740 <printf@plt>
+66483:   4f8c6:	e8 75 9e fb ff       	call   9740 <printf@plt>
+66494:   4f8fa:	e8 41 9e fb ff       	call   9740 <printf@plt>
+66506:   4f932:	e8 09 9e fb ff       	call   9740 <printf@plt>
+66518:   4f96a:	e8 d1 9d fb ff       	call   9740 <printf@plt>
+66527:   4f994:	e8 a7 9d fb ff       	call   9740 <printf@plt>
+66537:   4f9c2:	e8 79 9d fb ff       	call   9740 <printf@plt>
+66547:   4f9ed:	e8 4e 9d fb ff       	call   9740 <printf@plt>
+66556:   4fa14:	e8 27 9d fb ff       	call   9740 <printf@plt>
+66565:   4fa38:	e8 03 9d fb ff       	call   9740 <printf@plt>
+66578:   4fa6b:	e8 d0 9c fb ff       	call   9740 <printf@plt>
+66609:   4fadf:	e8 5c 9c fb ff       	call   9740 <printf@plt>
+66621:   4fb11:	e8 2a 9c fb ff       	call   9740 <printf@plt>
+66652:   4fb8a:	e8 41 9e fb ff       	call   99d0 <sprintf@plt>
+66662:   4fbb5:	e8 86 9b fb ff       	call   9740 <printf@plt>
+66700:   4fc42:	e8 f9 9a fb ff       	call   9740 <printf@plt>
+66733:   4fcb5:	e8 86 9a fb ff       	call   9740 <printf@plt>
+66742:   4fcdc:	e8 5f 9a fb ff       	call   9740 <printf@plt>
+66771:   4fd45:	e8 f6 99 fb ff       	call   9740 <printf@plt>
+66808:   4fdca:	e8 71 99 fb ff       	call   9740 <printf@plt>
+66831:   4fe1f:	e8 1c 99 fb ff       	call   9740 <printf@plt>
+66840:   4fe49:	e8 f2 98 fb ff       	call   9740 <printf@plt>
+66893:   4fefc:	e8 3f 98 fb ff       	call   9740 <printf@plt>
+66915:   4ff47:	e8 f4 97 fb ff       	call   9740 <printf@plt>
+67136:   50253:	e8 08 95 fb ff       	call   9760 <snprintf@plt>
+67156:   502a2:	e8 29 97 fb ff       	call   99d0 <sprintf@plt>
+67164:   502c6:	e8 05 97 fb ff       	call   99d0 <sprintf@plt>
+67171:   502e4:	e8 77 94 fb ff       	call   9760 <snprintf@plt>
+67208:   50366:	e8 d5 93 fb ff       	call   9740 <printf@plt>
+67238:   503c6:	e8 75 93 fb ff       	call   9740 <printf@plt>
+67247:   503eb:	e8 50 93 fb ff       	call   9740 <printf@plt>
+67270:   5043a:	e8 21 93 fb ff       	call   9760 <snprintf@plt>
+67279:   5045e:	e8 fd 92 fb ff       	call   9760 <snprintf@plt>
+67294:   50494:	e8 c7 92 fb ff       	call   9760 <snprintf@plt>
+67495:   507c7:	e8 74 8f fb ff       	call   9740 <printf@plt>
+67520:   50833:	e8 08 8f fb ff       	call   9740 <printf@plt>
+67602:   509b7:	e8 84 8d fb ff       	call   9740 <printf@plt>
+67614:   509f7:	e8 44 8d fb ff       	call   9740 <printf@plt>
+67620:   50a13:	e8 28 8d fb ff       	call   9740 <printf@plt>
+67629:   50a3e:	e8 fd 8c fb ff       	call   9740 <printf@plt>
+67679:   50b2b:	e8 10 8c fb ff       	call   9740 <printf@plt>
+67716:   50bd7:	e8 64 8b fb ff       	call   9740 <printf@plt>
+67753:   50c83:	e8 b8 8a fb ff       	call   9740 <printf@plt>
+67762:   50ca6:	e8 95 8a fb ff       	call   9740 <printf@plt>
+67819:   50db6:	e8 85 89 fb ff       	call   9740 <printf@plt>
+67946:   5101e:	e8 1d 87 fb ff       	call   9740 <printf@plt>
+67951:   51037:	e8 04 87 fb ff       	call   9740 <printf@plt>
+67988:   510e0:	e8 5b 86 fb ff       	call   9740 <printf@plt>
+68025:   51189:	e8 b2 85 fb ff       	call   9740 <printf@plt>
+68062:   51232:	e8 09 85 fb ff       	call   9740 <printf@plt>
+68072:   5125b:	e8 e0 84 fb ff       	call   9740 <printf@plt>
+68091:   512b4:	e8 87 84 fb ff       	call   9740 <printf@plt>
+68098:   512d2:	e8 69 84 fb ff       	call   9740 <printf@plt>
+68107:   512f9:	e8 42 84 fb ff       	call   9740 <printf@plt>
+68118:   51329:	e8 12 84 fb ff       	call   9740 <printf@plt>
+69247:   5242c:	e8 2f 73 fb ff       	call   9760 <snprintf@plt>
+69259:   52460:	e8 fb 72 fb ff       	call   9760 <snprintf@plt>
+69290:   524d7:	e8 84 72 fb ff       	call   9760 <snprintf@plt>
+69317:   5253e:	e8 1d 72 fb ff       	call   9760 <snprintf@plt>
+69348:   525ab:	e8 90 71 fb ff       	call   9740 <printf@plt>
+69374:   52610:	e8 2b 71 fb ff       	call   9740 <printf@plt>
+69492:   5282f:	e8 0c 6f fb ff       	call   9740 <printf@plt>
+69497:   52848:	e8 f3 6e fb ff       	call   9740 <printf@plt>
+69556:   52966:	e8 d5 6d fb ff       	call   9740 <printf@plt>
+69594:   52a25:	e8 16 6d fb ff       	call   9740 <printf@plt>
+69653:   52b43:	e8 f8 6b fb ff       	call   9740 <printf@plt>
+69691:   52c02:	e8 39 6b fb ff       	call   9740 <printf@plt>
+69750:   52d20:	e8 1b 6a fb ff       	call   9740 <printf@plt>
+69788:   52ddf:	e8 5c 69 fb ff       	call   9740 <printf@plt>
+69847:   52efd:	e8 3e 68 fb ff       	call   9740 <printf@plt>
+69905:   53016:	e8 25 67 fb ff       	call   9740 <printf@plt>
+69943:   530d5:	e8 66 66 fb ff       	call   9740 <printf@plt>
+69980:   5318f:	e8 ac 65 fb ff       	call   9740 <printf@plt>
+70020:   53253:	e8 e8 64 fb ff       	call   9740 <printf@plt>
+70060:   53317:	e8 24 64 fb ff       	call   9740 <printf@plt>
+70065:   53330:	e8 0b 64 fb ff       	call   9740 <printf@plt>
+70070:   53349:	e8 f2 63 fb ff       	call   9740 <printf@plt>
+70075:   53362:	e8 d9 63 fb ff       	call   9740 <printf@plt>
+70134:   53480:	e8 bb 62 fb ff       	call   9740 <printf@plt>
+70139:   53499:	e8 a2 62 fb ff       	call   9740 <printf@plt>
+70144:   534b2:	e8 89 62 fb ff       	call   9740 <printf@plt>
+70149:   534cb:	e8 70 62 fb ff       	call   9740 <printf@plt>
+70154:   534e4:	e8 57 62 fb ff       	call   9740 <printf@plt>
+70159:   534fd:	e8 3e 62 fb ff       	call   9740 <printf@plt>
+70164:   53516:	e8 25 62 fb ff       	call   9740 <printf@plt>
+70169:   5352f:	e8 0c 62 fb ff       	call   9740 <printf@plt>
+70174:   53548:	e8 f3 61 fb ff       	call   9740 <printf@plt>
+70179:   53561:	e8 da 61 fb ff       	call   9740 <printf@plt>
+70184:   5357a:	e8 c1 61 fb ff       	call   9740 <printf@plt>
+70189:   53593:	e8 a8 61 fb ff       	call   9740 <printf@plt>
+70194:   535ac:	e8 8f 61 fb ff       	call   9740 <printf@plt>
+70199:   535c5:	e8 76 61 fb ff       	call   9740 <printf@plt>
+70239:   53689:	e8 b2 60 fb ff       	call   9740 <printf@plt>
+70244:   536a2:	e8 99 60 fb ff       	call   9740 <printf@plt>
+70249:   536bb:	e8 80 60 fb ff       	call   9740 <printf@plt>
+70254:   536d4:	e8 67 60 fb ff       	call   9740 <printf@plt>
+70259:   536ed:	e8 4e 60 fb ff       	call   9740 <printf@plt>
+70297:   537ac:	e8 8f 5f fb ff       	call   9740 <printf@plt>
+70302:   537c5:	e8 76 5f fb ff       	call   9740 <printf@plt>
+70307:   537de:	e8 5d 5f fb ff       	call   9740 <printf@plt>
+70312:   537f7:	e8 44 5f fb ff       	call   9740 <printf@plt>
+70317:   53810:	e8 2b 5f fb ff       	call   9740 <printf@plt>
+70322:   53829:	e8 12 5f fb ff       	call   9740 <printf@plt>
+70327:   53842:	e8 f9 5e fb ff       	call   9740 <printf@plt>
+70365:   53901:	e8 3a 5e fb ff       	call   9740 <printf@plt>
+70373:   53925:	e8 16 5e fb ff       	call   9740 <printf@plt>
+70387:   53961:	e8 da 5d fb ff       	call   9740 <printf@plt>
+70437:   53a4b:	e8 f0 5c fb ff       	call   9740 <printf@plt>
+70483:   53b28:	e8 13 5c fb ff       	call   9740 <printf@plt>
+70525:   53bf6:	e8 45 5b fb ff       	call   9740 <printf@plt>
+70607:   53d81:	e8 ba 59 fb ff       	call   9740 <printf@plt>
+70647:   53e45:	e8 f6 58 fb ff       	call   9740 <printf@plt>
+70706:   53f63:	e8 d8 57 fb ff       	call   9740 <printf@plt>
+70765:   54081:	e8 ba 56 fb ff       	call   9740 <printf@plt>
+70770:   5409a:	e8 a1 56 fb ff       	call   9740 <printf@plt>
+70775:   540b3:	e8 88 56 fb ff       	call   9740 <printf@plt>
+70819:   5418e:	e8 ad 55 fb ff       	call   9740 <printf@plt>
+70863:   54269:	e8 d2 54 fb ff       	call   9740 <printf@plt>
+70872:   54293:	e8 a8 54 fb ff       	call   9740 <printf@plt>
+70993:   544e4:	e8 57 52 fb ff       	call   9740 <printf@plt>
+70998:   544fd:	e8 3e 52 fb ff       	call   9740 <printf@plt>
+71003:   54516:	e8 25 52 fb ff       	call   9740 <printf@plt>
+71008:   5452f:	e8 0c 52 fb ff       	call   9740 <printf@plt>
+71050:   545f9:	e8 42 51 fb ff       	call   9740 <printf@plt>
+71092:   546c3:	e8 78 50 fb ff       	call   9740 <printf@plt>
+71097:   546dc:	e8 5f 50 fb ff       	call   9740 <printf@plt>
+71102:   546f5:	e8 46 50 fb ff       	call   9740 <printf@plt>
+71145:   547ce:	e8 6d 4f fb ff       	call   9740 <printf@plt>
+71150:   547e7:	e8 54 4f fb ff       	call   9740 <printf@plt>
+71175:   5486a:	e8 d1 4e fb ff       	call   9740 <printf@plt>
+71196:   548ca:	e8 71 4e fb ff       	call   9740 <printf@plt>
+71360:   54be8:	e8 53 4b fb ff       	call   9740 <printf@plt>
+71410:   54cea:	e8 51 4a fb ff       	call   9740 <printf@plt>
+71487:   54e75:	e8 c6 48 fb ff       	call   9740 <printf@plt>
+71599:   5509e:	e8 9d 46 fb ff       	call   9740 <printf@plt>
+71640:   55170:	e8 cb 45 fb ff       	call   9740 <printf@plt>
+71705:   552aa:	e8 91 44 fb ff       	call   9740 <printf@plt>
+71746:   5537c:	e8 bf 43 fb ff       	call   9740 <printf@plt>
+71800:   55483:	e8 b8 42 fb ff       	call   9740 <printf@plt>
+71854:   5558a:	e8 b1 41 fb ff       	call   9740 <printf@plt>
+71919:   556c4:	e8 77 40 fb ff       	call   9740 <printf@plt>
+71959:   55791:	e8 aa 3f fb ff       	call   9740 <printf@plt>
+71999:   5585e:	e8 dd 3e fb ff       	call   9740 <printf@plt>
+72008:   55888:	e8 b3 3e fb ff       	call   9740 <printf@plt>
+72129:   55ad9:	e8 62 3c fb ff       	call   9740 <printf@plt>
+72134:   55af2:	e8 49 3c fb ff       	call   9740 <printf@plt>
+72139:   55b0b:	e8 30 3c fb ff       	call   9740 <printf@plt>
+72144:   55b24:	e8 17 3c fb ff       	call   9740 <printf@plt>
+72149:   55b3d:	e8 fe 3b fb ff       	call   9740 <printf@plt>
+72154:   55b56:	e8 e5 3b fb ff       	call   9740 <printf@plt>
+72159:   55b6f:	e8 cc 3b fb ff       	call   9740 <printf@plt>
+72164:   55b88:	e8 b3 3b fb ff       	call   9740 <printf@plt>
+72180:   55bc9:	e8 72 3b fb ff       	call   9740 <printf@plt>
+72190:   55bf2:	e8 49 3b fb ff       	call   9740 <printf@plt>
+72200:   55c1f:	e8 1c 3b fb ff       	call   9740 <printf@plt>
+72396:   55efe:	e8 5d 38 fb ff       	call   9760 <snprintf@plt>
+73551:   570e0:	e8 5b 26 fb ff       	call   9740 <printf@plt>
+73562:   57112:	e8 29 26 fb ff       	call   9740 <printf@plt>
+73686:   572be:	e8 7d 24 fb ff       	call   9740 <printf@plt>
+73714:   57320:	e8 1b 24 fb ff       	call   9740 <printf@plt>
+73834:   57502:	e8 39 22 fb ff       	call   9740 <printf@plt>
+73866:   5757e:	e8 bd 21 fb ff       	call   9740 <printf@plt>
+73897:   575f5:	e8 46 21 fb ff       	call   9740 <printf@plt>
+73943:   576a8:	e8 93 20 fb ff       	call   9740 <printf@plt>
+73951:   576cd:	e8 6e 20 fb ff       	call   9740 <printf@plt>
+73956:   576e3:	e8 58 20 fb ff       	call   9740 <printf@plt>
+74510:   58165:	e8 d6 15 fb ff       	call   9740 <printf@plt>
+74620:   5837e:	e8 bd 13 fb ff       	call   9740 <printf@plt>
+74635:   583c6:	e8 75 13 fb ff       	call   9740 <printf@plt>
+74652:   58415:	e8 26 13 fb ff       	call   9740 <printf@plt>
+74667:   5845d:	e8 de 12 fb ff       	call   9740 <printf@plt>
+74682:   584a5:	e8 96 12 fb ff       	call   9740 <printf@plt>
+74697:   584ed:	e8 4e 12 fb ff       	call   9740 <printf@plt>
+74739:   585bf:	e8 7c 11 fb ff       	call   9740 <printf@plt>
+74872:   58867:	e8 d4 0e fb ff       	call   9740 <printf@plt>
+74889:   588b3:	e8 88 0e fb ff       	call   9740 <printf@plt>
+75138:   58d7d:	e8 be 09 fb ff       	call   9740 <printf@plt>
+75161:   58de5:	e8 56 09 fb ff       	call   9740 <printf@plt>
+75207:   58eb6:	e8 85 08 fb ff       	call   9740 <printf@plt>
+75230:   58f1e:	e8 1d 08 fb ff       	call   9740 <printf@plt>
+75261:   58fbb:	e8 80 07 fb ff       	call   9740 <printf@plt>
+75289:   59037:	e8 04 07 fb ff       	call   9740 <printf@plt>
+75998:   59c29:	e8 12 fb fa ff       	call   9740 <printf@plt>
+76005:   59c4a:	e8 f1 fa fa ff       	call   9740 <printf@plt>
+76012:   59c68:	e8 d3 fa fa ff       	call   9740 <printf@plt>
+76019:   59c86:	e8 b5 fa fa ff       	call   9740 <printf@plt>
+76033:   59cc3:	e8 78 fa fa ff       	call   9740 <printf@plt>
+76063:   59d51:	e8 ea f9 fa ff       	call   9740 <printf@plt>
+76068:   59d6a:	e8 d1 f9 fa ff       	call   9740 <printf@plt>
+76073:   59d83:	e8 b8 f9 fa ff       	call   9740 <printf@plt>
+76078:   59d9c:	e8 9f f9 fa ff       	call   9740 <printf@plt>
+76083:   59db5:	e8 86 f9 fa ff       	call   9740 <printf@plt>
+76088:   59dce:	e8 6d f9 fa ff       	call   9740 <printf@plt>
+76093:   59de7:	e8 54 f9 fa ff       	call   9740 <printf@plt>
+76098:   59e00:	e8 3b f9 fa ff       	call   9740 <printf@plt>
+76103:   59e19:	e8 22 f9 fa ff       	call   9740 <printf@plt>
+76108:   59e32:	e8 09 f9 fa ff       	call   9740 <printf@plt>
+76113:   59e4b:	e8 f0 f8 fa ff       	call   9740 <printf@plt>
+76118:   59e64:	e8 d7 f8 fa ff       	call   9740 <printf@plt>
+76123:   59e7d:	e8 be f8 fa ff       	call   9740 <printf@plt>
+76128:   59e96:	e8 a5 f8 fa ff       	call   9740 <printf@plt>
+76133:   59eaf:	e8 8c f8 fa ff       	call   9740 <printf@plt>
+76138:   59ec8:	e8 73 f8 fa ff       	call   9740 <printf@plt>
+76143:   59ee1:	e8 5a f8 fa ff       	call   9740 <printf@plt>
+76148:   59efa:	e8 41 f8 fa ff       	call   9740 <printf@plt>
+76153:   59f13:	e8 28 f8 fa ff       	call   9740 <printf@plt>
+76158:   59f2c:	e8 0f f8 fa ff       	call   9740 <printf@plt>
+76163:   59f45:	e8 f6 f7 fa ff       	call   9740 <printf@plt>
+76168:   59f5e:	e8 dd f7 fa ff       	call   9740 <printf@plt>
+76173:   59f77:	e8 c4 f7 fa ff       	call   9740 <printf@plt>
+76178:   59f90:	e8 ab f7 fa ff       	call   9740 <printf@plt>
+76183:   59fa9:	e8 92 f7 fa ff       	call   9740 <printf@plt>
+76188:   59fc2:	e8 79 f7 fa ff       	call   9740 <printf@plt>
+76193:   59fdb:	e8 60 f7 fa ff       	call   9740 <printf@plt>
+76198:   59ff4:	e8 47 f7 fa ff       	call   9740 <printf@plt>
+76203:   5a00d:	e8 2e f7 fa ff       	call   9740 <printf@plt>
+76208:   5a026:	e8 15 f7 fa ff       	call   9740 <printf@plt>
+76213:   5a03f:	e8 fc f6 fa ff       	call   9740 <printf@plt>
+76218:   5a058:	e8 e3 f6 fa ff       	call   9740 <printf@plt>
+76223:   5a071:	e8 ca f6 fa ff       	call   9740 <printf@plt>
+76228:   5a08a:	e8 b1 f6 fa ff       	call   9740 <printf@plt>
+76233:   5a0a3:	e8 98 f6 fa ff       	call   9740 <printf@plt>
+76238:   5a0bc:	e8 7f f6 fa ff       	call   9740 <printf@plt>
+76243:   5a0d5:	e8 66 f6 fa ff       	call   9740 <printf@plt>
+76248:   5a0ee:	e8 4d f6 fa ff       	call   9740 <printf@plt>
+76268:   5a14c:	e8 ef f5 fa ff       	call   9740 <printf@plt>
+76282:   5a189:	e8 b2 f5 fa ff       	call   9740 <printf@plt>
+76301:   5a1e1:	e8 5a f5 fa ff       	call   9740 <printf@plt>
+76306:   5a1fa:	e8 41 f5 fa ff       	call   9740 <printf@plt>
+76311:   5a213:	e8 28 f5 fa ff       	call   9740 <printf@plt>
+76316:   5a22c:	e8 0f f5 fa ff       	call   9740 <printf@plt>
+76321:   5a245:	e8 f6 f4 fa ff       	call   9740 <printf@plt>
+76326:   5a25e:	e8 dd f4 fa ff       	call   9740 <printf@plt>
+76331:   5a277:	e8 c4 f4 fa ff       	call   9740 <printf@plt>
+76336:   5a290:	e8 ab f4 fa ff       	call   9740 <printf@plt>
+76341:   5a2a9:	e8 92 f4 fa ff       	call   9740 <printf@plt>
+76346:   5a2c2:	e8 79 f4 fa ff       	call   9740 <printf@plt>
+76351:   5a2db:	e8 60 f4 fa ff       	call   9740 <printf@plt>
+76356:   5a2f4:	e8 47 f4 fa ff       	call   9740 <printf@plt>
+76361:   5a30d:	e8 2e f4 fa ff       	call   9740 <printf@plt>
+76366:   5a326:	e8 15 f4 fa ff       	call   9740 <printf@plt>
+76371:   5a33f:	e8 fc f3 fa ff       	call   9740 <printf@plt>
+76376:   5a358:	e8 e3 f3 fa ff       	call   9740 <printf@plt>
+76381:   5a371:	e8 ca f3 fa ff       	call   9740 <printf@plt>
+76386:   5a38a:	e8 b1 f3 fa ff       	call   9740 <printf@plt>
+76391:   5a3a3:	e8 98 f3 fa ff       	call   9740 <printf@plt>
+76396:   5a3bc:	e8 7f f3 fa ff       	call   9740 <printf@plt>
+76401:   5a3d5:	e8 66 f3 fa ff       	call   9740 <printf@plt>
+76406:   5a3ee:	e8 4d f3 fa ff       	call   9740 <printf@plt>
+76411:   5a407:	e8 34 f3 fa ff       	call   9740 <printf@plt>
+76416:   5a420:	e8 1b f3 fa ff       	call   9740 <printf@plt>
+76421:   5a439:	e8 02 f3 fa ff       	call   9740 <printf@plt>
+76426:   5a44f:	e8 ec f2 fa ff       	call   9740 <printf@plt>
+76439:   5a489:	e8 b2 f2 fa ff       	call   9740 <printf@plt>
+76446:   5a4a7:	e8 94 f2 fa ff       	call   9740 <printf@plt>
+76464:   5a4ec:	e8 4f f2 fa ff       	call   9740 <printf@plt>
+76469:   5a502:	e8 39 f2 fa ff       	call   9740 <printf@plt>
+76474:   5a518:	e8 23 f2 fa ff       	call   9740 <printf@plt>
+76481:   5a536:	e8 05 f2 fa ff       	call   9740 <printf@plt>
+76499:   5a57b:	e8 c0 f1 fa ff       	call   9740 <printf@plt>
+76504:   5a591:	e8 aa f1 fa ff       	call   9740 <printf@plt>
+76509:   5a5a7:	e8 94 f1 fa ff       	call   9740 <printf@plt>
+76516:   5a5c5:	e8 76 f1 fa ff       	call   9740 <printf@plt>
+76534:   5a609:	e8 32 f1 fa ff       	call   9740 <printf@plt>
+76539:   5a622:	e8 19 f1 fa ff       	call   9740 <printf@plt>
+76544:   5a638:	e8 03 f1 fa ff       	call   9740 <printf@plt>
+76557:   5a672:	e8 c9 f0 fa ff       	call   9740 <printf@plt>
+76564:   5a690:	e8 ab f0 fa ff       	call   9740 <printf@plt>
+76582:   5a6d4:	e8 67 f0 fa ff       	call   9740 <printf@plt>
+76587:   5a6ea:	e8 51 f0 fa ff       	call   9740 <printf@plt>
+76592:   5a700:	e8 3b f0 fa ff       	call   9740 <printf@plt>
+76599:   5a71e:	e8 1d f0 fa ff       	call   9740 <printf@plt>
+76621:   5a76e:	e8 cd ef fa ff       	call   9740 <printf@plt>
+76626:   5a784:	e8 b7 ef fa ff       	call   9740 <printf@plt>
+76631:   5a79a:	e8 a1 ef fa ff       	call   9740 <printf@plt>
+76636:   5a7b0:	e8 8b ef fa ff       	call   9740 <printf@plt>
+76643:   5a7ce:	e8 6d ef fa ff       	call   9740 <printf@plt>
+76673:   5a856:	e8 e5 ee fa ff       	call   9740 <printf@plt>
+76678:   5a86f:	e8 cc ee fa ff       	call   9740 <printf@plt>
+76683:   5a888:	e8 b3 ee fa ff       	call   9740 <printf@plt>
+76688:   5a8a1:	e8 9a ee fa ff       	call   9740 <printf@plt>
+76693:   5a8ba:	e8 81 ee fa ff       	call   9740 <printf@plt>
+76698:   5a8d3:	e8 68 ee fa ff       	call   9740 <printf@plt>
+76703:   5a8e9:	e8 52 ee fa ff       	call   9740 <printf@plt>
+76716:   5a923:	e8 18 ee fa ff       	call   9740 <printf@plt>
+76723:   5a941:	e8 fa ed fa ff       	call   9740 <printf@plt>
+76745:   5a9a2:	e8 99 ed fa ff       	call   9740 <printf@plt>
+76750:   5a9b8:	e8 83 ed fa ff       	call   9740 <printf@plt>
+76755:   5a9ce:	e8 6d ed fa ff       	call   9740 <printf@plt>
+76776:   5aa2c:	e8 0f ed fa ff       	call   9740 <printf@plt>
+76783:   5aa4d:	e8 ee ec fa ff       	call   9740 <printf@plt>
+76790:   5aa6b:	e8 d0 ec fa ff       	call   9740 <printf@plt>
+76797:   5aa89:	e8 b2 ec fa ff       	call   9740 <printf@plt>
+76804:   5aaa7:	e8 94 ec fa ff       	call   9740 <printf@plt>
+76811:   5aac5:	e8 76 ec fa ff       	call   9740 <printf@plt>
+76831:   5ab11:	e8 2a ec fa ff       	call   9740 <printf@plt>
+76838:   5ab2f:	e8 0c ec fa ff       	call   9740 <printf@plt>
+76845:   5ab4d:	e8 ee eb fa ff       	call   9740 <printf@plt>
+76852:   5ab6b:	e8 d0 eb fa ff       	call   9740 <printf@plt>
+76884:   5abf4:	e8 47 eb fa ff       	call   9740 <printf@plt>
+76891:   5ac16:	e8 25 eb fa ff       	call   9740 <printf@plt>
+76921:   5ac9b:	e8 a0 ea fa ff       	call   9740 <printf@plt>
+76929:   5acc2:	e8 79 ea fa ff       	call   9740 <printf@plt>
+76995:   5ade7:	e8 54 e9 fa ff       	call   9740 <printf@plt>
+77004:   5ae0e:	e8 2d e9 fa ff       	call   9740 <printf@plt>
+77050:   5ae9d:	e8 9e e8 fa ff       	call   9740 <printf@plt>
+77191:   5b084:	e8 b7 e6 fa ff       	call   9740 <printf@plt>
+77201:   5b0b0:	e8 8b e6 fa ff       	call   9740 <printf@plt>
+77221:   5b0fb:	e8 40 e6 fa ff       	call   9740 <printf@plt>
+77231:   5b124:	e8 17 e6 fa ff       	call   9740 <printf@plt>
+78700:   5cbe5:	e8 56 cb fa ff       	call   9740 <printf@plt>
+78719:   5cc39:	e8 02 cb fa ff       	call   9740 <printf@plt>
+78728:   5cc5e:	e8 dd ca fa ff       	call   9740 <printf@plt>
+78747:   5cca7:	e8 94 ca fa ff       	call   9740 <printf@plt>
+78760:   5ccdf:	e8 5c ca fa ff       	call   9740 <printf@plt>
+78769:   5cd04:	e8 37 ca fa ff       	call   9740 <printf@plt>
+78785:   5cd4e:	e8 ed c9 fa ff       	call   9740 <printf@plt>
+78798:   5cd89:	e8 b2 c9 fa ff       	call   9740 <printf@plt>
+78813:   5cdd7:	e8 64 c9 fa ff       	call   9740 <printf@plt>
+78837:   5ce3f:	e8 fc c8 fa ff       	call   9740 <printf@plt>
+78861:   5cea7:	e8 94 c8 fa ff       	call   9740 <printf@plt>
+78885:   5cf0f:	e8 2c c8 fa ff       	call   9740 <printf@plt>
+78909:   5cf77:	e8 c4 c7 fa ff       	call   9740 <printf@plt>
+79180:   5d45a:	e8 e1 c2 fa ff       	call   9740 <printf@plt>
+79259:   5d5d4:	e8 67 c1 fa ff       	call   9740 <printf@plt>
+79276:   5d61d:	e8 1e c1 fa ff       	call   9740 <printf@plt>
+79335:   5d728:	e8 13 c0 fa ff       	call   9740 <printf@plt>
+79408:   5d868:	e8 d3 be fa ff       	call   9740 <printf@plt>
+80536:   5ea27:	e8 14 ad fa ff       	call   9740 <printf@plt>
+80594:   5eb2a:	e8 11 ac fa ff       	call   9740 <printf@plt>
+80600:   5eb46:	e8 f5 ab fa ff       	call   9740 <printf@plt>
+80658:   5ec53:	e8 e8 aa fa ff       	call   9740 <printf@plt>
+80665:   5ec74:	e8 c7 aa fa ff       	call   9740 <printf@plt>
+80672:   5ec95:	e8 a6 aa fa ff       	call   9740 <printf@plt>
+80679:   5ecb3:	e8 88 aa fa ff       	call   9740 <printf@plt>
+80686:   5ecd1:	e8 6a aa fa ff       	call   9740 <printf@plt>
+80700:   5ed0b:	e8 30 aa fa ff       	call   9740 <printf@plt>
+80735:   5edc6:	e8 75 a9 fa ff       	call   9740 <printf@plt>
+80977:   5f21a:	e8 21 a5 fa ff       	call   9740 <printf@plt>
+80986:   5f240:	e8 fb a4 fa ff       	call   9740 <printf@plt>
+80995:   5f265:	e8 d6 a4 fa ff       	call   9740 <printf@plt>
+81007:   5f294:	e8 a7 a4 fa ff       	call   9740 <printf@plt>
+81016:   5f2b9:	e8 82 a4 fa ff       	call   9740 <printf@plt>
+81025:   5f2dd:	e8 5e a4 fa ff       	call   9740 <printf@plt>
+81034:   5f302:	e8 39 a4 fa ff       	call   9740 <printf@plt>
+81046:   5f331:	e8 0a a4 fa ff       	call   9740 <printf@plt>
+81055:   5f356:	e8 e5 a3 fa ff       	call   9740 <printf@plt>
+81063:   5f377:	e8 c4 a3 fa ff       	call   9740 <printf@plt>
+81072:   5f39c:	e8 9f a3 fa ff       	call   9740 <printf@plt>
+81081:   5f3c1:	e8 7a a3 fa ff       	call   9740 <printf@plt>
+81117:   5f461:	e8 da a2 fa ff       	call   9740 <printf@plt>
+81147:   5f4db:	e8 60 a2 fa ff       	call   9740 <printf@plt>
+81196:   5f5d2:	e8 69 a1 fa ff       	call   9740 <printf@plt>
+81209:   5f611:	e8 2a a1 fa ff       	call   9740 <printf@plt>
+81223:   5f652:	e8 e9 a0 fa ff       	call   9740 <printf@plt>
+81255:   5f6ec:	e8 4f a0 fa ff       	call   9740 <printf@plt>
+81266:   5f721:	e8 1a a0 fa ff       	call   9740 <printf@plt>
+81272:   5f73d:	e8 fe 9f fa ff       	call   9740 <printf@plt>
+81282:   5f76d:	e8 ce 9f fa ff       	call   9740 <printf@plt>
+81330:   5f867:	e8 d4 9e fa ff       	call   9740 <printf@plt>
+81367:   5f925:	e8 16 9e fa ff       	call   9740 <printf@plt>
+81404:   5f9e3:	e8 58 9d fa ff       	call   9740 <printf@plt>
+81414:   5fa13:	e8 28 9d fa ff       	call   9740 <printf@plt>
+81454:   5fad8:	e8 63 9c fa ff       	call   9740 <printf@plt>
+81461:   5faf9:	e8 42 9c fa ff       	call   9740 <printf@plt>
+81469:   5fb23:	e8 18 9c fa ff       	call   9740 <printf@plt>
+81537:   5fc59:	e8 e2 9a fa ff       	call   9740 <printf@plt>
+81606:   5fd8c:	e8 af 99 fa ff       	call   9740 <printf@plt>
+81635:   5fe08:	e8 33 99 fa ff       	call   9740 <printf@plt>
+81648:   5fe3f:	e8 fc 98 fa ff       	call   9740 <printf@plt>
+81682:   5fed9:	e8 62 98 fa ff       	call   9740 <printf@plt>
+81695:   5ff10:	e8 2b 98 fa ff       	call   9740 <printf@plt>
+81778:   60091:	e8 aa 96 fa ff       	call   9740 <printf@plt>
+81844:   601b9:	e8 82 95 fa ff       	call   9740 <printf@plt>
+81891:   6029b:	e8 a0 94 fa ff       	call   9740 <printf@plt>
+81932:   60360:	e8 db 93 fa ff       	call   9740 <printf@plt>
+81975:   6043b:	e8 00 93 fa ff       	call   9740 <printf@plt>
+81999:   604ac:	e8 8f 92 fa ff       	call   9740 <printf@plt>
+82008:   604da:	e8 61 92 fa ff       	call   9740 <printf@plt>
+82070:   605e6:	e8 55 91 fa ff       	call   9740 <printf@plt>
+82136:   6070e:	e8 2d 90 fa ff       	call   9740 <printf@plt>
+82212:   6087a:	e8 c1 8e fa ff       	call   9740 <printf@plt>
+82219:   6089b:	e8 a0 8e fa ff       	call   9740 <printf@plt>
+82226:   608bc:	e8 7f 8e fa ff       	call   9740 <printf@plt>
+82267:   6098a:	e8 b1 8d fa ff       	call   9740 <printf@plt>
+82276:   609b4:	e8 87 8d fa ff       	call   9740 <printf@plt>
+82330:   60ab9:	e8 82 8c fa ff       	call   9740 <printf@plt>
+83654:   6236f:	e8 cc 73 fa ff       	call   9740 <printf@plt>
+83667:   623a7:	e8 94 73 fa ff       	call   9740 <printf@plt>
+83723:   624aa:	e8 21 72 fa ff       	call   96d0 <strlen@plt>
+83737:   624e6:	e8 55 72 fa ff       	call   9740 <printf@plt>
+83745:   62509:	e8 32 72 fa ff       	call   9740 <printf@plt>
+83753:   6252e:	e8 0d 72 fa ff       	call   9740 <printf@plt>
+83760:   6254c:	e8 ef 71 fa ff       	call   9740 <printf@plt>
+84017:   62a04:	e8 c7 6c fa ff       	call   96d0 <strlen@plt>
+84165:   62c85:	e8 b6 6a fa ff       	call   9740 <printf@plt>
+84326:   62f9b:	e8 a0 67 fa ff       	call   9740 <printf@plt>
+84351:   63007:	e8 34 67 fa ff       	call   9740 <printf@plt>
+84378:   63078:	e8 c3 66 fa ff       	call   9740 <printf@plt>
+84404:   630de:	e8 5d 66 fa ff       	call   9740 <printf@plt>
+84433:   6315f:	e8 dc 65 fa ff       	call   9740 <printf@plt>
+84456:   631be:	e8 7d 65 fa ff       	call   9740 <printf@plt>
+84652:   6357b:	e8 c0 61 fa ff       	call   9740 <printf@plt>
+84661:   635a5:	e8 96 61 fa ff       	call   9740 <printf@plt>
+84715:   636a1:	e8 9a 60 fa ff       	call   9740 <printf@plt>
+84777:   637b7:	e8 14 5f fa ff       	call   96d0 <strlen@plt>
+84837:   638b9:	e8 82 5e fa ff       	call   9740 <printf@plt>
+84849:   638f6:	e8 45 5e fa ff       	call   9740 <printf@plt>
+84861:   6392b:	e8 10 5e fa ff       	call   9740 <printf@plt>
+84873:   63965:	e8 d6 5d fa ff       	call   9740 <printf@plt>
+84882:   6398b:	e8 b0 5d fa ff       	call   9740 <printf@plt>
+84887:   639a1:	e8 9a 5d fa ff       	call   9740 <printf@plt>
+84894:   639bf:	e8 7c 5d fa ff       	call   9740 <printf@plt>
+85417:   64238:	e8 03 55 fa ff       	call   9740 <printf@plt>
+85426:   6425d:	e8 de 54 fa ff       	call   9740 <printf@plt>
+85434:   64280:	e8 bb 54 fa ff       	call   9740 <printf@plt>
+85443:   642a6:	e8 95 54 fa ff       	call   9740 <printf@plt>
+85469:   64318:	e8 23 54 fa ff       	call   9740 <printf@plt>
+85476:   64336:	e8 05 54 fa ff       	call   9740 <printf@plt>
+85623:   645a6:	e8 95 51 fa ff       	call   9740 <printf@plt>
+85635:   645d2:	e8 69 51 fa ff       	call   9740 <printf@plt>
+85796:   64836:	e8 05 4f fa ff       	call   9740 <printf@plt>
+85803:   64857:	e8 e4 4e fa ff       	call   9740 <printf@plt>
+85852:   64910:	e8 2b 4e fa ff       	call   9740 <printf@plt>
+85901:   649c9:	e8 72 4d fa ff       	call   9740 <printf@plt>
+85950:   64a82:	e8 b9 4c fa ff       	call   9740 <printf@plt>
+86581:   6548b:	e8 b0 42 fa ff       	call   9740 <printf@plt>
+86590:   654b2:	e8 89 42 fa ff       	call   9740 <printf@plt>
+86599:   654d9:	e8 62 42 fa ff       	call   9740 <printf@plt>
+86662:   65608:	e8 33 41 fa ff       	call   9740 <printf@plt>
+86731:   65755:	e8 e6 3f fa ff       	call   9740 <printf@plt>
+86830:   65931:	e8 0a 3e fa ff       	call   9740 <printf@plt>
+86840:   6595d:	e8 de 3d fa ff       	call   9740 <printf@plt>
+86909:   65aa5:	e8 96 3c fa ff       	call   9740 <printf@plt>
+87063:   65d95:	e8 a6 39 fa ff       	call   9740 <printf@plt>
+87112:   65e90:	e8 ab 38 fa ff       	call   9740 <printf@plt>
+87202:   6604b:	e8 f0 36 fa ff       	call   9740 <printf@plt>
+87228:   660c2:	e8 79 36 fa ff       	call   9740 <printf@plt>
+87235:   660e3:	e8 58 36 fa ff       	call   9740 <printf@plt>
+87327:   662ad:	e8 8e 34 fa ff       	call   9740 <printf@plt>
+87419:   66477:	e8 c4 32 fa ff       	call   9740 <printf@plt>
+87479:   6659a:	e8 a1 31 fa ff       	call   9740 <printf@plt>
+87567:   6674e:	e8 ed 2f fa ff       	call   9740 <printf@plt>
+87655:   66902:	e8 39 2e fa ff       	call   9740 <printf@plt>
+87715:   66a25:	e8 16 2d fa ff       	call   9740 <printf@plt>
+87783:   66b87:	e8 b4 2b fa ff       	call   9740 <printf@plt>
+87788:   66b9d:	e8 9e 2b fa ff       	call   9740 <printf@plt>
+87804:   66be2:	e8 59 2b fa ff       	call   9740 <printf@plt>
+87814:   66c10:	e8 2b 2b fa ff       	call   9740 <printf@plt>
+87830:   66c54:	e8 e7 2a fa ff       	call   9740 <printf@plt>
+87899:   66d95:	e8 a6 29 fa ff       	call   9740 <printf@plt>
+87909:   66dc1:	e8 7a 29 fa ff       	call   9740 <printf@plt>
+88082:   6709a:	e8 a1 26 fa ff       	call   9740 <printf@plt>
+88112:   6710f:	e8 2c 26 fa ff       	call   9740 <printf@plt>
+88131:   67159:	e8 e2 25 fa ff       	call   9740 <printf@plt>
+88142:   67186:	e8 b5 25 fa ff       	call   9740 <printf@plt>
+88293:   673ba:	e8 81 23 fa ff       	call   9740 <printf@plt>
+88311:   67402:	e8 39 23 fa ff       	call   9740 <printf@plt>
+88463:   6766d:	e8 ce 20 fa ff       	call   9740 <printf@plt>
+88589:   67873:	e8 c8 1e fa ff       	call   9740 <printf@plt>
+88622:   678eb:	e8 50 1e fa ff       	call   9740 <printf@plt>
+88710:   67a67:	e8 d4 1c fa ff       	call   9740 <printf@plt>
+88830:   67c62:	e8 d9 1a fa ff       	call   9740 <printf@plt>
+89014:   67f87:	e8 b4 17 fa ff       	call   9740 <printf@plt>
+89158:   68221:	e8 1a 15 fa ff       	call   9740 <printf@plt>
+89175:   68271:	e8 ca 14 fa ff       	call   9740 <printf@plt>
+89477:   68818:	e8 23 0f fa ff       	call   9740 <printf@plt>
+89487:   68843:	e8 f8 0e fa ff       	call   9740 <printf@plt>
+89559:   68992:	e8 a9 0d fa ff       	call   9740 <printf@plt>
+89657:   68b5a:	e8 e1 0b fa ff       	call   9740 <printf@plt>
+89711:   68c55:	e8 e6 0a fa ff       	call   9740 <printf@plt>
+89740:   68ccb:	e8 90 0a fa ff       	call   9760 <snprintf@plt>
+89747:   68ceb:	e8 50 0a fa ff       	call   9740 <printf@plt>
+89860:   68ec1:	e8 7a 08 fa ff       	call   9740 <printf@plt>
+90011:   69156:	e8 e5 05 fa ff       	call   9740 <printf@plt>
+90036:   691c5:	e8 76 05 fa ff       	call   9740 <printf@plt>
+90080:   69289:	e8 b2 04 fa ff       	call   9740 <printf@plt>
+90086:   692a5:	e8 96 04 fa ff       	call   9740 <printf@plt>
+90236:   69543:	e8 f8 01 fa ff       	call   9740 <printf@plt>
+90292:   69638:	e8 03 01 fa ff       	call   9740 <printf@plt>
+90344:   69707:	e8 34 00 fa ff       	call   9740 <printf@plt>
+90464:   698f8:	e8 43 fe f9 ff       	call   9740 <printf@plt>
+90630:   69b96:	e8 a5 fb f9 ff       	call   9740 <printf@plt>
+91247:   6a61a:	e8 21 f1 f9 ff       	call   9740 <printf@plt>
+91253:   6a636:	e8 05 f1 f9 ff       	call   9740 <printf@plt>
+91766:   6aeb8:	e8 83 e8 f9 ff       	call   9740 <printf@plt>
+91784:   6af06:	e8 35 e8 f9 ff       	call   9740 <printf@plt>
+91800:   6af40:	e8 fb e7 f9 ff       	call   9740 <printf@plt>
+91805:   6af56:	e8 e5 e7 f9 ff       	call   9740 <printf@plt>
+92322:   6b79c:	e8 9f df f9 ff       	call   9740 <printf@plt>
+92331:   6b7c1:	e8 7a df f9 ff       	call   9740 <printf@plt>
+92339:   6b7e4:	e8 57 df f9 ff       	call   9740 <printf@plt>
+92348:   6b809:	e8 32 df f9 ff       	call   9740 <printf@plt>
+92357:   6b82e:	e8 0d df f9 ff       	call   9740 <printf@plt>
+92396:   6b8dc:	e8 5f de f9 ff       	call   9740 <printf@plt>
+92403:   6b8fa:	e8 41 de f9 ff       	call   9740 <printf@plt>
+92528:   6baf4:	e8 47 dc f9 ff       	call   9740 <printf@plt>
+92602:   6bbfc:	e8 3f db f9 ff       	call   9740 <printf@plt>
+92758:   6be61:	e8 da d8 f9 ff       	call   9740 <printf@plt>
+92764:   6be7d:	e8 be d8 f9 ff       	call   9740 <printf@plt>
+92806:   6bf18:	e8 23 d8 f9 ff       	call   9740 <printf@plt>
+92852:   6bfd1:	e8 6a d7 f9 ff       	call   9740 <printf@plt>
+93015:   6c262:	e8 d9 d4 f9 ff       	call   9740 <printf@plt>
+93021:   6c27e:	e8 bd d4 f9 ff       	call   9740 <printf@plt>
+93143:   6c457:	e8 e4 d2 f9 ff       	call   9740 <printf@plt>
+93152:   6c47c:	e8 bf d2 f9 ff       	call   9740 <printf@plt>
+93158:   6c498:	e8 a3 d2 f9 ff       	call   9740 <printf@plt>
+93238:   6c5c9:	e8 72 d1 f9 ff       	call   9740 <printf@plt>
+93375:   6c7b5:	e8 86 cf f9 ff       	call   9740 <printf@plt>
+93385:   6c7df:	e8 5c cf f9 ff       	call   9740 <printf@plt>
+93508:   6c9cb:	e8 70 cd f9 ff       	call   9740 <printf@plt>
+93571:   6cada:	e8 61 cc f9 ff       	call   9740 <printf@plt>
+93631:   6cbe6:	e8 55 cb f9 ff       	call   9740 <printf@plt>
+93978:   6d19e:	e8 9d c5 f9 ff       	call   9740 <printf@plt>
+94415:   6d951:	e8 ea bd f9 ff       	call   9740 <printf@plt>
+94498:   6dac2:	e8 79 bc f9 ff       	call   9740 <printf@plt>
+95679:   6f155:	e8 06 a6 f9 ff       	call   9760 <snprintf@plt>
+95855:   6f3a8:	e8 b3 a3 f9 ff       	call   9760 <snprintf@plt>
+95865:   6f3d2:	e8 89 a3 f9 ff       	call   9760 <snprintf@plt>
+95905:   6f480:	e8 bb a2 f9 ff       	call   9740 <printf@plt>
+95924:   6f4d2:	e8 69 a2 f9 ff       	call   9740 <printf@plt>
+95934:   6f4fd:	e8 3e a2 f9 ff       	call   9740 <printf@plt>
+95969:   6f599:	e8 32 a4 f9 ff       	call   99d0 <sprintf@plt>
+95975:   6f5b4:	e8 87 a1 f9 ff       	call   9740 <printf@plt>
+96030:   6f69c:	e8 2f a3 f9 ff       	call   99d0 <sprintf@plt>
+96043:   6f6d6:	e8 f5 a2 f9 ff       	call   99d0 <sprintf@plt>
+96060:   6f71c:	e8 af a2 f9 ff       	call   99d0 <sprintf@plt>
+96077:   6f760:	e8 db 9f f9 ff       	call   9740 <printf@plt>
+96671:   700b3:	e8 88 96 f9 ff       	call   9740 <printf@plt>
+96707:   70138:	e8 03 96 f9 ff       	call   9740 <printf@plt>
+96727:   7017b:	e8 c0 95 f9 ff       	call   9740 <printf@plt>
+96861:   703fb:	e8 40 93 f9 ff       	call   9740 <printf@plt>
+97103:   70898:	e8 a3 8e f9 ff       	call   9740 <printf@plt>
+97132:   7091b:	e8 20 8e f9 ff       	call   9740 <printf@plt>
+97142:   7094b:	e8 f0 8d f9 ff       	call   9740 <printf@plt>
+97149:   7096d:	e8 ce 8d f9 ff       	call   9740 <printf@plt>
+97160:   7099c:	e8 9f 8d f9 ff       	call   9740 <printf@plt>
+97168:   709c0:	e8 7b 8d f9 ff       	call   9740 <printf@plt>
+97175:   709e0:	e8 5b 8d f9 ff       	call   9740 <printf@plt>
+97182:   70a00:	e8 3b 8d f9 ff       	call   9740 <printf@plt>
+97189:   70a20:	e8 1b 8d f9 ff       	call   9740 <printf@plt>
+97937:   71824:	e8 17 7f f9 ff       	call   9740 <printf@plt>
+97947:   71851:	e8 ea 7e f9 ff       	call   9740 <printf@plt>
+97974:   718ca:	e8 71 7e f9 ff       	call   9740 <printf@plt>
+98761:   727bc:	e8 7f 6f f9 ff       	call   9740 <printf@plt>
+98831:   7290a:	e8 31 6e f9 ff       	call   9740 <printf@plt>
+98878:   729da:	e8 61 6d f9 ff       	call   9740 <printf@plt>
+98967:   72b65:	e8 d6 6b f9 ff       	call   9740 <printf@plt>
+99059:   72d0d:	e8 2e 6a f9 ff       	call   9740 <printf@plt>
+99158:   72ed3:	e8 68 68 f9 ff       	call   9740 <printf@plt>
+99257:   73099:	e8 a2 66 f9 ff       	call   9740 <printf@plt>
+99357:   7327e:	e8 bd 64 f9 ff       	call   9740 <printf@plt>
+99469:   73496:	e8 a5 62 f9 ff       	call   9740 <printf@plt>
+99545:   735fc:	e8 3f 61 f9 ff       	call   9740 <printf@plt>
+99645:   737d0:	e8 6b 5f f9 ff       	call   9740 <printf@plt>
+99715:   73922:	e8 19 5e f9 ff       	call   9740 <printf@plt>
+99814:   73b0c:	e8 2f 5c f9 ff       	call   9740 <printf@plt>
+100085:   74021:	e8 1a 57 f9 ff       	call   9740 <printf@plt>
+100134:   7410e:	e8 2d 56 f9 ff       	call   9740 <printf@plt>
+100176:   741e2:	e8 59 55 f9 ff       	call   9740 <printf@plt>
+100230:   742f4:	e8 47 54 f9 ff       	call   9740 <printf@plt>
+100238:   74317:	e8 24 54 f9 ff       	call   9740 <printf@plt>
+100346:   7454a:	e8 f1 51 f9 ff       	call   9740 <printf@plt>
+100365:   7459a:	e8 a1 51 f9 ff       	call   9740 <printf@plt>
+100476:   747d7:	e8 64 4f f9 ff       	call   9740 <printf@plt>
+100495:   74827:	e8 14 4f f9 ff       	call   9740 <printf@plt>
+100615:   74a6c:	e8 cf 4c f9 ff       	call   9740 <printf@plt>
+100729:   74c8b:	e8 b0 4a f9 ff       	call   9740 <printf@plt>
+100842:   74eab:	e8 90 48 f9 ff       	call   9740 <printf@plt>
+100892:   74fa5:	e8 96 47 f9 ff       	call   9740 <printf@plt>
+100981:   7513e:	e8 fd 45 f9 ff       	call   9740 <printf@plt>
+101037:   75256:	e8 e5 44 f9 ff       	call   9740 <printf@plt>
+101131:   7541e:	e8 1d 43 f9 ff       	call   9740 <printf@plt>
+101166:   754b7:	e8 84 42 f9 ff       	call   9740 <printf@plt>
+101542:   75bbc:	e8 7f 3b f9 ff       	call   9740 <printf@plt>
+101995:   76401:	e8 3a 33 f9 ff       	call   9740 <printf@plt>
+102057:   7652e:	e8 0d 32 f9 ff       	call   9740 <printf@plt>
+102080:   76599:	e8 a2 31 f9 ff       	call   9740 <printf@plt>
+102104:   76602:	e8 39 31 f9 ff       	call   9740 <printf@plt>
+102112:   76628:	e8 13 31 f9 ff       	call   9740 <printf@plt>
+102175:   7675a:	e8 e1 2f f9 ff       	call   9740 <printf@plt>
+102187:   76799:	e8 a2 2f f9 ff       	call   9740 <printf@plt>
+102250:   768cb:	e8 70 2e f9 ff       	call   9740 <printf@plt>
+102262:   7690a:	e8 31 2e f9 ff       	call   9740 <printf@plt>
+102324:   76a2e:	e8 0d 2d f9 ff       	call   9740 <printf@plt>
+102431:   76c59:	e8 e2 2a f9 ff       	call   9740 <printf@plt>
+102493:   76d82:	e8 b9 29 f9 ff       	call   9740 <printf@plt>
+102697:   77174:	e8 c7 25 f9 ff       	call   9740 <printf@plt>
+102846:   77431:	e8 0a 23 f9 ff       	call   9740 <printf@plt>
+102910:   7756a:	e8 d1 21 f9 ff       	call   9740 <printf@plt>
+102990:   776d7:	e8 64 20 f9 ff       	call   9740 <printf@plt>
+103058:   77813:	e8 28 1f f9 ff       	call   9740 <printf@plt>
+103097:   778ae:	e8 8d 1e f9 ff       	call   9740 <printf@plt>
+103166:   779ce:	e8 6d 1d f9 ff       	call   9740 <printf@plt>
+103214:   77a87:	e8 b4 1c f9 ff       	call   9740 <printf@plt>
+103270:   77b60:	e8 db 1b f9 ff       	call   9740 <printf@plt>
+103329:   77c60:	e8 db 1a f9 ff       	call   9740 <printf@plt>
+103560:   78085:	e8 b6 16 f9 ff       	call   9740 <printf@plt>
+103599:   7811f:	e8 1c 16 f9 ff       	call   9740 <printf@plt>
+103609:   78154:	e8 e7 15 f9 ff       	call   9740 <printf@plt>
+103659:   78219:	e8 22 15 f9 ff       	call   9740 <printf@plt>
+103675:   78269:	e8 d2 14 f9 ff       	call   9740 <printf@plt>
+103717:   78323:	e8 18 14 f9 ff       	call   9740 <printf@plt>
+103731:   78369:	e8 d2 13 f9 ff       	call   9740 <printf@plt>
+103781:   78443:	e8 f8 12 f9 ff       	call   9740 <printf@plt>
+103812:   784c1:	e8 7a 12 f9 ff       	call   9740 <printf@plt>
+103836:   78526:	e8 15 12 f9 ff       	call   9740 <printf@plt>
+103881:   785e8:	e8 53 11 f9 ff       	call   9740 <printf@plt>
+103940:   786e8:	e8 53 10 f9 ff       	call   9740 <printf@plt>
+103953:   7871e:	e8 1d 10 f9 ff       	call   9740 <printf@plt>
+103972:   78771:	e8 ca 0f f9 ff       	call   9740 <printf@plt>
+104121:   789cb:	e8 90 0d f9 ff       	call   9760 <snprintf@plt>
+104413:   78f29:	e8 12 08 f9 ff       	call   9740 <printf@plt>
+104424:   78f59:	e8 e2 07 f9 ff       	call   9740 <printf@plt>
+104433:   78f80:	e8 bb 07 f9 ff       	call   9740 <printf@plt>
+104442:   78fa7:	e8 94 07 f9 ff       	call   9740 <printf@plt>
+104598:   79298:	e8 a3 04 f9 ff       	call   9740 <printf@plt>
+104670:   793ee:	e8 4d 03 f9 ff       	call   9740 <printf@plt>
+104785:   79609:	e8 32 01 f9 ff       	call   9740 <printf@plt>
+104799:   79649:	e8 f2 00 f9 ff       	call   9740 <printf@plt>
+104899:   7981d:	e8 1e ff f8 ff       	call   9740 <printf@plt>
+105070:   79b3d:	e8 fe fb f8 ff       	call   9740 <printf@plt>
+105146:   79c84:	e8 b7 fa f8 ff       	call   9740 <printf@plt>
+105267:   79eb2:	e8 89 f8 f8 ff       	call   9740 <printf@plt>
+105281:   79ef2:	e8 49 f8 f8 ff       	call   9740 <printf@plt>
+105359:   7a04d:	e8 ee f6 f8 ff       	call   9740 <printf@plt>
+105462:   7a23d:	e8 fe f4 f8 ff       	call   9740 <printf@plt>
+105538:   7a384:	e8 b7 f3 f8 ff       	call   9740 <printf@plt>
+105658:   7a59c:	e8 9f f1 f8 ff       	call   9740 <printf@plt>
+105791:   7a774:	e8 c7 ef f8 ff       	call   9740 <printf@plt>
+105837:   7a81e:	e8 2d f0 f8 ff       	call   9850 <fprintf@plt>
+106209:   7ad7e:	e8 4d e9 f8 ff       	call   96d0 <strlen@plt>
+106230:   7adc3:	e8 08 e9 f8 ff       	call   96d0 <strlen@plt>
+106256:   7ae32:	e8 99 eb f8 ff       	call   99d0 <sprintf@plt>
+106271:   7ae6d:	e8 5e eb f8 ff       	call   99d0 <sprintf@plt>
+106286:   7aea9:	e8 22 eb f8 ff       	call   99d0 <sprintf@plt>
+106301:   7aee5:	e8 e6 ea f8 ff       	call   99d0 <sprintf@plt>
+106317:   7af27:	e8 a4 ea f8 ff       	call   99d0 <sprintf@plt>
+106335:   7af70:	e8 5b ea f8 ff       	call   99d0 <sprintf@plt>
+106351:   7afb2:	e8 19 ea f8 ff       	call   99d0 <sprintf@plt>
+106378:   7b019:	e8 b2 e6 f8 ff       	call   96d0 <strlen@plt>
+106421:   7b0c9:	e8 02 e9 f8 ff       	call   99d0 <sprintf@plt>
+106440:   7b11c:	e8 af e8 f8 ff       	call   99d0 <sprintf@plt>
+106457:   7b168:	e8 63 e8 f8 ff       	call   99d0 <sprintf@plt>
+106473:   7b1ae:	e8 1d e8 f8 ff       	call   99d0 <sprintf@plt>
+106489:   7b1f4:	e8 d7 e7 f8 ff       	call   99d0 <sprintf@plt>
+106505:   7b239:	e8 92 e7 f8 ff       	call   99d0 <sprintf@plt>
+106521:   7b27e:	e8 4d e7 f8 ff       	call   99d0 <sprintf@plt>
+106586:   7b362:	e8 d9 e3 f8 ff       	call   9740 <printf@plt>
+106651:   7b467:	e8 d4 e2 f8 ff       	call   9740 <printf@plt>
+106739:   7b5cb:	e8 70 e1 f8 ff       	call   9740 <printf@plt>
+106749:   7b5f9:	e8 42 e1 f8 ff       	call   9740 <printf@plt>
+106764:   7b637:	e8 04 e1 f8 ff       	call   9740 <printf@plt>
+106772:   7b65a:	e8 e1 e0 f8 ff       	call   9740 <printf@plt>
+106785:   7b68e:	e8 ad e0 f8 ff       	call   9740 <printf@plt>
+107018:   7ba2f:	e8 9c dc f8 ff       	call   96d0 <strlen@plt>
+107305:   7bec7:	e8 84 d9 f8 ff       	call   9850 <fprintf@plt>
+107311:   7bee7:	e8 a4 da f8 ff       	call   9990 <vfprintf@plt>
+107369:   7bfe7:	e8 64 d8 f8 ff       	call   9850 <fprintf@plt>
+107375:   7c007:	e8 84 d9 f8 ff       	call   9990 <vfprintf@plt>
+108688:   7d336:	e8 05 c4 f8 ff       	call   9740 <printf@plt>
+109278:   7dc2e:	e8 9d ba f8 ff       	call   96d0 <strlen@plt>
+109282:   7dc3d:	e8 8e ba f8 ff       	call   96d0 <strlen@plt>
+109301:   7dc7b:	e8 50 ba f8 ff       	call   96d0 <strlen@plt>
+109309:   7dc98:	e8 33 ba f8 ff       	call   96d0 <strlen@plt>
+109353:   7dd43:	e8 18 ba f8 ff       	call   9760 <snprintf@plt>
+109367:   7dd7c:	e8 df b9 f8 ff       	call   9760 <snprintf@plt>
+109383:   7ddb6:	e8 a5 b9 f8 ff       	call   9760 <snprintf@plt>
+109395:   7dde5:	e8 76 b9 f8 ff       	call   9760 <snprintf@plt>
+109535:   7e013:	e8 b8 b6 f8 ff       	call   96d0 <strlen@plt>
+109625:   7e17d:	e8 4e b5 f8 ff       	call   96d0 <strlen@plt>
+111103:   7f6b0:	e8 6b a2 f8 ff       	call   9920 <asprintf@plt>
+111131:   7f718:	e8 03 a2 f8 ff       	call   9920 <asprintf@plt>
+111230:   7f88a:	e8 91 a0 f8 ff       	call   9920 <asprintf@plt>
+111284:   7f93f:	e8 dc 9f f8 ff       	call   9920 <asprintf@plt>
+111343:   7fa21:	e8 fa 9e f8 ff       	call   9920 <asprintf@plt>
+111373:   7fa97:	e8 84 9e f8 ff       	call   9920 <asprintf@plt>
+111406:   7fb12:	e8 09 9e f8 ff       	call   9920 <asprintf@plt>
+111583:   7fd77:	e8 a4 9b f8 ff       	call   9920 <asprintf@plt>
+111684:   7feee:	e8 2d 9a f8 ff       	call   9920 <asprintf@plt>
+111700:   7ff2c:	e8 ef 99 f8 ff       	call   9920 <asprintf@plt>
+111837:   8013e:	e8 dd 97 f8 ff       	call   9920 <asprintf@plt>
+111847:   80167:	e8 b4 97 f8 ff       	call   9920 <asprintf@plt>
+112020:   80404:	e8 17 95 f8 ff       	call   9920 <asprintf@plt>
+112129:   8059c:	e8 7f 93 f8 ff       	call   9920 <asprintf@plt>
+112175:   8064a:	e8 d1 92 f8 ff       	call   9920 <asprintf@plt>
+112239:   80738:	e8 e3 91 f8 ff       	call   9920 <asprintf@plt>
+112365:   80902:	e8 c9 8d f8 ff       	call   96d0 <strlen@plt>
+112437:   80a13:	e8 08 8f f8 ff       	call   9920 <asprintf@plt>
+112454:   80a4d:	e8 7e 8c f8 ff       	call   96d0 <strlen@plt>
+112695:   80def:	e8 dc 88 f8 ff       	call   96d0 <strlen@plt>
+121160:   89291:	e8 3a 04 f8 ff       	call   96d0 <strlen@plt>
+124782:   8cabf:	e8 0c cc f7 ff       	call   96d0 <strlen@plt>
+124795:   8cb05:	e8 c6 cb f7 ff       	call   96d0 <strlen@plt>
+124808:   8cb4b:	e8 80 cb f7 ff       	call   96d0 <strlen@plt>
+124821:   8cb91:	e8 3a cb f7 ff       	call   96d0 <strlen@plt>
+126602:   8e70a:	e8 c1 af f7 ff       	call   96d0 <strlen@plt>
+126918:   8eb53:	e8 78 ab f7 ff       	call   96d0 <strlen@plt>
+127208:   8efbb:	e8 10 a7 f7 ff       	call   96d0 <strlen@plt>
+127487:   8f3bf:	e8 cc a5 f7 ff       	call   9990 <vfprintf@plt>
+128580:   903a8:	e8 23 93 f7 ff       	call   96d0 <strlen@plt>
+128589:   903cf:	e8 8c 93 f7 ff       	call   9760 <snprintf@plt>
+130894:   92521:	e8 aa 71 f7 ff       	call   96d0 <strlen@plt>
+130898:   92531:	e8 9a 71 f7 ff       	call   96d0 <strlen@plt>
+131308:   92b25:	e8 46 6b f7 ff       	call   9670 <vasprintf@plt>
+131526:   92e2a:	e8 a1 68 f7 ff       	call   96d0 <strlen@plt>
+131822:   93288:	e8 c3 65 f7 ff       	call   9850 <fprintf@plt>
+131845:   932f4:	e8 57 65 f7 ff       	call   9850 <fprintf@plt>
+132137:   93772:	e8 59 5f f7 ff       	call   96d0 <strlen@plt>
+132180:   937ff:	e8 cc 5e f7 ff       	call   96d0 <strlen@plt>
+134089:   95f92:	e8 b9 38 f7 ff       	call   9850 <fprintf@plt>
+135992:   97867:	e8 e4 1f f7 ff       	call   9850 <fprintf@plt>
+136085:   979ab:	e8 20 1d f7 ff       	call   96d0 <strlen@plt>
+143117:   9e0f0:	e8 db b5 f6 ff       	call   96d0 <strlen@plt>
+143219:   9e251:	e8 ea b3 f6 ff       	call   9640 <vsnprintf@plt>
+143735:   9e9ea:	e8 e1 ac f6 ff       	call   96d0 <strlen@plt>
+143762:   9ea57:	e8 04 ad f6 ff       	call   9760 <snprintf@plt>
+143900:   9ec46:	e8 15 ab f6 ff       	call   9760 <snprintf@plt>
+144444:   9f3d2:	e8 f9 a2 f6 ff       	call   96d0 <strlen@plt>
+144448:   9f3e1:	e8 ea a2 f6 ff       	call   96d0 <strlen@plt>
+144468:   9f42d:	e8 9e a2 f6 ff       	call   96d0 <strlen@plt>
+144472:   9f43c:	e8 8f a2 f6 ff       	call   96d0 <strlen@plt>
+144484:   9f470:	e8 eb a2 f6 ff       	call   9760 <snprintf@plt>
+
+[exit_code=0]
+
+===== objdump grep: c9b/c9c rodata xrefs =====
+$ objdump -d -M intel '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf' | rg '# *c9b|# *c9c|c9bb|c9bc|c9bd|c9be|c9bf'
+   10d8f:	48 8d 05 31 7b 0a 00 	lea    rax,[rip+0xa7b31]        # b88c7 <warn@@Base+0x3c9bd>
+   263a5:	0f 84 80 00 00 00    	je     2642b <__ctype_b_loc@plt+0x1c9bb>
+   263c1:	73 68                	jae    2642b <__ctype_b_loc@plt+0x1c9bb>
+   2c9bd:	89 8d 48 ff ff ff    	mov    DWORD PTR [rbp-0xb8],ecx
+   3553b:	48 8d 05 cd 45 09 00 	lea    rax,[rip+0x945cd]        # c9b0f <warn@@Base+0x4dc05>
+   355a1:	48 8d 05 73 45 09 00 	lea    rax,[rip+0x94573]        # c9b1b <warn@@Base+0x4dc11>
+   355b9:	48 8d 05 5f 45 09 00 	lea    rax,[rip+0x9455f]        # c9b1f <warn@@Base+0x4dc15>
+   35627:	48 8d 05 f5 44 09 00 	lea    rax,[rip+0x944f5]        # c9b23 <warn@@Base+0x4dc19>
+   35661:	48 8d 05 c5 44 09 00 	lea    rax,[rip+0x944c5]        # c9b2d <warn@@Base+0x4dc23>
+   35684:	48 8d 05 a7 44 09 00 	lea    rax,[rip+0x944a7]        # c9b32 <warn@@Base+0x4dc28>
+   356aa:	48 8d 05 86 44 09 00 	lea    rax,[rip+0x94486]        # c9b37 <warn@@Base+0x4dc2d>
+   356e7:	48 8d 05 55 44 09 00 	lea    rax,[rip+0x94455]        # c9b43 <warn@@Base+0x4dc39>
+   3571b:	48 8d 05 2d 44 09 00 	lea    rax,[rip+0x9442d]        # c9b4f <warn@@Base+0x4dc45>
+   35752:	48 8d 05 02 44 09 00 	lea    rax,[rip+0x94402]        # c9b5b <warn@@Base+0x4dc51>
+   35787:	48 8d 05 e4 43 09 00 	lea    rax,[rip+0x943e4]        # c9b72 <warn@@Base+0x4dc68>
+   35869:	48 8d 05 06 43 09 00 	lea    rax,[rip+0x94306]        # c9b76 <warn@@Base+0x4dc6c>
+   35ca3:	48 8d 05 d9 3e 09 00 	lea    rax,[rip+0x93ed9]        # c9b83 <warn@@Base+0x4dc79>
+   35ed7:	48 8d 05 ba 3c 09 00 	lea    rax,[rip+0x93cba]        # c9b98 <warn@@Base+0x4dc8e>
+   35f3f:	48 8d 05 59 3c 09 00 	lea    rax,[rip+0x93c59]        # c9b9f <warn@@Base+0x4dc95>
+   35f72:	48 8d 05 2c 3c 09 00 	lea    rax,[rip+0x93c2c]        # c9ba5 <warn@@Base+0x4dc9b>
+   35fa7:	48 8d 05 f1 3b 09 00 	lea    rax,[rip+0x93bf1]        # c9b9f <warn@@Base+0x4dc95>
+   35fdb:	48 8d 05 bd 3b 09 00 	lea    rax,[rip+0x93bbd]        # c9b9f <warn@@Base+0x4dc95>
+   36020:	48 8d 05 84 3b 09 00 	lea    rax,[rip+0x93b84]        # c9bab <warn@@Base+0x4dca1>
+   3604c:	48 8d 05 5f 3b 09 00 	lea    rax,[rip+0x93b5f]        # c9bb2 <warn@@Base+0x4dca8>
+   3615a:	48 8d 0d 57 3a 09 00 	lea    rcx,[rip+0x93a57]        # c9bb8 <warn@@Base+0x4dcae>
+   361af:	48 8d 05 08 3a 09 00 	lea    rax,[rip+0x93a08]        # c9bbe <warn@@Base+0x4dcb4>
+   36257:	48 8d 05 6a 39 09 00 	lea    rax,[rip+0x9396a]        # c9bc8 <warn@@Base+0x4dcbe>
+   36380:	48 8d 05 81 38 09 00 	lea    rax,[rip+0x93881]        # c9c08 <warn@@Base+0x4dcfe>
+   3638a:	48 8d 05 a7 38 09 00 	lea    rax,[rip+0x938a7]        # c9c38 <warn@@Base+0x4dd2e>
+   363b3:	48 8d 05 ae 38 09 00 	lea    rax,[rip+0x938ae]        # c9c68 <warn@@Base+0x4dd5e>
+   363d1:	48 8d 05 d0 38 09 00 	lea    rax,[rip+0x938d0]        # c9ca8 <warn@@Base+0x4dd9e>
+   36545:	48 8d 05 a4 37 09 00 	lea    rax,[rip+0x937a4]        # c9cf0 <warn@@Base+0x4dde6>
+   365f1:	48 8d 05 70 36 09 00 	lea    rax,[rip+0x93670]        # c9c68 <warn@@Base+0x4dd5e>
+   3660f:	48 8d 05 92 36 09 00 	lea    rax,[rip+0x93692]        # c9ca8 <warn@@Base+0x4dd9e>
+   3c9bc:	c7 45 f4 01 00 00 00 	mov    DWORD PTR [rbp-0xc],0x1
+   5c9bd:	8b 95 18 fe ff ff    	mov    edx,DWORD PTR [rbp-0x1e8]
+   66407:	eb 22                	jmp    6642b <__ctype_b_loc@plt+0x5c9bb>
+   6c9bc:	48 8d 05 af 8c 06 00 	lea    rax,[rip+0x68caf]        # d5672 <warn@@Base+0x59768>
+   7657b:	0f 82 ac fe ff ff    	jb     7642d <__ctype_b_loc@plt+0x6c9bd>
+   7c9bc:	48 8b 55 f0          	mov    rdx,QWORD PTR [rbp-0x10]
+   8c9bc:	89 d2                	mov    edx,edx
+   8c9be:	48 8b 45 f8          	mov    rax,QWORD PTR [rbp-0x8]
+   9c9bb:	48 8b 45 d8          	mov    rax,QWORD PTR [rbp-0x28]
+   9c9bf:	8b 80 0c 17 00 00    	mov    eax,DWORD PTR [rax+0x170c]
+
+[exit_code=0]
+
+===== local objdump window around patched block =====
+$ objdump -d -M intel --start-address=0x35ee0 --stop-address=0x362b0 '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf'
+
+/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf：     文件格式 elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000035ee0 <error@@Base-0x45f0a>:
+   35ee0:	c7                   	(bad)  
+   35ee1:	b8 00 00 00 00       	mov    eax,0x0
+   35ee6:	e8 55 38 fd ff       	call   9740 <printf@plt>
+   35eeb:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35eef:	48 8b 00             	mov    rax,QWORD PTR [rax]
+   35ef2:	be 06 00 00 00       	mov    esi,0x6
+   35ef7:	48 89 c7             	mov    rdi,rax
+   35efa:	e8 ba e9 fd ff       	call   148b9 <__ctype_b_loc@plt+0xae49>
+   35eff:	bf 20 00 00 00       	mov    edi,0x20
+   35f04:	e8 77 36 fd ff       	call   9580 <putchar@plt>
+   35f09:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35f0d:	48 8b 40 08          	mov    rax,QWORD PTR [rax+0x8]
+   35f11:	be 02 00 00 00       	mov    esi,0x2
+   35f16:	48 89 c7             	mov    rdi,rax
+   35f19:	e8 9b e9 fd ff       	call   148b9 <__ctype_b_loc@plt+0xae49>
+   35f1e:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35f22:	0f b6 40 18          	movzx  eax,BYTE PTR [rax+0x18]
+   35f26:	0f b6 c0             	movzx  eax,al
+   35f29:	83 e0 0f             	and    eax,0xf
+   35f2c:	89 c2                	mov    edx,eax
+   35f2e:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   35f32:	89 d6                	mov    esi,edx
+   35f34:	48 89 c7             	mov    rdi,rax
+   35f37:	e8 52 ed ff ff       	call   34c8e <__ctype_b_loc@plt+0x2b21e>
+   35f3c:	48 89 c6             	mov    rsi,rax
+   35f3f:	48 8d 05 59 3c 09 00 	lea    rax,[rip+0x93c59]        # c9b9f <warn@@Base+0x4dc95>
+   35f46:	48 89 c7             	mov    rdi,rax
+   35f49:	b8 00 00 00 00       	mov    eax,0x0
+   35f4e:	e8 ed 37 fd ff       	call   9740 <printf@plt>
+   35f53:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35f57:	0f b6 40 18          	movzx  eax,BYTE PTR [rax+0x18]
+   35f5b:	c0 e8 04             	shr    al,0x4
+   35f5e:	0f b6 d0             	movzx  edx,al
+   35f61:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   35f65:	89 d6                	mov    esi,edx
+   35f67:	48 89 c7             	mov    rdi,rax
+   35f6a:	e8 fb eb ff ff       	call   34b6a <__ctype_b_loc@plt+0x2b0fa>
+   35f6f:	48 89 c6             	mov    rsi,rax
+   35f72:	48 8d 05 2c 3c 09 00 	lea    rax,[rip+0x93c2c]        # c9ba5 <warn@@Base+0x4dc9b>
+   35f79:	48 89 c7             	mov    rdi,rax
+   35f7c:	b8 00 00 00 00       	mov    eax,0x0
+   35f81:	e8 ba 37 fd ff       	call   9740 <printf@plt>
+   35f86:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   35f8a:	0f b6 40 1f          	movzx  eax,BYTE PTR [rax+0x1f]
+   35f8e:	3c 06                	cmp    al,0x6
+   35f90:	75 2b                	jne    35fbd <__ctype_b_loc@plt+0x2c54d>
+   35f92:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35f96:	0f b6 40 19          	movzx  eax,BYTE PTR [rax+0x19]
+   35f9a:	0f b6 c0             	movzx  eax,al
+   35f9d:	89 c7                	mov    edi,eax
+   35f9f:	e8 10 f0 ff ff       	call   34fb4 <__ctype_b_loc@plt+0x2b544>
+   35fa4:	48 89 c6             	mov    rsi,rax
+   35fa7:	48 8d 05 f1 3b 09 00 	lea    rax,[rip+0x93bf1]        # c9b9f <warn@@Base+0x4dc95>
+   35fae:	48 89 c7             	mov    rdi,rax
+   35fb1:	b8 00 00 00 00       	mov    eax,0x0
+   35fb6:	e8 85 37 fd ff       	call   9740 <printf@plt>
+   35fbb:	eb 77                	jmp    36034 <__ctype_b_loc@plt+0x2c5c4>
+   35fbd:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35fc1:	0f b6 40 19          	movzx  eax,BYTE PTR [rax+0x19]
+   35fc5:	0f b6 c0             	movzx  eax,al
+   35fc8:	83 e0 03             	and    eax,0x3
+   35fcb:	89 45 b0             	mov    DWORD PTR [rbp-0x50],eax
+   35fce:	8b 45 b0             	mov    eax,DWORD PTR [rbp-0x50]
+   35fd1:	89 c7                	mov    edi,eax
+   35fd3:	e8 e4 ee ff ff       	call   34ebc <__ctype_b_loc@plt+0x2b44c>
+   35fd8:	48 89 c6             	mov    rsi,rax
+   35fdb:	48 8d 05 bd 3b 09 00 	lea    rax,[rip+0x93bbd]        # c9b9f <warn@@Base+0x4dc95>
+   35fe2:	48 89 c7             	mov    rdi,rax
+   35fe5:	b8 00 00 00 00       	mov    eax,0x0
+   35fea:	e8 51 37 fd ff       	call   9740 <printf@plt>
+   35fef:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   35ff3:	0f b6 40 19          	movzx  eax,BYTE PTR [rax+0x19]
+   35ff7:	0f b6 c0             	movzx  eax,al
+   35ffa:	39 45 b0             	cmp    DWORD PTR [rbp-0x50],eax
+   35ffd:	74 35                	je     36034 <__ctype_b_loc@plt+0x2c5c4>
+   35fff:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   36003:	0f b6 40 19          	movzx  eax,BYTE PTR [rax+0x19]
+   36007:	0f b6 c0             	movzx  eax,al
+   3600a:	33 45 b0             	xor    eax,DWORD PTR [rbp-0x50]
+   3600d:	89 c2                	mov    edx,eax
+   3600f:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   36013:	89 d6                	mov    esi,edx
+   36015:	48 89 c7             	mov    rdi,rax
+   36018:	e8 47 f4 ff ff       	call   35464 <__ctype_b_loc@plt+0x2b9f4>
+   3601d:	48 89 c6             	mov    rsi,rax
+   36020:	48 8d 05 84 3b 09 00 	lea    rax,[rip+0x93b84]        # c9bab <warn@@Base+0x4dca1>
+   36027:	48 89 c7             	mov    rdi,rax
+   3602a:	b8 00 00 00 00       	mov    eax,0x0
+   3602f:	e8 0c 37 fd ff       	call   9740 <printf@plt>
+   36034:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   36038:	8b 50 1c             	mov    edx,DWORD PTR [rax+0x1c]
+   3603b:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   3603f:	89 d6                	mov    esi,edx
+   36041:	48 89 c7             	mov    rdi,rax
+   36044:	e8 2b f5 ff ff       	call   35574 <__ctype_b_loc@plt+0x2bb04>
+   36049:	48 89 c6             	mov    rsi,rax
+   3604c:	48 8d 05 5f 3b 09 00 	lea    rax,[rip+0x93b5f]        # c9bb2 <warn@@Base+0x4dca8>
+   36053:	48 89 c7             	mov    rdi,rax
+   36056:	b8 00 00 00 00       	mov    eax,0x0
+   3605b:	e8 e0 36 fd ff       	call   9740 <printf@plt>
+   36060:	48 83 bd 78 ff ff ff 	cmp    QWORD PTR [rbp-0x88],0x0
+   36067:	00 
+   36068:	74 18                	je     36082 <__ctype_b_loc@plt+0x2c612>
+   3606a:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   3606e:	48 8b 40 10          	mov    rax,QWORD PTR [rax+0x10]
+   36072:	48 39 85 70 ff ff ff 	cmp    QWORD PTR [rbp-0x90],rax
+   36079:	76 07                	jbe    36082 <__ctype_b_loc@plt+0x2c612>
+   3607b:	b8 01 00 00 00       	mov    eax,0x1
+   36080:	eb 05                	jmp    36087 <__ctype_b_loc@plt+0x2c617>
+   36082:	b8 00 00 00 00       	mov    eax,0x0
+   36087:	89 45 b4             	mov    DWORD PTR [rbp-0x4c],eax
+   3608a:	83 7d b4 00          	cmp    DWORD PTR [rbp-0x4c],0x0
+   3608e:	74 14                	je     360a4 <__ctype_b_loc@plt+0x2c634>
+   36090:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   36094:	48 8b 50 10          	mov    rdx,QWORD PTR [rax+0x10]
+   36098:	48 8b 85 78 ff ff ff 	mov    rax,QWORD PTR [rbp-0x88]
+   3609f:	48 01 d0             	add    rax,rdx
+   360a2:	eb 0f                	jmp    360b3 <__ctype_b_loc@plt+0x2c643>
+   360a4:	48 8d 05 6f 9f 08 00 	lea    rax,[rip+0x89f6f]        # c001a <warn@@Base+0x44110>
+   360ab:	48 89 c7             	mov    rdi,rax
+   360ae:	e8 6d 36 fd ff       	call   9720 <gettext@plt>
+   360b3:	48 89 45 c0          	mov    QWORD PTR [rbp-0x40],rax
+   360b7:	48 8b 45 90          	mov    rax,QWORD PTR [rbp-0x70]
+   360bb:	41 89 c0             	mov    r8d,eax
+   360be:	48 83 7d 80 00       	cmp    QWORD PTR [rbp-0x80],0x0
+   360c3:	74 0c                	je     360d1 <__ctype_b_loc@plt+0x2c661>
+   360c5:	48 8b 45 80          	mov    rax,QWORD PTR [rbp-0x80]
+   360c9:	8b 40 04             	mov    eax,DWORD PTR [rax+0x4]
+   360cc:	83 f8 0b             	cmp    eax,0xb
+   360cf:	75 08                	jne    360d9 <__ctype_b_loc@plt+0x2c669>
+   360d1:	41 ba 01 00 00 00    	mov    r10d,0x1
+   360d7:	eb 06                	jmp    360df <__ctype_b_loc@plt+0x2c66f>
+   360d9:	41 ba 00 00 00 00    	mov    r10d,0x0
+   360df:	48 8b 7d b8          	mov    rdi,QWORD PTR [rbp-0x48]
+   360e3:	48 8b 8d 70 ff ff ff 	mov    rcx,QWORD PTR [rbp-0x90]
+   360ea:	48 8b 95 78 ff ff ff 	mov    rdx,QWORD PTR [rbp-0x88]
+   360f1:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   360f5:	48 8d 75 a6          	lea    rsi,[rbp-0x5a]
+   360f9:	56                   	push   rsi
+   360fa:	48 8d 75 a8          	lea    rsi,[rbp-0x58]
+   360fe:	56                   	push   rsi
+   360ff:	49 89 f9             	mov    r9,rdi
+   36102:	44 89 d6             	mov    esi,r10d
+   36105:	48 89 c7             	mov    rdi,rax
+   36108:	e8 a4 f6 ff ff       	call   357b1 <__ctype_b_loc@plt+0x2bd41>
+   3610d:	48 83 c4 10          	add    rsp,0x10
+   36111:	48 89 45 c8          	mov    QWORD PTR [rbp-0x38],rax
+   36115:	c7 45 ac 15 00 00 00 	mov    DWORD PTR [rbp-0x54],0x15
+   3611c:	8b 05 d6 06 0c 00    	mov    eax,DWORD PTR [rip+0xc06d6]        # f67f8 <stderr@GLIBC_2.2.5+0x1158>
+   36122:	85 c0                	test   eax,eax
+   36124:	75 5c                	jne    36182 <__ctype_b_loc@plt+0x2c712>
+   36126:	48 83 7d c8 00       	cmp    QWORD PTR [rbp-0x38],0x0
+   3612b:	74 55                	je     36182 <__ctype_b_loc@plt+0x2c712>
+   3612d:	8b 5d ac             	mov    ebx,DWORD PTR [rbp-0x54]
+   36130:	48 8b 45 c8          	mov    rax,QWORD PTR [rbp-0x38]
+   36134:	48 89 c7             	mov    rdi,rax
+   36137:	e8 94 35 fd ff       	call   96d0 <strlen@plt>
+   3613c:	89 c2                	mov    edx,eax
+   3613e:	89 d8                	mov    eax,ebx
+   36140:	29 d0                	sub    eax,edx
+   36142:	83 e8 01             	sub    eax,0x1
+   36145:	89 45 ac             	mov    DWORD PTR [rbp-0x54],eax
+   36148:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   3614b:	85 c0                	test   eax,eax
+   3614d:	75 27                	jne    36176 <__ctype_b_loc@plt+0x2c706>
+   3614f:	0f b7 45 a6          	movzx  eax,WORD PTR [rbp-0x5a]
+   36153:	0f b7 d0             	movzx  edx,ax
+   36156:	48 8d 45 d0          	lea    rax,[rbp-0x30]
+   3615a:	48 8d 0d 57 3a 09 00 	lea    rcx,[rip+0x93a57]        # c9bb8 <warn@@Base+0x4dcae>
+   36161:	48 89 ce             	mov    rsi,rcx
+   36164:	48 89 c7             	mov    rdi,rax
+   36167:	b8 00 00 00 00       	mov    eax,0x0
+   3616c:	e8 5f 38 fd ff       	call   99d0 <sprintf@plt>
+   36171:	29 45 ac             	sub    DWORD PTR [rbp-0x54],eax
+   36174:	eb 0c                	jmp    36182 <__ctype_b_loc@plt+0x2c712>
+   36176:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   36179:	83 f8 01             	cmp    eax,0x1
+   3617c:	74 04                	je     36182 <__ctype_b_loc@plt+0x2c712>
+   3617e:	83 6d ac 01          	sub    DWORD PTR [rbp-0x54],0x1
+   36182:	48 8b 55 c0          	mov    rdx,QWORD PTR [rbp-0x40]
+   36186:	8b 45 ac             	mov    eax,DWORD PTR [rbp-0x54]
+   36189:	48 89 d6             	mov    rsi,rdx
+   3618c:	89 c7                	mov    edi,eax
+   3618e:	e8 86 e8 fd ff       	call   14a19 <__ctype_b_loc@plt+0xafa9>
+   36193:	48 83 7d c8 00       	cmp    QWORD PTR [rbp-0x38],0x0
+   36198:	74 57                	je     361f1 <__ctype_b_loc@plt+0x2c781>
+   3619a:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   3619d:	85 c0                	test   eax,eax
+   3619f:	75 24                	jne    361c5 <__ctype_b_loc@plt+0x2c755>
+   361a1:	0f b7 45 a6          	movzx  eax,WORD PTR [rbp-0x5a]
+   361a5:	0f b7 d0             	movzx  edx,ax
+   361a8:	48 8b 45 c8          	mov    rax,QWORD PTR [rbp-0x38]
+   361ac:	48 89 c6             	mov    rsi,rax
+   361af:	48 8d 05 08 3a 09 00 	lea    rax,[rip+0x93a08]        # c9bbe <warn@@Base+0x4dcb4>
+   361b6:	48 89 c7             	mov    rdi,rax
+   361b9:	b8 00 00 00 00       	mov    eax,0x0
+   361be:	e8 7d 35 fd ff       	call   9740 <printf@plt>
+   361c3:	eb 2c                	jmp    361f1 <__ctype_b_loc@plt+0x2c781>
+   361c5:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   361c8:	83 f8 01             	cmp    eax,0x1
+   361cb:	75 09                	jne    361d6 <__ctype_b_loc@plt+0x2c766>
+   361cd:	48 8d 05 37 a2 08 00 	lea    rax,[rip+0x8a237]        # c040b <warn@@Base+0x44501>
+   361d4:	eb 07                	jmp    361dd <__ctype_b_loc@plt+0x2c76d>
+   361d6:	48 8d 05 29 a2 08 00 	lea    rax,[rip+0x8a229]        # c0406 <warn@@Base+0x444fc>
+   361dd:	48 8b 55 c8          	mov    rdx,QWORD PTR [rbp-0x38]
+   361e1:	48 89 d6             	mov    rsi,rdx
+   361e4:	48 89 c7             	mov    rdi,rax
+   361e7:	b8 00 00 00 00       	mov    eax,0x0
+   361ec:	e8 4f 35 fd ff       	call   9740 <printf@plt>
+   361f1:	bf 0a 00 00 00       	mov    edi,0xa
+   361f6:	e8 85 33 fd ff       	call   9580 <putchar@plt>
+   361fb:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   361ff:	0f b6 40 18          	movzx  eax,BYTE PTR [rax+0x18]
+   36203:	c0 e8 04             	shr    al,0x4
+   36206:	84 c0                	test   al,al
+   36208:	75 75                	jne    3627f <__ctype_b_loc@plt+0x2c80f>
+   3620a:	48 83 7d 80 00       	cmp    QWORD PTR [rbp-0x80],0x0
+   3620f:	74 6e                	je     3627f <__ctype_b_loc@plt+0x2c80f>
+   36211:	48 8b 45 80          	mov    rax,QWORD PTR [rbp-0x80]
+   36215:	8b 40 2c             	mov    eax,DWORD PTR [rax+0x2c]
+   36218:	89 c0                	mov    eax,eax
+   3621a:	48 39 45 90          	cmp    QWORD PTR [rbp-0x70],rax
+   3621e:	72 5f                	jb     3627f <__ctype_b_loc@plt+0x2c80f>
+   36220:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   36224:	0f b7 40 52          	movzx  eax,WORD PTR [rax+0x52]
+   36228:	66 83 f8 08          	cmp    ax,0x8
+   3622c:	74 51                	je     3627f <__ctype_b_loc@plt+0x2c80f>
+   3622e:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   36232:	0f b6 40 1f          	movzx  eax,BYTE PTR [rax+0x1f]
+   36236:	3c 06                	cmp    al,0x6
+   36238:	74 45                	je     3627f <__ctype_b_loc@plt+0x2c80f>
+   3623a:	48 8b 45 80          	mov    rax,QWORD PTR [rbp-0x80]
+   3623e:	8b 58 2c             	mov    ebx,DWORD PTR [rax+0x2c]
+   36241:	48 8b 55 80          	mov    rdx,QWORD PTR [rbp-0x80]
+   36245:	48 8b 45 98          	mov    rax,QWORD PTR [rbp-0x68]
+   36249:	48 89 d6             	mov    rsi,rdx
+   3624c:	48 89 c7             	mov    rdi,rax
+   3624f:	e8 1e ea fd ff       	call   14c72 <__ctype_b_loc@plt+0xb202>
+   36254:	49 89 c4             	mov    r12,rax
+   36257:	48 8d 05 6a 39 09 00 	lea    rax,[rip+0x9396a]        # c9bc8 <warn@@Base+0x4dcbe>
+   3625e:	48 89 c7             	mov    rdi,rax
+   36261:	e8 ba 34 fd ff       	call   9720 <gettext@plt>
+   36266:	48 89 c7             	mov    rdi,rax
+   36269:	48 8b 45 90          	mov    rax,QWORD PTR [rbp-0x70]
+   3626d:	89 d9                	mov    ecx,ebx
+   3626f:	4c 89 e2             	mov    rdx,r12
+   36272:	48 89 c6             	mov    rsi,rax
+   36275:	b8 00 00 00 00       	mov    eax,0x0
+   3627a:	e8 8b 5c 04 00       	call   7bf0a <warn@@Base>
+   3627f:	90                   	nop
+   36280:	48 8b 45 e8          	mov    rax,QWORD PTR [rbp-0x18]
+   36284:	64 48 2b 04 25 28 00 	sub    rax,QWORD PTR fs:0x28
+   3628b:	00 00 
+   3628d:	74 05                	je     36294 <__ctype_b_loc@plt+0x2c824>
+   3628f:	e8 4c 34 fd ff       	call   96e0 <__stack_chk_fail@plt>
+   36294:	48 8d 65 f0          	lea    rsp,[rbp-0x10]
+   36298:	5b                   	pop    rbx
+   36299:	41 5c                	pop    r12
+   3629b:	5d                   	pop    rbp
+   3629c:	c3                   	ret    
+   3629d:	f3 0f 1e fa          	endbr64 
+   362a1:	55                   	push   rbp
+   362a2:	48 89 e5             	mov    rbp,rsp
+   362a5:	41 54                	push   r12
+   362a7:	53                   	push   rbx
+   362a8:	48 81 ec f0 00 00 00 	sub    rsp,0xf0
+   362af:	48                   	rex.W
+
+[exit_code=0]
+
+===== tighter local objdump window around strlen/sprintf evidence =====
+$ objdump -d -M intel --start-address=0x360f0 --stop-address=0x36210 '/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf'
+
+/home/zhangxb/ClawSpace/agent/straight_detect/binutils/gcc_stripped/binutils-2.35.2-o0-readelf：     文件格式 elf64-x86-64
+
+
+Disassembly of section .text:
+
+00000000000360f0 <error@@Base-0x45cfa>:
+   360f0:	ff 48 8b             	dec    DWORD PTR [rax-0x75]
+   360f3:	45 98                	rex.RB cwde 
+   360f5:	48 8d 75 a6          	lea    rsi,[rbp-0x5a]
+   360f9:	56                   	push   rsi
+   360fa:	48 8d 75 a8          	lea    rsi,[rbp-0x58]
+   360fe:	56                   	push   rsi
+   360ff:	49 89 f9             	mov    r9,rdi
+   36102:	44 89 d6             	mov    esi,r10d
+   36105:	48 89 c7             	mov    rdi,rax
+   36108:	e8 a4 f6 ff ff       	call   357b1 <__ctype_b_loc@plt+0x2bd41>
+   3610d:	48 83 c4 10          	add    rsp,0x10
+   36111:	48 89 45 c8          	mov    QWORD PTR [rbp-0x38],rax
+   36115:	c7 45 ac 15 00 00 00 	mov    DWORD PTR [rbp-0x54],0x15
+   3611c:	8b 05 d6 06 0c 00    	mov    eax,DWORD PTR [rip+0xc06d6]        # f67f8 <stderr@GLIBC_2.2.5+0x1158>
+   36122:	85 c0                	test   eax,eax
+   36124:	75 5c                	jne    36182 <__ctype_b_loc@plt+0x2c712>
+   36126:	48 83 7d c8 00       	cmp    QWORD PTR [rbp-0x38],0x0
+   3612b:	74 55                	je     36182 <__ctype_b_loc@plt+0x2c712>
+   3612d:	8b 5d ac             	mov    ebx,DWORD PTR [rbp-0x54]
+   36130:	48 8b 45 c8          	mov    rax,QWORD PTR [rbp-0x38]
+   36134:	48 89 c7             	mov    rdi,rax
+   36137:	e8 94 35 fd ff       	call   96d0 <strlen@plt>
+   3613c:	89 c2                	mov    edx,eax
+   3613e:	89 d8                	mov    eax,ebx
+   36140:	29 d0                	sub    eax,edx
+   36142:	83 e8 01             	sub    eax,0x1
+   36145:	89 45 ac             	mov    DWORD PTR [rbp-0x54],eax
+   36148:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   3614b:	85 c0                	test   eax,eax
+   3614d:	75 27                	jne    36176 <__ctype_b_loc@plt+0x2c706>
+   3614f:	0f b7 45 a6          	movzx  eax,WORD PTR [rbp-0x5a]
+   36153:	0f b7 d0             	movzx  edx,ax
+   36156:	48 8d 45 d0          	lea    rax,[rbp-0x30]
+   3615a:	48 8d 0d 57 3a 09 00 	lea    rcx,[rip+0x93a57]        # c9bb8 <warn@@Base+0x4dcae>
+   36161:	48 89 ce             	mov    rsi,rcx
+   36164:	48 89 c7             	mov    rdi,rax
+   36167:	b8 00 00 00 00       	mov    eax,0x0
+   3616c:	e8 5f 38 fd ff       	call   99d0 <sprintf@plt>
+   36171:	29 45 ac             	sub    DWORD PTR [rbp-0x54],eax
+   36174:	eb 0c                	jmp    36182 <__ctype_b_loc@plt+0x2c712>
+   36176:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   36179:	83 f8 01             	cmp    eax,0x1
+   3617c:	74 04                	je     36182 <__ctype_b_loc@plt+0x2c712>
+   3617e:	83 6d ac 01          	sub    DWORD PTR [rbp-0x54],0x1
+   36182:	48 8b 55 c0          	mov    rdx,QWORD PTR [rbp-0x40]
+   36186:	8b 45 ac             	mov    eax,DWORD PTR [rbp-0x54]
+   36189:	48 89 d6             	mov    rsi,rdx
+   3618c:	89 c7                	mov    edi,eax
+   3618e:	e8 86 e8 fd ff       	call   14a19 <__ctype_b_loc@plt+0xafa9>
+   36193:	48 83 7d c8 00       	cmp    QWORD PTR [rbp-0x38],0x0
+   36198:	74 57                	je     361f1 <__ctype_b_loc@plt+0x2c781>
+   3619a:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   3619d:	85 c0                	test   eax,eax
+   3619f:	75 24                	jne    361c5 <__ctype_b_loc@plt+0x2c755>
+   361a1:	0f b7 45 a6          	movzx  eax,WORD PTR [rbp-0x5a]
+   361a5:	0f b7 d0             	movzx  edx,ax
+   361a8:	48 8b 45 c8          	mov    rax,QWORD PTR [rbp-0x38]
+   361ac:	48 89 c6             	mov    rsi,rax
+   361af:	48 8d 05 08 3a 09 00 	lea    rax,[rip+0x93a08]        # c9bbe <warn@@Base+0x4dcb4>
+   361b6:	48 89 c7             	mov    rdi,rax
+   361b9:	b8 00 00 00 00       	mov    eax,0x0
+   361be:	e8 7d 35 fd ff       	call   9740 <printf@plt>
+   361c3:	eb 2c                	jmp    361f1 <__ctype_b_loc@plt+0x2c781>
+   361c5:	8b 45 a8             	mov    eax,DWORD PTR [rbp-0x58]
+   361c8:	83 f8 01             	cmp    eax,0x1
+   361cb:	75 09                	jne    361d6 <__ctype_b_loc@plt+0x2c766>
+   361cd:	48 8d 05 37 a2 08 00 	lea    rax,[rip+0x8a237]        # c040b <warn@@Base+0x44501>
+   361d4:	eb 07                	jmp    361dd <__ctype_b_loc@plt+0x2c76d>
+   361d6:	48 8d 05 29 a2 08 00 	lea    rax,[rip+0x8a229]        # c0406 <warn@@Base+0x444fc>
+   361dd:	48 8b 55 c8          	mov    rdx,QWORD PTR [rbp-0x38]
+   361e1:	48 89 d6             	mov    rsi,rdx
+   361e4:	48 89 c7             	mov    rdi,rax
+   361e7:	b8 00 00 00 00       	mov    eax,0x0
+   361ec:	e8 4f 35 fd ff       	call   9740 <printf@plt>
+   361f1:	bf 0a 00 00 00       	mov    edi,0xa
+   361f6:	e8 85 33 fd ff       	call   9580 <putchar@plt>
+   361fb:	48 8b 45 b8          	mov    rax,QWORD PTR [rbp-0x48]
+   361ff:	0f b6 40 18          	movzx  eax,BYTE PTR [rax+0x18]
+   36203:	c0 e8 04             	shr    al,0x4
+   36206:	84 c0                	test   al,al
+   36208:	75 75                	jne    3627f <__ctype_b_loc@plt+0x2c80f>
+   3620a:	48 83 7d 80 00       	cmp    QWORD PTR [rbp-0x80],0x0
+   3620f:	74                   	.byte 0x74
+
+[exit_code=0]
