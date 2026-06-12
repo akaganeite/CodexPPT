@@ -25,6 +25,10 @@ def target_binary() -> str:
     return str(AGENT_CONTEXT["binary_path"])
 
 
+def scratch_dir() -> str:
+    return str(AGENT_CONTEXT.get("scratch_dir", ""))
+
+
 def compile_regex(pattern: str, ignore_case: bool) -> re.Pattern[str]:
     return re.compile(pattern, re.IGNORECASE if ignore_case else 0)
 
@@ -48,7 +52,7 @@ def run_command(argv: list[str], timeout_sec: int, max_output_chars: int) -> dic
     rejects anything outside the binutils/filter allowlist, any debug/source
     option, and any path other than the one target binary.
     """
-    decision, reason = decide_command(argv, target_binary())
+    decision, reason = decide_command(argv, target_binary(), scratch_dir())
     if decision is not Decision.ALLOW:
         return _validation_failure("run_command", argv, reason, {"validation_error": reason})
 
@@ -131,7 +135,7 @@ def objdump_window(start_address: str, stop_address: str, syntax: str, max_outpu
     args.append(target_binary())
     args.extend([f"--start-address={start_address}", f"--stop-address={stop_address}"])
 
-    decision, reason = decide_command(args, target_binary())
+    decision, reason = decide_command(args, target_binary(), scratch_dir())
     if decision is not Decision.ALLOW:
         return _validation_failure(
             "objdump_window", args, reason,

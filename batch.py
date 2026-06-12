@@ -210,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-strict", action="store_true")
     parser.add_argument("--thinking", action="store_true")
     parser.add_argument("--reasoning-effort", default="medium")
-    parser.add_argument("--max-turns", type=int, default=12)
+    parser.add_argument("--max-turns", type=int, default=20)
     parser.add_argument("--finalization-turns", type=int, default=3)
     parser.add_argument("--api-timeout", type=int, default=240)
     parser.add_argument("--api-max-retries", type=int, default=3)

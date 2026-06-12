@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from claudeagent.common import FINAL_RESULT_SCHEMA, jdump
+from claudeagent.runtime import AGENT_CONTEXT
 from claudeagent.schema_validate import final_tool_parameters_schema, load_final_result_schema
 
 
@@ -20,6 +21,7 @@ def build_task(metadata: dict[str, Any], binary: str, preflight: dict[str, Any])
         "cve": metadata.get("cve_id", ""),
         "cve_metadata": metadata,
         "target_binary": binary,
+        "scratch_dir": AGENT_CONTEXT.get("scratch_dir", ""),
         "binary_facts": preflight.get("binary", {}),
         "symbol_hint": preflight.get("symbol_hint", {}),
         "harness_protocol": [

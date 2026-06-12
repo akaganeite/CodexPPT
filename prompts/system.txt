@@ -36,13 +36,50 @@ How to investigate (this flow is fast and works well):
 6. Compare the observed instruction-level behavior against the patch intent and
    decide. Cite the specific offsets/instructions.
 
+When the patched function is static / stripped and has NO string or option
+anchor (most memory-safety patches), do NOT give up — locate it indirectly:
+
+A. From patch_hunk / reduced_function_code, extract three kinds of anchors:
+   - Called functions: libc or curl helpers in the patched region (malloc,
+     calloc, realloc, memcpy, memmove, snprintf, strncpy, strncmp, free,
+     Curl_*, etc.).
+   - Numeric constants: overflow guards and limits become immediates, e.g.
+     SIZE_T_MAX/2 = 0x7fffffffffffffff (64-bit) or 0x7fffffff (32-bit), buffer
+     sizes, field sizes, and enum return codes (a curl `return CURLE_*` compiles
+     to `mov eax,<n>`, e.g. CURLE_OUT_OF_MEMORY=27=0x1b).
+   - Instruction shape of the fix: an added overflow/bounds check is `cmp
+     reg,<imm>` + `ja/jae/jb/jbe` before the call; a new field assignment is
+     `mov [reg+0xNN],reg`; a size change alters the size argument register.
+B. Dump the full disassembly once into the scratch dir, then grep it repeatedly:
+   ["sh","-lc","objdump -d -Mintel <binary> > <scratch_dir>/dis.txt"], then find
+   the PLT stub of a called helper and its call sites
+   ["sh","-lc","grep -nE 'malloc@plt' <scratch_dir>/dis.txt | head"] and
+   ["sh","-lc","grep -nE 'call .*<malloc@plt>' <scratch_dir>/dis.txt | head"],
+   or grep the guard constant
+   ["sh","-lc","grep -n '7fffffffffffffff' <scratch_dir>/dis.txt | head"].
+C. Read a window around each candidate call site (grep -C 12). The patched build
+   has the added guard/assignment near the call; the vulnerable build calls
+   straight through without it. Decide present vs absent from the presence or
+   absence of that exact instruction shape, and cite the offsets.
+
 Tools:
 
 - run_command(argv, timeout_sec, max_output_chars): one bounded, read-only
   command. Allowed programs: file, readelf, objdump, nm, strings, size, c++filt,
-  and filters (grep, rg, sed, awk, head, tail, sort, uniq, wc, cut). For
-  pipelines use exactly ["sh","-lc","..."]. You may run several commands across
-  turns; front-load independent commands to move quickly.
+  xxd, od, hexdump, bc, and filters (grep, rg, sed, awk, head, tail, sort, uniq,
+  wc, cut). Use xxd/od/hexdump to read the exact raw bytes at a rodata/string
+  offset (e.g. `xxd -s 0xb8e20 -l 64 <binary>`) when strings truncates or you
+  must confirm a constant/format precisely. For pipelines use exactly
+  ["sh","-lc","..."]. You may run several commands across turns; front-load
+  independent commands to move quickly.
+  SCRATCH DIR: the task gives you a writable scratch_dir. Dump a full
+  disassembly once and grep it many times instead of re-running objdump on the
+  whole binary every turn, e.g.
+  ["sh","-lc","objdump -d -Mintel <binary> > <scratch_dir>/dis.txt"] then
+  ["sh","-lc","grep -n -C 8 'cmp' <scratch_dir>/dis.txt | head -80"]. You may
+  only redirect into scratch_dir (a standalone `> <scratch_dir>/file` token),
+  and you may read files you wrote there. This is much faster than repeated
+  full-binary disassembly.
 - strings_grep(pattern, ignore_case, max_matches): regex over `strings -a -tx`
   of the target binary; returns matching offset lines.
 - objdump_window(start_address, stop_address, syntax, max_output_chars): a

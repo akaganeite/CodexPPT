@@ -27,6 +27,13 @@ class Decision(Enum):
 
 
 # Programs that read/inspect the binary.
+#
+# xxd / od / hexdump dump raw bytes at a given offset (e.g. `xxd -s 0xb8e20 -l 48
+# <binary>`); they take a normal file argument so path confinement applies, and
+# they write only to stdout (writing a file needs redirection, which is denied).
+# bc is pure arithmetic for offset/size math. `dd` is deliberately NOT here: its
+# if=/of= are key=value tokens that bypass per-token path confinement and of= can
+# write files, so it stays on the denylist; xxd/od cover the same read use safely.
 ALLOWED_COMMANDS = {
     "file",
     "readelf",
@@ -37,6 +44,10 @@ ALLOWED_COMMANDS = {
     "size",
     "sha1sum",
     "sha256sum",
+    "xxd",
+    "od",
+    "hexdump",
+    "bc",
 }
 # Text filters usable inside `sh -lc` pipelines.
 SAFE_FILTERS = {
@@ -71,9 +82,16 @@ DENIED_SHELL_PATTERNS = [
     re.compile(r"readelf\b[^;&|]*?(?:--debug-dump(?:=|\b)|\s-w[a-zA-Z=]*)"),
     re.compile(r"objdump\b[^;&|]*?(?:\s-S\b|--source\b|\s-g\b|--debugging\b|\s-W\b|--dwarf\b|--line-numbers\b|\s-l\b)"),
     re.compile(r"\$\(|`|<\("),                    # command/process substitution
-    re.compile(r"(?<![12])>\s*[^&]"),             # output redirection to a file
-    re.compile(r"(?<![12])>>"),
 ]
+
+# Redirection policy (enforced token-by-token in validate_shell_script): output
+# may be redirected only to /dev/null or into the scratch dir, so the model can
+# dump a big disassembly once and grep it many times, and can silence stderr with
+# `2>/dev/null`. fd-to-fd dups like `2>&1` / `>&2` are fine. Input redirection
+# (`<`) and any other redirect target are rejected.
+_FD_TO_FD = re.compile(r"^[0-9]*>&[0-9-]+$")            # 2>&1, >&2, 1>&-
+_INLINE_REDIR = re.compile(r"^&?[0-9]*>>?(.+)$")        # 2>file, >file, &>file, 1>>file
+_REDIR_OPS = {">", ">>", "&>", "&>>"}                   # target is the next token
 
 # Denied path shapes: source files, debug/unstripped siblings, source repos.
 # Applied to the full command/script text AND to each individual token.
@@ -101,8 +119,28 @@ def _resolved(path: str) -> str:
         return path
 
 
-def _token_is_confined(token: str, binary_real: str) -> tuple[bool, str]:
-    """A token that resolves to an existing file must BE the target binary."""
+def _in_scratch(path: str, scratch_real: str) -> bool:
+    """True if path resolves inside the per-case scratch dir."""
+    if not scratch_real:
+        return False
+    rp = _resolved(path)
+    return rp == scratch_real or rp.startswith(scratch_real + os.sep)
+
+
+def _redir_target_ok(target: str, scratch_real: str) -> bool:
+    """A redirection target is allowed only if it is /dev/null or in the scratch dir."""
+    return target == "/dev/null" or _in_scratch(target, scratch_real)
+
+
+def _token_is_confined(token: str, binary_real: str, scratch_real: str = "") -> tuple[bool, str]:
+    """A token that resolves to an existing file must BE the target binary.
+
+    Files inside the scratch dir are allowed: they can only hold output derived
+    from the target binary (commands that read other files are rejected first),
+    so reading/writing them does not widen the model's input beyond the binary.
+    """
+    if _in_scratch(token, scratch_real):
+        return True, ""
     denied = _denied_path_reason(token)
     if denied:
         return False, denied
@@ -133,22 +171,44 @@ def validate_no_debug_source_args(command: str, argv: list[str]) -> tuple[bool, 
     return True, ""
 
 
-def validate_shell_script(script: str, binary_real: str) -> tuple[bool, str]:
+def validate_shell_script(script: str, binary_real: str, scratch_real: str = "") -> tuple[bool, str]:
     for pattern in DENIED_SHELL_PATTERNS:
         if pattern.search(script):
             return False, f"shell command contains denied pattern: {pattern.pattern}"
-    denied = _denied_path_reason(script)
-    if denied:
-        return False, denied
     try:
         tokens = shlex.split(script)
     except ValueError as exc:
         return False, f"cannot parse shell command: {exc}"
     command_expected = True
+    expect_redirect_target = False
+    redir_err = "redirection target must be /dev/null or a path inside the scratch dir"
     for token in tokens:
+        if expect_redirect_target:
+            expect_redirect_target = False
+            if not _redir_target_ok(token, scratch_real):
+                return False, redir_err
+            continue
         if token in {"|", "&&", "||", ";", "(", ")"}:
             command_expected = token != ")"
             continue
+        if token in _REDIR_OPS:              # standalone `>` / `>>` / `&>` ; target is next token
+            expect_redirect_target = True
+            command_expected = False
+            continue
+        if _FD_TO_FD.match(token):           # 2>&1, >&2, 1>&- : fd dup, not a file
+            command_expected = False
+            continue
+        inline = _INLINE_REDIR.match(token)  # 2>/dev/null, >scratch/x, 1>>scratch/x
+        if inline and not inline.group(1).startswith("&"):
+            if not _redir_target_ok(inline.group(1), scratch_real):
+                return False, redir_err
+            command_expected = False
+            continue
+        if ">" in token or "<" in token:
+            return False, (
+                "unsupported redirection; redirect only to /dev/null or a scratch_dir path "
+                "(fd dups like 2>&1 are allowed; input redirection `<` is not)"
+            )
         if command_expected and "=" in token and not token.startswith(("/", ".", "-")):
             # leading VAR=value assignment, stay in command position
             continue
@@ -157,13 +217,20 @@ def validate_shell_script(script: str, binary_real: str) -> tuple[bool, str]:
             if base not in COMMAND_POSITION_OK:
                 return False, f"unsupported shell command: {token}"
             command_expected = False
-        ok, reason = _token_is_confined(token, binary_real)
+        ok, reason = _token_is_confined(token, binary_real, scratch_real)
         if not ok:
             return False, reason
+    if expect_redirect_target:
+        return False, "dangling redirection with no target"
+    # Path-shape denylist over the whole script, but tolerate scratch-dir paths.
+    sanitized = re.sub(r"\S+", lambda m: "" if _in_scratch(m.group(0), scratch_real) else m.group(0), script)
+    denied = _denied_path_reason(sanitized)
+    if denied:
+        return False, denied
     return True, ""
 
 
-def decide_command(argv: list[str], binary_path: str) -> tuple[Decision, str]:
+def decide_command(argv: list[str], binary_path: str, scratch_dir: str = "") -> tuple[Decision, str]:
     """Decide whether a tool's argv may run against the one target binary."""
     if not argv:
         return Decision.FORBID, "argv is empty"
@@ -171,12 +238,13 @@ def decide_command(argv: list[str], binary_path: str) -> tuple[Decision, str]:
         if "\x00" in item or "\n" in item:
             return Decision.FORBID, "argv item contains NUL/newline"
     binary_real = _resolved(binary_path) if binary_path else ""
+    scratch_real = _resolved(scratch_dir) if scratch_dir else ""
     command = Path(argv[0]).name
 
     if command == "sh":
         if len(argv) != 3 or argv[1] != "-lc":
             return Decision.FORBID, "sh is only allowed as: sh -lc <read-only binutils/filter pipeline>"
-        ok, reason = validate_shell_script(argv[2], binary_real)
+        ok, reason = validate_shell_script(argv[2], binary_real, scratch_real)
         return (Decision.ALLOW, "") if ok else (Decision.FORBID, reason)
 
     if command not in COMMAND_POSITION_OK:
@@ -186,7 +254,7 @@ def decide_command(argv: list[str], binary_path: str) -> tuple[Decision, str]:
     if not ok:
         return Decision.FORBID, reason
     for item in argv:
-        ok, reason = _token_is_confined(item, binary_real)
+        ok, reason = _token_is_confined(item, binary_real, scratch_real)
         if not ok:
             return Decision.FORBID, reason
     return Decision.ALLOW, ""

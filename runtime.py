@@ -44,6 +44,7 @@ def initialize_agent_context(
     binary: str,
     cve_id: str = "",
     output_dir: str = "",
+    scratch_dir: str = "",
 ) -> None:
     AGENT_CONTEXT.clear()
     AGENT_CONTEXT.update({
@@ -51,6 +52,7 @@ def initialize_agent_context(
         "binary_path": binary,
         "cve_id": metadata.get("cve_id", cve_id),
         "output_dir": output_dir,
+        "scratch_dir": scratch_dir,
         "observations": [],
         "evidence_ledger": [],
         "observation_counter": 0,

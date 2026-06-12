@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -186,7 +187,12 @@ def run_agent(args: argparse.Namespace) -> int:
     start_epoch = time.time()
     metadata = load_cve_metadata(args)
     binary = str(expand(args.binary))
-    initialize_agent_context(metadata, binary, args.cve_id, args.output_dir)
+    if args.output_dir:
+        scratch = str(expand(args.output_dir) / "scratch")
+    else:
+        scratch = tempfile.mkdtemp(prefix="claudeagent-scratch-")
+    os.makedirs(scratch, exist_ok=True)
+    initialize_agent_context(metadata, binary, args.cve_id, args.output_dir, scratch)
 
     preflight = preflight_detection_inputs(binary, metadata)
     if not preflight.get("ok"):
@@ -318,7 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-strict", action="store_true", help="drop tool 'strict' flags (non-strict tool schemas)")
     parser.add_argument("--thinking", action="store_true", help="enable DeepSeek thinking mode")
     parser.add_argument("--reasoning-effort", default="medium")
-    parser.add_argument("--max-turns", type=int, default=12)
+    parser.add_argument("--max-turns", type=int, default=20)
     parser.add_argument("--finalize-on-max-turns", action="store_true", default=True)
     parser.add_argument("--no-finalize-on-max-turns", dest="finalize_on_max_turns", action="store_false")
     parser.add_argument("--finalization-turns", type=int, default=3)

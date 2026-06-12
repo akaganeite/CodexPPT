@@ -4,7 +4,7 @@
     "function": {
       "name": "run_command",
       "strict": true,
-      "description": "Run one bounded, read-only command against the target binary. Allowed: file, readelf, objdump, nm, strings, size, c++filt and text filters (grep, rg, sed, awk, head, tail, sort, uniq, wc, cut). For pipelines use exactly [\"sh\",\"-lc\",\"objdump -d -Mintel <binary> | grep -n -C 8 '6f64d' | head -60\"]. Only the one target binary may be inspected; debug/source options and other files are rejected.",
+      "description": "Run one bounded, read-only command against the target binary. Allowed: file, readelf, objdump, nm, strings, size, c++filt, xxd, od, hexdump, bc and text filters (grep, rg, sed, awk, head, tail, sort, uniq, wc, cut). Use xxd/od/hexdump to read exact raw bytes at an offset (e.g. xxd -s 0xb8e20 -l 64 <binary>). For pipelines use exactly [\"sh\",\"-lc\",\"objdump -d -Mintel <binary> | grep -n -C 8 '6f64d' | head -60\"]. Only the one target binary may be inspected; debug/source options and other files are rejected.",
       "parameters": {
         "type": "object",
         "properties": {
