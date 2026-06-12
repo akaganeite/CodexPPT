@@ -1,0 +1,92 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "run_command",
+      "strict": true,
+      "description": "Run one bounded, read-only command against the target binary. Allowed: file, readelf, objdump, nm, strings, size, c++filt and text filters (grep, rg, sed, awk, head, tail, sort, uniq, wc, cut). For pipelines use exactly [\"sh\",\"-lc\",\"objdump -d -Mintel <binary> | grep -n -C 8 '6f64d' | head -60\"]. Only the one target binary may be inspected; debug/source options and other files are rejected.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "argv": {
+            "type": "array",
+            "description": "Command argv. Do not put pipe tokens directly in argv; use [\"sh\",\"-lc\",\"...\"] for pipelines.",
+            "items": { "type": "string" },
+            "minItems": 1,
+            "maxItems": 80
+          },
+          "timeout_sec": {
+            "type": "integer",
+            "description": "Timeout in seconds. Use 0 for default (240).",
+            "minimum": 0,
+            "maximum": 600
+          },
+          "max_output_chars": {
+            "type": "integer",
+            "description": "Maximum stdout head/tail characters retained. Use 0 for default (60000).",
+            "minimum": 0,
+            "maximum": 120000
+          }
+        },
+        "required": ["argv", "timeout_sec", "max_output_chars"],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "strings_grep",
+      "strict": true,
+      "description": "Run `strings -a -tx` on the target binary and return matching offset-bearing lines. Use to find format strings, error strings, option names, and constants from the patch metadata, with their hex offsets.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": { "type": "string", "description": "Regex over strings output." },
+          "ignore_case": { "type": "boolean", "description": "Case-insensitive matching." },
+          "max_matches": {
+            "type": "integer",
+            "description": "Maximum matching lines. Use 0 for default (80).",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": ["pattern", "ignore_case", "max_matches"],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "objdump_window",
+      "strict": true,
+      "description": "Return a bounded objdump disassembly window of the target binary between two addresses.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "start_address": { "type": "string", "description": "Hex or decimal start address." },
+          "stop_address": { "type": "string", "description": "Hex or decimal stop address." },
+          "syntax": { "type": "string", "description": "Disassembly syntax.", "enum": ["intel", "att"] },
+          "max_output_chars": {
+            "type": "integer",
+            "description": "Maximum output characters. Use 0 for default (30000).",
+            "minimum": 0,
+            "maximum": 120000
+          }
+        },
+        "required": ["start_address", "stop_address", "syntax", "max_output_chars"],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "submit_detection_result",
+      "strict": true,
+      "description": "Submit the final patch-presence verdict. Call exactly once when ready. Determinate verdicts (present/absent/not_affected) must cite at least one evidence_id from a prior tool call.",
+      "parameters": { "$ref": "schemas/final_result.schema.json#/$defs/submit_detection_result" }
+    }
+  }
+]

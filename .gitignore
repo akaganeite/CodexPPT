@@ -1,0 +1,13 @@
+# Run artifacts (single-case + batch outputs)
+runs/*
+!runs/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Secrets / local config
+.env
+.claude/settings.local.json

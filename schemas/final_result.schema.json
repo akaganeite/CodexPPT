@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/claudeagent/final_result.schema.json",
+  "title": "claudeagent final result",
+  "$defs": {
+    "submit_detection_result": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/properties/status" },
+        "confidence": { "$ref": "#/properties/confidence" },
+        "evidence": { "$ref": "#/properties/evidence" },
+        "evidence_ids": { "$ref": "#/properties/evidence_ids" },
+        "reasoning": { "$ref": "#/properties/reasoning" },
+        "decisive_addresses": { "$ref": "#/properties/decisive_addresses" },
+        "inconclusive_reason": { "$ref": "#/properties/inconclusive_reason" }
+      },
+      "required": [
+        "status",
+        "confidence",
+        "evidence",
+        "evidence_ids",
+        "reasoning",
+        "decisive_addresses",
+        "inconclusive_reason"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "ok",
+    "project",
+    "cve_id",
+    "binary",
+    "status",
+    "confidence",
+    "evidence",
+    "evidence_ids",
+    "reasoning",
+    "decisive_addresses",
+    "inconclusive_reason",
+    "completed_at_epoch",
+    "observations",
+    "evidence_ledger",
+    "harness_metrics",
+    "timing",
+    "usage_metrics"
+  ],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "project": { "type": "string" },
+    "cve_id": { "type": "string" },
+    "binary": { "type": "string" },
+    "status": {
+      "type": "string",
+      "description": "Patch-presence/applicability status for the target binary.",
+      "enum": ["present", "absent", "not_affected", "inconclusive"]
+    },
+    "confidence": {
+      "type": "string",
+      "description": "Confidence level.",
+      "enum": ["high", "medium", "low"]
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Compact human-readable evidence summaries. Determinate verdicts must be backed by evidence_ids.",
+      "items": { "type": "string" },
+      "maxItems": 20
+    },
+    "evidence_ids": {
+      "type": "array",
+      "description": "Evidence ids from the ledger that support the verdict.",
+      "items": { "type": "string" },
+      "maxItems": 30
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "Concise rationale comparing binary evidence with patch semantics."
+    },
+    "decisive_addresses": {
+      "type": "array",
+      "description": "Addresses/ranges most relevant to the decision, e.g. \"0x6f64d\".",
+      "items": { "type": "string" },
+      "maxItems": 30
+    },
+    "inconclusive_reason": {
+      "type": "string",
+      "description": "Use none for determinate verdicts; otherwise explain why the harness could not decide.",
+      "enum": [
+        "none",
+        "insufficient_metadata",
+        "no_binary_anchor",
+        "stripped_or_optimized",
+        "conflicting_evidence",
+        "tool_failure",
+        "unsupported_binary",
+        "insufficient_tool_budget",
+        "not_applicable_uncertain",
+        "other"
+      ]
+    },
+    "completed_at_epoch": { "type": "number" },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "observation_id",
+          "tool",
+          "command",
+          "command_text",
+          "exit_code",
+          "ok",
+          "stdout_head",
+          "stdout_tail",
+          "stderr_tail",
+          "truncated",
+          "truncation",
+          "parsed_facts"
+        ],
+        "properties": {
+          "observation_id": { "type": "string" },
+          "tool": { "type": "string" },
+          "command": { "type": "array", "items": { "type": "string" } },
+          "command_text": { "type": "string" },
+          "exit_code": { "type": ["integer", "null"] },
+          "ok": { "type": "boolean" },
+          "elapsed_sec": { "type": ["number", "null"] },
+          "stdout_head": { "type": "string" },
+          "stdout_tail": { "type": "string" },
+          "stderr_tail": { "type": "string" },
+          "truncated": { "type": "boolean" },
+          "truncation": { "type": "object", "additionalProperties": true },
+          "parsed_facts": { "type": "object", "additionalProperties": true },
+          "error": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "evidence_ledger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "observation_id",
+          "kind",
+          "claim",
+          "supporting_excerpt",
+          "location",
+          "confidence"
+        ],
+        "properties": {
+          "evidence_id": { "type": "string" },
+          "observation_id": { "type": "string" },
+          "kind": { "type": "string" },
+          "claim": { "type": "string" },
+          "supporting_excerpt": { "type": "array", "items": { "type": "string" } },
+          "location": { "type": "object", "additionalProperties": true },
+          "confidence": { "type": "string" },
+          "polarity": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "harness_metrics": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" }
+    },
+    "timing": { "type": "object", "additionalProperties": true },
+    "usage_metrics": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": true
+}
