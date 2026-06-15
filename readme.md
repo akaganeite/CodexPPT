@@ -25,6 +25,19 @@ python3 /home/zhangxb/ClawSpace/agent/straight_detect/codex_patch_presence_batch
   --reasoning-effort high
 ```
 
+## Dataset 文件布局
+
+新的实验数据优先放在 `datasets/<dataset-name>/`：
+
+```text
+datasets/curl_dataset4ppt_20/testset.json
+datasets/curl_dataset4ppt_20/groundtruth.json
+datasets/curl_deployed/testset.json
+datasets/curl_deployed/groundtruth.json
+```
+
+`testset.json` 和 `groundtruth.json` 只支持 dataset export list 格式，不再支持旧的 `CVE -> [binary]` 或 `CVE -> {vuln, patch}` 顶层对象格式。`testset/` 和 `groundtruth/` 下仍保留部分历史数据，用于旧实验或对照。
+
 | Project | PS³ A | PS³ P | PS³ R | PS³ F1 | PS³ DSR | React A | React P | React R | React F1 | React DSR | BinXray A | BinXray P | BinXray R | BinXray
 F1 | BinXray DSR | PatchDiscovery A | PatchDiscovery P | PatchDiscovery R | PatchDiscovery F1 | PatchDiscovery DSR | Robin A | Robin P | Robin R | Robin
 F1 | Robin DSR | Ours A | Ours P | Ours R | Ours F1 | Ours DSR |

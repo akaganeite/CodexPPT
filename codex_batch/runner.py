@@ -2,50 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import threading
 import time
 from pathlib import Path
 
 from .io import is_relative_to
-
-
-def _resolved_model(args: argparse.Namespace) -> str | None:
-    if args.model:
-        return args.model
-    if args.provider == "dpsk":
-        return args.dpsk_model
-    return None
-
-
-def _provider_overrides(args: argparse.Namespace) -> list[str]:
-    if args.provider != "dpsk":
-        return []
-    return [
-        "-c",
-        'model_provider="OpenAI"',
-        "-c",
-        f'model_providers.OpenAI.base_url="{args.dpsk_base_url}"',
-        "-c",
-        'model_providers.OpenAI.wire_api="responses"',
-        "-c",
-        "model_providers.OpenAI.requires_openai_auth=true",
-    ]
-
-
-def _codex_env(args: argparse.Namespace) -> dict[str, str]:
-    env = os.environ.copy()
-    if args.provider == "dpsk":
-        bypass_hosts = ["127.0.0.1", "localhost"]
-        for key in ("NO_PROXY", "no_proxy"):
-            existing = env.get(key, "")
-            parts = [part.strip() for part in existing.split(",") if part.strip()]
-            for host in bypass_hosts:
-                if host not in parts:
-                    parts.append(host)
-            env[key] = ",".join(parts)
-    return env
+from .providers import codex_env, provider_overrides, resolved_model
 
 
 def run_codex(
@@ -79,10 +42,10 @@ def run_codex(
     safe_objdump_dir = getattr(args, "safe_objdump_dir", None)
     if safe_objdump_dir is not None and not is_relative_to(safe_objdump_dir, args.cd):
         cmd.extend(["--add-dir", str(args.safe_objdump_dir)])
-    model = _resolved_model(args)
+    model = resolved_model(args)
     if model:
         cmd.extend(["--model", model])
-    cmd.extend(_provider_overrides(args))
+    cmd.extend(provider_overrides(args))
     if args.reasoning_effort:
         cmd.extend(["-c", f'model_reasoning_effort="{args.reasoning_effort}"'])
     if args.profile:
@@ -97,7 +60,7 @@ def run_codex(
         cmd=cmd,
         stdin_text=prompt,
         timeout=args.timeout,
-        env=_codex_env(args),
+        env=codex_env(args),
     )
     elapsed_seconds = time.monotonic() - started_monotonic
     write_timing(

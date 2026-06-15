@@ -7,6 +7,42 @@ from typing import Any
 VERSION_RE = re.compile(r"^[A-Za-z0-9_+.-]+-([0-9]+(?:\.[0-9]+){1,3})-[A-Za-z0-9_+.-]+$")
 
 
+def normalize_groundtruth(raw: Any) -> dict[str, dict[str, list[str]]]:
+    """Accept only dataset export list groundtruth format."""
+    if not isinstance(raw, list):
+        raise ValueError(
+            "groundtruth JSON must be a dataset export list, e.g. "
+            "[{'CVE': 'CVE-...', 'vuln': [...], 'patch': [...], 'not_affected': [...]}]"
+        )
+
+    out: dict[str, dict[str, list[str]]] = {}
+    bad: list[int] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            bad.append(index)
+            continue
+        cve = item.get("CVE")
+        if not isinstance(cve, str) or not cve:
+            bad.append(index)
+            continue
+        normalized: dict[str, list[str]] = {}
+        for key in ("vuln", "patch", "not_affected"):
+            values = item.get(key, [])
+            if not isinstance(values, list) or not all(isinstance(x, str) for x in values):
+                bad.append(index)
+                break
+            normalized[key] = list(dict.fromkeys(values))
+        else:
+            out[cve] = normalized
+    if bad:
+        sample = ", ".join(str(x) for x in bad[:5])
+        raise ValueError(
+            "groundtruth JSON must be a dataset export list with CVE and "
+            f"vuln/patch/not_affected string lists. Bad item indexes: {sample}"
+        )
+    return out
+
+
 def expected_status_for_binary(binary: str, gt: dict[str, Any]) -> str | None:
     """Return present/absent/not_affected, or None if missing.
 
@@ -40,7 +76,7 @@ def expected_status_for_binary(binary: str, gt: dict[str, Any]) -> str | None:
 
 
 def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> dict[str, Any]:
-    """Evaluate merged results against CVE -> {vuln, patch, not_affected} groundtruth.
+    """Evaluate merged results against dataset export list groundtruth.
 
     not_found is excluded from TC. not_affected is reported separately and also
     excluded from patch-presence TC because it is an applicability decision
@@ -48,6 +84,7 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
     in patch-presence TC, but not in the Accuracy denominator, matching the
     original binary table definition.
     """
+    groundtruth_by_cve = normalize_groundtruth(groundtruth)
     counts = {
         "TP": 0,
         "TN": 0,
@@ -66,7 +103,7 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
     mismatches: list[dict[str, str]] = []
 
     for cve, per_binary in results.items():
-        gt = groundtruth.get(cve)
+        gt = groundtruth_by_cve.get(cve)
         if not isinstance(gt, dict):
             counts["missing_groundtruth_cve"] += len(per_binary)
             continue

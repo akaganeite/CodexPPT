@@ -1,0 +1,288 @@
+[
+  {
+    "CVE": "CVE-2016-8617",
+    "functions": [
+      "base64_encode"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8618",
+    "functions": [
+      "alloc_addbyter"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8619",
+    "functions": [
+      "read_data"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8621",
+    "functions": [
+      "parsedate"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8623",
+    "functions": [
+      "dup_cookie",
+      "Curl_cookie_cleanup",
+      "Curl_cookie_clearall",
+      "Curl_cookie_freelist",
+      "Curl_cookie_getlist",
+      "Curl_http"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8624",
+    "functions": [
+      "parseurlandfillconn"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-0500",
+    "functions": [
+      "Curl_smtp_escape_eob"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.1-curl",
+      "curl-7.58.0-2ubuntu1-curl",
+      "curl-7.58.0-2ubuntu3.2-curl",
+      "curl-7.58.0-2ubuntu3.24-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000120",
+    "functions": [
+      "ftp_done",
+      "ftp_parse_url_path",
+      "ftp_state_list"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu2-curl",
+      "curl-7.58.0-2ubuntu3-curl",
+      "curl-7.61.0-1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000121",
+    "functions": [
+      "ldap_recv"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu2-curl",
+      "curl-7.58.0-2ubuntu3-curl",
+      "curl-7.61.0-1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000122",
+    "functions": [
+      "readwrite_data"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu2-curl",
+      "curl-7.58.0-2ubuntu3-curl",
+      "curl-7.61.0-1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000300",
+    "functions": [
+      "Curl_pp_readresp"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3-curl",
+      "curl-7.58.0-2ubuntu1-curl",
+      "curl-7.58.0-2ubuntu3.1-curl",
+      "curl-7.61.0-1-curl",
+      "curl-7.58.0-2ubuntu3.24-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000301",
+    "functions": [
+      "Curl_http_readwrite_headers"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3-curl",
+      "curl-7.58.0-2ubuntu3.1-curl",
+      "curl-7.61.0-1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-16839",
+    "functions": [
+      "Curl_auth_create_plain_message"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.3-curl",
+      "curl-7.61.0-1-curl",
+      "curl-7.58.0-2ubuntu3.5-curl",
+      "curl-7.62.0-1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-16840",
+    "functions": [
+      "Curl_close"
+    ],
+    "binaries": [
+      "curl-7.61.0-1-curl",
+      "curl-7.62.0-1-curl",
+      "curl-7.68.0-1ubuntu2.25-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-16842",
+    "functions": [
+      "voutf"
+    ],
+    "binaries": [
+      "curl-7.61.0-1-curl",
+      "curl-7.62.0-1-curl",
+      "curl-7.68.0-1ubuntu2.25-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2019-5481",
+    "functions": [
+      "read_data"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.6-curl",
+      "curl-7.63.0-1-curl",
+      "curl-7.58.0-2ubuntu3.8-curl",
+      "curl-7.68.0-1ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2019-5482",
+    "functions": [
+      "tftp_connect"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.6-curl",
+      "curl-7.63.0-1-curl",
+      "curl-7.58.0-2ubuntu3.8-curl",
+      "curl-7.68.0-1ubuntu1-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2020-8169",
+    "functions": [
+      "override_login"
+    ],
+    "binaries": [
+      "curl-7.68.0-1ubuntu2-curl",
+      "curl-7.61.0-1-curl",
+      "curl-7.68.0-1ubuntu2.1-curl",
+      "curl-7.80.0-3-curl",
+      "curl-7.68.0-1ubuntu2.25-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2020-8177",
+    "functions": [
+      "getparameter",
+      "tool_header_cb"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.8-curl",
+      "curl-7.68.0-1ubuntu2-curl",
+      "curl-7.58.0-2ubuntu3.9-curl",
+      "curl-7.68.0-1ubuntu2.1-curl",
+      "curl-7.80.0-3-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2020-8284",
+    "functions": [
+      "Curl_init_userdefined",
+      "config_init"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.10-curl",
+      "curl-7.68.0-1ubuntu2.2-curl",
+      "curl-7.58.0-2ubuntu3.12-curl",
+      "curl-7.68.0-1ubuntu2.4-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2021-22898",
+    "functions": [
+      "suboption"
+    ],
+    "binaries": [
+      "curl-7.58.0-2ubuntu3.13-curl",
+      "curl-7.68.0-1ubuntu2.5-curl",
+      "curl-7.58.0-2ubuntu1-curl",
+      "curl-7.58.0-2ubuntu3.14-curl",
+      "curl-7.68.0-1ubuntu2.6-curl",
+      "curl-7.58.0-2ubuntu3.24-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2022-42915",
+    "functions": [
+      "Curl_connect_done",
+      "conn_shutdown"
+    ],
+    "binaries": [
+      "curl-7.81.0-1ubuntu1.4-curl",
+      "curl-7.85.0-1-curl",
+      "curl-7.80.0-3-curl",
+      "curl-7.81.0-1ubuntu1.6-curl",
+      "curl-7.86.0-1-curl",
+      "curl-7.81.0-1ubuntu1.23-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2022-42916",
+    "functions": [
+      "create_conn",
+      "parseurlandfillconn"
+    ],
+    "binaries": [
+      "curl-7.81.0-1ubuntu1.4-curl",
+      "curl-7.85.0-1-curl",
+      "curl-7.80.0-3-curl",
+      "curl-7.81.0-1ubuntu1.6-curl",
+      "curl-7.86.0-1-curl",
+      "curl-7.81.0-1ubuntu1.23-curl"
+    ]
+  },
+  {
+    "CVE": "CVE-2023-46218",
+    "functions": [
+      "Curl_cookie_add"
+    ],
+    "binaries": [
+      "curl-7.68.0-1ubuntu2.20-curl",
+      "curl-7.81.0-1ubuntu1.14-curl",
+      "curl-7.61.0-1-curl",
+      "curl-7.68.0-1ubuntu2.21-curl",
+      "curl-7.81.0-1ubuntu1.15-curl",
+      "curl-7.68.0-1ubuntu2.25-curl"
+    ]
+  }
+]

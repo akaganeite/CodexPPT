@@ -1,0 +1,295 @@
+[
+  {
+    "CVE": "CVE-2013-0249",
+    "functions": [
+      "Curl_sasl_create_digest_md5_message"
+    ],
+    "binaries": [
+      "curl-7.27.0-libcurl-gcc-O0",
+      "curl-7.28.0-libcurl-gcc-O0",
+      "curl-7.28.1-libcurl-gcc-O0",
+      "curl-7.29.0-libcurl-gcc-O0",
+      "curl-7.30.0-libcurl-gcc-O0",
+      "curl-7.31.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2014-0015",
+    "functions": [
+      "ConnectionExists"
+    ],
+    "binaries": [
+      "curl-7.32.0-libcurl-gcc-O0",
+      "curl-7.33.0-libcurl-gcc-O0",
+      "curl-7.34.0-libcurl-gcc-O0",
+      "curl-7.35.0-libcurl-gcc-O0",
+      "curl-7.36.0-libcurl-gcc-O0",
+      "curl-7.37.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2015-3237",
+    "functions": [
+      "smb_request_state"
+    ],
+    "binaries": [
+      "curl-7.41.0-libcurl-gcc-O0",
+      "curl-7.42.0-libcurl-gcc-O0",
+      "curl-7.42.1-libcurl-gcc-O0",
+      "curl-7.43.0-libcurl-gcc-O0",
+      "curl-7.44.0-libcurl-gcc-O0",
+      "curl-7.45.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-3739",
+    "functions": [
+      "mbed_connect_step1",
+      "polarssl_connect_step1"
+    ],
+    "binaries": [
+      "curl-7.46.0-libcurl-gcc-O0",
+      "curl-7.47.0-libcurl-gcc-O0",
+      "curl-7.48.0-libcurl-gcc-O0",
+      "curl-7.49.0-libcurl-gcc-O0",
+      "curl-7.49.1-libcurl-gcc-O0",
+      "curl-7.50.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8617",
+    "functions": [
+      "base64_encode"
+    ],
+    "binaries": [
+      "curl-7.50.1-libcurl-gcc-O0",
+      "curl-7.50.2-libcurl-gcc-O0",
+      "curl-7.50.3-libcurl-gcc-O0",
+      "curl-7.51.0-libcurl-gcc-O0",
+      "curl-7.52.0-libcurl-gcc-O0",
+      "curl-7.52.1-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8618",
+    "functions": [
+      "alloc_addbyter"
+    ],
+    "binaries": [
+      "curl-7.50.1-libcurl-gcc-O0",
+      "curl-7.50.2-libcurl-gcc-O0",
+      "curl-7.50.3-libcurl-gcc-O0",
+      "curl-7.51.0-libcurl-gcc-O0",
+      "curl-7.52.0-libcurl-gcc-O0",
+      "curl-7.52.1-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-8624",
+    "functions": [
+      "parseurlandfillconn"
+    ],
+    "binaries": [
+      "curl-7.50.1-libcurl-gcc-O0",
+      "curl-7.50.2-libcurl-gcc-O0",
+      "curl-7.50.3-libcurl-gcc-O0",
+      "curl-7.51.0-libcurl-gcc-O0",
+      "curl-7.52.0-libcurl-gcc-O0",
+      "curl-7.52.1-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2016-9594",
+    "functions": [
+      "randit"
+    ],
+    "binaries": [
+      "curl-7.50.3-libcurl-gcc-O0",
+      "curl-7.51.0-libcurl-gcc-O0",
+      "curl-7.52.0-libcurl-gcc-O0",
+      "curl-7.52.1-libcurl-gcc-O0",
+      "curl-7.53.0-libcurl-gcc-O0",
+      "curl-7.53.1-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2017-1000101",
+    "functions": [
+      "glob_range"
+    ],
+    "binaries": [
+      "curl-7.53.1-curl-gcc-O0",
+      "curl-7.54.0-curl-gcc-O0",
+      "curl-7.54.1-curl-gcc-O0",
+      "curl-7.55.0-curl-gcc-O0",
+      "curl-7.55.1-curl-gcc-O0",
+      "curl-7.56.0-curl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2017-2629",
+    "functions": [
+      "allocate_conn"
+    ],
+    "binaries": [
+      "curl-7.51.0-libcurl-gcc-O0",
+      "curl-7.52.0-libcurl-gcc-O0",
+      "curl-7.52.1-libcurl-gcc-O0",
+      "curl-7.53.0-libcurl-gcc-O0",
+      "curl-7.53.1-libcurl-gcc-O0",
+      "curl-7.54.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2017-8816",
+    "functions": [
+      "Curl_ntlm_core_mk_ntlmv2_hash"
+    ],
+    "binaries": [
+      "curl-7.55.1-libcurl-gcc-O0",
+      "curl-7.56.0-libcurl-gcc-O0",
+      "curl-7.56.1-libcurl-gcc-O0",
+      "curl-7.57.0-libcurl-gcc-O0",
+      "curl-7.58.0-libcurl-gcc-O0",
+      "curl-7.59.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-0500",
+    "functions": [
+      "Curl_smtp_escape_eob"
+    ],
+    "binaries": [
+      "curl-7.58.0-libcurl-gcc-O0",
+      "curl-7.59.0-libcurl-gcc-O0",
+      "curl-7.60.0-libcurl-gcc-O0",
+      "curl-7.61.0-libcurl-gcc-O0",
+      "curl-7.61.1-libcurl-gcc-O0",
+      "curl-7.62.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000007",
+    "functions": [
+      "Curl_add_custom_headers",
+      "Curl_http_output_auth",
+      "Curl_vsetopt"
+    ],
+    "binaries": [
+      "curl-7.56.0-libcurl-gcc-O0",
+      "curl-7.56.1-libcurl-gcc-O0",
+      "curl-7.57.0-libcurl-gcc-O0",
+      "curl-7.58.0-libcurl-gcc-O0",
+      "curl-7.59.0-libcurl-gcc-O0",
+      "curl-7.60.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-1000121",
+    "functions": [
+      "ldap_recv"
+    ],
+    "binaries": [
+      "curl-7.56.1-libcurl-gcc-O0",
+      "curl-7.57.0-libcurl-gcc-O0",
+      "curl-7.58.0-libcurl-gcc-O0",
+      "curl-7.59.0-libcurl-gcc-O0",
+      "curl-7.60.0-libcurl-gcc-O0",
+      "curl-7.61.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2018-16842",
+    "functions": [
+      "voutf"
+    ],
+    "binaries": [
+      "curl-7.60.0-curl-gcc-O0",
+      "curl-7.61.0-curl-gcc-O0",
+      "curl-7.61.1-curl-gcc-O0",
+      "curl-7.62.0-curl-gcc-O0",
+      "curl-7.63.0-curl-gcc-O0",
+      "curl-7.64.0-curl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2019-5482",
+    "functions": [
+      "tftp_connect"
+    ],
+    "binaries": [
+      "curl-7.65.1-libcurl-gcc-O0",
+      "curl-7.65.2-libcurl-gcc-O0",
+      "curl-7.65.3-libcurl-gcc-O0",
+      "curl-7.66.0-libcurl-gcc-O0",
+      "curl-7.67.0-libcurl-gcc-O0",
+      "curl-7.68.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2020-8177",
+    "functions": [
+      "getparameter",
+      "tool_header_cb"
+    ],
+    "binaries": [
+      "curl-7.69.0-curl-gcc-O0",
+      "curl-7.69.1-curl-gcc-O0",
+      "curl-7.70.0-curl-gcc-O0",
+      "curl-7.71.0-curl-gcc-O0",
+      "curl-7.71.1-curl-gcc-O0",
+      "curl-7.72.0-curl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2021-22901",
+    "functions": [
+      "Curl_attach_connnection",
+      "Curl_detach_connnection",
+      "Curl_ssl_associate_conn",
+      "Curl_ssl_detach_conn",
+      "ossl_associate_connection",
+      "ossl_connect_step1",
+      "ossl_disassociate_connection",
+      "set_ssl_ciphers"
+    ],
+    "binaries": [
+      "curl-7.75.0-libcurl-gcc-O0",
+      "curl-7.76.0-libcurl-gcc-O0",
+      "curl-7.76.1-libcurl-gcc-O0",
+      "curl-7.77.0-libcurl-gcc-O0",
+      "curl-7.78.0-libcurl-gcc-O0",
+      "curl-7.79.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2022-42916",
+    "functions": [
+      "create_conn",
+      "parseurlandfillconn"
+    ],
+    "binaries": [
+      "curl-7.83.1-libcurl-gcc-O0",
+      "curl-7.84.0-libcurl-gcc-O0",
+      "curl-7.85.0-libcurl-gcc-O0",
+      "curl-7.86.0-libcurl-gcc-O0",
+      "curl-7.87.0-libcurl-gcc-O0",
+      "curl-7.88.0-libcurl-gcc-O0"
+    ]
+  },
+  {
+    "CVE": "CVE-2023-46219",
+    "functions": [
+      "Curl_fopen",
+      "dirslash"
+    ],
+    "binaries": [
+      "curl-8.2.1-libcurl-gcc-O0",
+      "curl-8.3.0-libcurl-gcc-O0",
+      "curl-8.4.0-libcurl-gcc-O0",
+      "curl-8.5.0-libcurl-gcc-O0",
+      "curl-8.6.0-libcurl-gcc-O0",
+      "curl-8.7.0-libcurl-gcc-O0"
+    ]
+  }
+]

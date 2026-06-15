@@ -1,8 +1,8 @@
 {
   "project": "curl",
   "kind": "deployed_binary_not_affected_annotations",
-  "source_groundtruth": "groundtruth/curl_deployed.json",
-  "semantics": "These entries annotate deployed-binary applicability for testcases judged not_affected. They do not replace the present/absent labels in curl_deployed.json.",
+  "source_groundtruth": "datasets/curl_deployed/groundtruth.json",
+  "semantics": "These entries annotate deployed-binary applicability for testcases judged not_affected. They do not replace the present/absent labels in datasets/curl_deployed/groundtruth.json.",
   "target_context": {
     "binary_root": "/home/zhangxb/extdisk/deployedbins/curl",
     "source_repo": "/home/zhangxb/extrepo/ubuntu/curl",
