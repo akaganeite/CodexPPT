@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--cve", action="append", help="Only run this CVE; repeatable.")
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--binarywise",
+        action="store_true",
+        help="Run one codex exec per CVE/binary pair instead of one exec per CVE.",
+    )
     parser.add_argument("--resume", action="store_true", help="Skip CVEs already in --output.")
     parser.add_argument(
         "--retry-errors",
@@ -104,7 +110,33 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="Write prompts but do not call codex.")
     parser.add_argument("--codex-bin", default="codex")
+    parser.add_argument(
+        "--provider",
+        choices=["openai", "dpsk"],
+        default="openai",
+        help=(
+            "Backend used by codex exec. "
+            "'openai' uses the current Codex config as-is; "
+            "'dpsk' routes Codex through a local DeepSeek-compatible proxy."
+        ),
+    )
     parser.add_argument("--model", default=None)
+    parser.add_argument(
+        "--dpsk-base-url",
+        default="http://127.0.0.1:18080/v1",
+        help="Local proxy base URL used when --provider dpsk.",
+    )
+    parser.add_argument(
+        "--dpsk-model",
+        default="deepseek-v4-flash",
+        help="Default model used when --provider dpsk and --model is not set.",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=["low", "medium", "high", "xhigh"],
+        default=None,
+        help="Override Codex model reasoning effort for each codex exec run.",
+    )
     parser.add_argument("--profile", default=None)
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument(
@@ -200,6 +232,25 @@ def load_existing_results(output: Path, args: argparse.Namespace) -> dict[str, A
     return existing
 
 
+def result_has_status_for_binaries(result: Any, binaries: list[str], status: str) -> bool:
+    if not isinstance(result, dict):
+        return False
+    for binary in binaries:
+        row = result.get(binary)
+        if isinstance(row, dict) and row.get("status") == status:
+            return True
+    return False
+
+
+def result_has_all_binaries(result: Any, binaries: list[str]) -> bool:
+    return isinstance(result, dict) and all(binary in result for binary in binaries)
+
+
+def safe_run_id(cve: str, binary: str | None = None) -> str:
+    raw = cve if binary is None else f"{cve}__{binary}"
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)
+
+
 def safe_objdump_helper_for_prompt(cd: Path) -> str:
     helper = SCRIPT_DIR / "utils" / "safe_objdump.py"
     return os.path.relpath(helper, cd)
@@ -214,27 +265,32 @@ def process_cve(
     merged: dict[str, Any],
     paths: dict[str, Path | None],
     args: argparse.Namespace,
+    requested_binaries: list[str] | None = None,
+    run_id: str | None = None,
 ) -> None:
     output = require_path(paths["output"])
     raw_dir = require_path(paths["raw_dir"])
     target_dir = require_path(paths["target_dir"])
     schema_path = raw_dir / "single_cve_schema.json"
 
-    if args.resume and cve in merged:
-        if args.retry_errors and cve_has_status(merged[cve], "error"):
+    binaries = requested_binaries or testset[cve]
+    run_id = run_id or safe_run_id(cve)
+
+    if args.resume and result_has_all_binaries(merged.get(cve), binaries):
+        if args.retry_errors and result_has_status_for_binaries(merged[cve], binaries, "error"):
             print(f"[{index}/{total}] retry {cve} (existing status=error)")
         else:
-            print(f"[{index}/{total}] skip {cve} (already in output)")
+            label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
+            print(f"[{index}/{total}] skip {label} (already in output)")
             return
 
-    binaries = testset[cve]
     if cve not in metadata:
-        merged[cve] = error_result(
+        merged.setdefault(cve, {}).update(error_result(
             cve,
             binaries,
             "Cannot inspect patch presence without metadata.",
             f"{cve} not found in project metadata JSON",
-        )
+        ))
         write_json(output, merged)
         return
 
@@ -271,11 +327,12 @@ def process_cve(
         run_binary_resolution,
     )
 
-    print(f"[{index}/{total}] run {cve} ({len(binaries)} binaries)")
+    label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
+    print(f"[{index}/{total}] run {label}")
     if args.dry_run:
-        (raw_dir / f"{cve}.prompt.txt").write_text(prompt, encoding="utf-8")
+        (raw_dir / f"{run_id}.prompt.txt").write_text(prompt, encoding="utf-8")
         if anonymous_targets is not None:
-            write_json(raw_dir / f"{cve}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
+            write_json(raw_dir / f"{run_id}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
             anonymous_targets.cleanup()
         return
 
@@ -287,8 +344,8 @@ def process_cve(
     args.safe_objdump_dir = run_safe_objdump_dir
     try:
         if anonymous_targets is not None:
-            write_json(raw_dir / f"{cve}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
-        rc, final_text, stderr_text, _ = run_codex(prompt, cve, args, raw_dir, schema_path)
+            write_json(raw_dir / f"{run_id}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
+        rc, final_text, stderr_text, _ = run_codex(prompt, run_id, args, raw_dir, schema_path)
         if rc != 0:
             raise RuntimeError(f"codex exec exited {rc}: {stderr_text[-1000:]}")
         parsed = extract_json_object(final_text)
@@ -300,14 +357,14 @@ def process_cve(
                 binaries,
                 anonymous_targets.target_dir,
             )
-        merged[cve] = result
+        merged.setdefault(cve, {}).update(result)
     except Exception as exc:
-        merged[cve] = error_result(
+        merged.setdefault(cve, {}).update(error_result(
             cve,
             binaries,
             "See raw per-CVE files in raw_dir.",
             f"codex exec failed or returned invalid JSON: {exc}",
-        )
+        ))
     finally:
         args.cd = old_cd
         args.target_dir = old_target_dir
@@ -371,8 +428,24 @@ def main() -> int:
     write_schema(raw_dir / "single_cve_schema.json")
 
     merged = load_existing_results(output, args)
-    for index, cve in enumerate(selected, 1):
-        process_cve(cve, index, len(selected), metadata, testset, merged, paths, args)
+    if args.binarywise:
+        tasks = [(cve, binary) for cve in selected for binary in testset[cve]]
+        for index, (cve, binary) in enumerate(tasks, 1):
+            process_cve(
+                cve,
+                index,
+                len(tasks),
+                metadata,
+                testset,
+                merged,
+                paths,
+                args,
+                requested_binaries=[binary],
+                run_id=safe_run_id(cve, binary),
+            )
+    else:
+        for index, cve in enumerate(selected, 1):
+            process_cve(cve, index, len(selected), metadata, testset, merged, paths, args)
 
     if args.dry_run:
         print(f"dry-run complete; prompts written under {raw_dir}")

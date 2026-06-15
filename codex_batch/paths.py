@@ -12,6 +12,21 @@ def requested_binary_to_actual(name: str, opt: str = "o0") -> str:
     return name
 
 
+def resolve_requested_binary(target_dir: Path, name: str, opt: str = "o0") -> str:
+    """Resolve a requested testcase name to a file under target_dir.
+
+    Source-built testsets request names such as curl-7.58.0-curl while the
+    actual optimized binary is curl-7.58.0-o0-curl. Deployed package binaries
+    are already named as concrete package artifacts and should be used as-is.
+    """
+    opt_name = requested_binary_to_actual(name, opt)
+    if (target_dir / opt_name).is_file():
+        return opt_name
+    if (target_dir / name).is_file():
+        return name
+    return opt_name
+
+
 def derive_project_paths(args: argparse.Namespace) -> None:
     """Fill project_json/testset_json/target_dir/output from --project when used."""
     base_dir = args.base_dir.resolve()

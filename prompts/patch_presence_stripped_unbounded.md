@@ -1,5 +1,5 @@
 You are doing an authorized local patch-presence evaluation.
-Analyze exactly one CVE across the requested binaries.
+Analyze exactly one CVE for exactly one requested binary.
 
 The target binaries may be stripped: symbol tables and DWARF debug info may be
 absent. Base the patch-presence decision primarily on root_cause_analysis,
@@ -38,7 +38,7 @@ Tool guidance for stripped binaries:
 - Start with file existence, `file`, `readelf`, `strings`, dynamic symbol/import tables, and byte-pattern searches.
 - You may use `objdump`, `readelf`, `xxd`, `dd`, `rg`, `perl`, `python3`, or the repository helper `python3 {{SAFE_OBJDUMP_HELPER}} --binary PATH ...`.
 - There is no fixed disassembly-call budget, window limit, or objdump output-size limit in this experiment. Still keep commands purposeful and stop once evidence is decisive.
-- Without symbols, locate relevant code by imported calls such as `sprintf`, `strlen`, `printf`, nearby format strings, constants, relative call targets, and cross-binary byte/control-flow differences.
+- Without symbols, locate relevant code by imported calls such as `sprintf`, `strlen`, `printf`, nearby format strings, constants, relative call targets, byte patterns, and local control-flow differences within the single target binary.
 - For CVE-2021-20294-like evidence, distinguish the vulnerable behavior `sprintf(buffer, "@%s", version_string)` from the patched behavior `strlen(version_string) + 1` used for length calculation while retaining bounded integer formatting for `" (%d)"`.
 
 Status semantics:

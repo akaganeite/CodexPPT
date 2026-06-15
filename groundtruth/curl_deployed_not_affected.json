@@ -1,0 +1,103 @@
+{
+  "project": "curl",
+  "kind": "deployed_binary_not_affected_annotations",
+  "source_groundtruth": "groundtruth/curl_deployed.json",
+  "semantics": "These entries annotate deployed-binary applicability for testcases judged not_affected. They do not replace the present/absent labels in curl_deployed.json.",
+  "target_context": {
+    "binary_root": "/home/zhangxb/extdisk/deployedbins/curl",
+    "source_repo": "/home/zhangxb/extrepo/ubuntu/curl",
+    "symbol_run_results": "runs/curl_deployed_o0_results.json",
+    "stripped_run_results": "runs/curl_deployed_stripped_o0_results.json"
+  },
+  "summary": {
+    "architecture_not_applicable": 2,
+    "component_not_compiled_in_binary": 8,
+    "source_mechanism_not_introduced": 1,
+    "total": 11
+  },
+  "categories": {
+    "architecture_not_applicable": [
+      {
+        "cve": "CVE-2016-8617",
+        "package_version": "7.58.0-2ubuntu1",
+        "binary": "curl-7.58.0-2ubuntu1-curl",
+        "source_tag": "applied/7.58.0-2ubuntu1",
+        "reason": "The patch and vulnerable mechanism are guarded by SIZEOF_SIZE_T == 4, while the deployed binary is ELF64 x86-64."
+      },
+      {
+        "cve": "CVE-2016-8618",
+        "package_version": "7.58.0-2ubuntu1",
+        "binary": "curl-7.58.0-2ubuntu1-curl",
+        "source_tag": "applied/7.58.0-2ubuntu1",
+        "reason": "The vulnerable mechanism is 32-bit size_t allocation wraparound, while the deployed binary is ELF64 x86-64."
+      }
+    ],
+    "component_not_compiled_in_binary": [
+      {
+        "cve": "CVE-2018-16842",
+        "package_version": "7.61.0-1",
+        "binary": "curl-7.61.0-1-curl",
+        "source_tag": "applied/7.61.0-1",
+        "reason": "The vulnerable function voutf is in curl CLI source src/tool_msgs.c, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2018-16842",
+        "package_version": "7.62.0-1",
+        "binary": "curl-7.62.0-1-curl",
+        "source_tag": "applied/7.62.0-1",
+        "reason": "The vulnerable function voutf is in curl CLI source src/tool_msgs.c, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2018-16842",
+        "package_version": "7.68.0-1ubuntu2.25",
+        "binary": "curl-7.68.0-1ubuntu2.25-curl",
+        "source_tag": "applied/7.68.0-1ubuntu2.25",
+        "reason": "The vulnerable function voutf is in curl CLI source src/tool_msgs.c, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2020-8177",
+        "package_version": "7.58.0-2ubuntu3.8",
+        "binary": "curl-7.58.0-2ubuntu3.8-curl",
+        "source_tag": "applied/7.58.0-2ubuntu3.8",
+        "reason": "The vulnerable workflow is in curl CLI getparameter/tool_header_cb handling for -i and -J, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2020-8177",
+        "package_version": "7.58.0-2ubuntu3.9",
+        "binary": "curl-7.58.0-2ubuntu3.9-curl",
+        "source_tag": "applied/7.58.0-2ubuntu3.9",
+        "reason": "The vulnerable workflow is in curl CLI getparameter/tool_header_cb handling for -i and -J, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2020-8177",
+        "package_version": "7.68.0-1ubuntu2",
+        "binary": "curl-7.68.0-1ubuntu2-curl",
+        "source_tag": "applied/7.68.0-1ubuntu2",
+        "reason": "The vulnerable workflow is in curl CLI getparameter/tool_header_cb handling for -i and -J, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2020-8177",
+        "package_version": "7.68.0-1ubuntu2.1",
+        "binary": "curl-7.68.0-1ubuntu2.1-curl",
+        "source_tag": "applied/7.68.0-1ubuntu2.1",
+        "reason": "The vulnerable workflow is in curl CLI getparameter/tool_header_cb handling for -i and -J, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      },
+      {
+        "cve": "CVE-2020-8177",
+        "package_version": "7.80.0-3",
+        "binary": "curl-7.80.0-3-curl",
+        "source_tag": "applied/7.80.0-3",
+        "reason": "The vulnerable workflow is in curl CLI getparameter/tool_header_cb handling for -i and -J, but the deployed binary is libcurl-gnutls.so.4 rather than the curl command-line tool."
+      }
+    ],
+    "source_mechanism_not_introduced": [
+      {
+        "cve": "CVE-2020-8169",
+        "package_version": "7.61.0-1",
+        "binary": "curl-7.61.0-1-curl",
+        "source_tag": "applied/7.61.0-1",
+        "reason": "The source tag does not contain urlapi.c or the curl_url_set URL API mechanism targeted by the CVE; override_login stores duplicated credentials directly instead."
+      }
+    ]
+  }
+}

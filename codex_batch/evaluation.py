@@ -7,20 +7,55 @@ from typing import Any
 VERSION_RE = re.compile(r"^[A-Za-z0-9_+.-]+-([0-9]+(?:\.[0-9]+){1,3})-[A-Za-z0-9_+.-]+$")
 
 
+def expected_status_for_binary(binary: str, gt: dict[str, Any]) -> str | None:
+    """Return present/absent/not_affected, or None if missing.
+
+    Groundtruth entries can be either full binary names, e.g.
+    curl-7.58.0-2ubuntu3.24-curl, or legacy upstream versions such as 7.58.0.
+    Full binary names are checked first so distribution package revisions can
+    have different labels under the same upstream version.
+    """
+    patched = {str(x) for x in gt.get("patch", [])}
+    vulnerable = {str(x) for x in gt.get("vuln", [])}
+    not_affected = {str(x) for x in gt.get("not_affected", [])}
+
+    if binary in patched:
+        return "present"
+    if binary in vulnerable:
+        return "absent"
+    if binary in not_affected:
+        return "not_affected"
+
+    match = VERSION_RE.match(binary)
+    if not match:
+        return None
+    version = match.group(1)
+    if version in patched:
+        return "present"
+    if version in vulnerable:
+        return "absent"
+    if version in not_affected:
+        return "not_affected"
+    return None
+
+
 def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> dict[str, Any]:
-    """Evaluate merged results against CVE -> {vuln, patch} groundtruth.
+    """Evaluate merged results against CVE -> {vuln, patch, not_affected} groundtruth.
 
     not_found is excluded from TC. not_affected is reported separately and also
     excluded from patch-presence TC because it is an applicability decision
     rather than a present/absent prediction. inconclusive and error are counted
-    in TC, but not in the Accuracy denominator, matching the table definition
-    supplied by the user.
+    in patch-presence TC, but not in the Accuracy denominator, matching the
+    original binary table definition.
     """
     counts = {
         "TP": 0,
         "TN": 0,
         "FP": 0,
         "FN": 0,
+        "not_affected_TP": 0,
+        "not_affected_FP": 0,
+        "not_affected_FN": 0,
         "inconclusive": 0,
         "error": 0,
         "not_found": 0,
@@ -35,20 +70,10 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
         if not isinstance(gt, dict):
             counts["missing_groundtruth_cve"] += len(per_binary)
             continue
-        patched = {str(x) for x in gt.get("patch", [])}
-        vulnerable = {str(x) for x in gt.get("vuln", [])}
 
         for binary, row in per_binary.items():
-            match = VERSION_RE.match(binary)
-            if not match:
-                counts["version_not_in_groundtruth"] += 1
-                continue
-            version = match.group(1)
-            if version in patched:
-                expected = "present"
-            elif version in vulnerable:
-                expected = "absent"
-            else:
+            expected = expected_status_for_binary(binary, gt)
+            if expected is None:
                 counts["version_not_in_groundtruth"] += 1
                 continue
 
@@ -58,15 +83,29 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
                 continue
             if status == "not_affected":
                 counts["not_affected"] += 1
+                if expected == "not_affected":
+                    counts["not_affected_TP"] += 1
+                elif expected in {"present", "absent"}:
+                    counts["not_affected_FP"] += 1
+                    mismatches.append(
+                        {"cve": cve, "binary": binary, "expected": expected, "predicted": status}
+                    )
                 continue
             if status == "inconclusive":
                 counts["inconclusive"] += 1
+                if expected == "not_affected":
+                    counts["not_affected_FN"] += 1
                 continue
             if status == "error":
                 counts["error"] += 1
+                if expected == "not_affected":
+                    counts["not_affected_FN"] += 1
                 continue
 
-            if expected == "present" and status == "present":
+            if expected == "not_affected":
+                counts["not_affected_FN"] += 1
+                mismatches.append({"cve": cve, "binary": binary, "expected": expected, "predicted": status})
+            elif expected == "present" and status == "present":
                 counts["TP"] += 1
             elif expected == "absent" and status == "absent":
                 counts["TN"] += 1
@@ -86,18 +125,30 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
     undecided = counts["inconclusive"] + counts["error"]
     accuracy_den = tp + tn + fp + fn
     tc = accuracy_den + undecided
+    not_affected_total = counts["not_affected_TP"] + counts["not_affected_FN"]
+    not_affected_included_tc = tc + not_affected_total
+    not_affected_included_correct = tp + tn + counts["not_affected_TP"]
 
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     accuracy = (tp + tn) / accuracy_den if accuracy_den else 0.0
     dsr = (tp + tn) / tc if tc else 0.0
+    not_affected_included_dsr = (
+        not_affected_included_correct / not_affected_included_tc if not_affected_included_tc else 0.0
+    )
+    not_affected_accuracy = (
+        counts["not_affected_TP"] / not_affected_total if not_affected_total else 0.0
+    )
 
     return {
         "counts": {
             **counts,
             "TC": tc,
             "accuracy_denominator": accuracy_den,
+            "not_affected_total": not_affected_total,
+            "not_affected_included_TC": not_affected_included_tc,
+            "not_affected_included_correct": not_affected_included_correct,
         },
         "metrics": {
             "P": precision,
@@ -105,6 +156,8 @@ def evaluate_results(results: dict[str, Any], groundtruth: dict[str, Any]) -> di
             "F1": f1,
             "A": accuracy,
             "DSR": dsr,
+            "not_affected_included_DSR": not_affected_included_dsr,
+            "not_affected_accuracy": not_affected_accuracy,
         },
         "mismatches": mismatches,
     }

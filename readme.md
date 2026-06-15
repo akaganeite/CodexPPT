@@ -7,6 +7,24 @@
 不可以使用联网搜索，版本号匹配，你的每个推断都要有清晰的逻辑推理和证据佐证。
 你可以使用本机的任意工具，或者编写代码，但是不可以作弊。
 
+## codex_patch_presence_batch.py provider 参数
+
+现在 `codex_patch_presence_batch.py` 支持 `--provider`：
+
+- `--provider openai`：沿用当前 Codex/OpenAI 配置
+- `--provider dpsk`：给 `codex exec` 注入本地 DeepSeek 代理配置
+
+示例：
+
+```bash
+python3 /home/zhangxb/ClawSpace/agent/straight_detect/codex_patch_presence_batch.py \
+  --project curl \
+  --provider dpsk \
+  --dpsk-base-url http://127.0.0.1:18080/v1 \
+  --dpsk-model deepseek-v4-flash \
+  --reasoning-effort high
+```
+
 | Project | PS³ A | PS³ P | PS³ R | PS³ F1 | PS³ DSR | React A | React P | React R | React F1 | React DSR | BinXray A | BinXray P | BinXray R | BinXray
 F1 | BinXray DSR | PatchDiscovery A | PatchDiscovery P | PatchDiscovery R | PatchDiscovery F1 | PatchDiscovery DSR | Robin A | Robin P | Robin R | Robin
 F1 | Robin DSR | Ours A | Ours P | Ours R | Ours F1 | Ours DSR |

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .paths import requested_binary_to_actual
+from .paths import resolve_requested_binary
 
 
 @dataclass
@@ -47,7 +47,7 @@ def prepare_anonymous_targets(
     for index, requested in enumerate(requested_binaries, 1):
         anonymous_requested = f"target_{index:03d}"
         anonymous_actual = anonymous_requested
-        original_actual = requested_binary_to_actual(requested, opt)
+        original_actual = resolve_requested_binary(source_target_dir, requested, opt)
         src = source_target_dir / original_actual
         dst = target_dir / anonymous_actual
         if src.is_file():

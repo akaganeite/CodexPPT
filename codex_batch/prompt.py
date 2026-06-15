@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .paths import requested_binary_to_actual
+from .paths import resolve_requested_binary
 
 
 def build_prompt(
@@ -20,7 +20,7 @@ def build_prompt(
     actual_map = (
         binary_resolution
         if binary_resolution is not None
-        else {b: requested_binary_to_actual(b, opt) for b in binaries}
+        else {b: resolve_requested_binary(target_dir, b, opt) for b in binaries}
     )
     payload = {
         "cve": cve,
