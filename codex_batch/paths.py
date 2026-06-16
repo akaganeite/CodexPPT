@@ -4,8 +4,15 @@ import argparse
 from pathlib import Path
 
 
+# Tool suffixes that source-built testset names end with. A requested name like
+# curl-7.58.0-curl maps to the optimized artifact curl-7.58.0-<opt>-curl by
+# splicing the opt level in before the tool suffix. Extend this list when adding
+# a project whose binaries are named after a different tool.
+KNOWN_TOOL_SUFFIXES = ("readelf", "objdump", "nm", "curl")
+
+
 def requested_binary_to_actual(name: str, opt: str = "o0") -> str:
-    for tool in ("readelf", "objdump", "nm", "curl"):
+    for tool in KNOWN_TOOL_SUFFIXES:
         suffix = "-" + tool
         if name.endswith(suffix):
             return name[: -len(suffix)] + "-" + opt + suffix

@@ -40,6 +40,23 @@ def result_has_all_binaries(result: Any, binaries: list[str]) -> bool:
     return isinstance(result, dict) and all(binary in result for binary in binaries)
 
 
+def should_skip(args: Any, merged: dict[str, Any], cve: str, binaries: list[str]) -> bool:
+    """Whether a task is already covered by --output and can be skipped.
+
+    Pure read over ``merged``; call it before submitting tasks so the resume
+    decision is made while no worker is mutating ``merged``.
+    """
+    if not getattr(args, "resume", False):
+        return False
+    if not result_has_all_binaries(merged.get(cve), binaries):
+        return False
+    if getattr(args, "retry_errors", False) and result_has_status_for_binaries(
+        merged[cve], binaries, "error"
+    ):
+        return False
+    return True
+
+
 def safe_run_id(cve: str, binary: str | None = None) -> str:
     raw = cve if binary is None else f"{cve}__{binary}"
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)

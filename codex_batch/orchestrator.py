@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +16,9 @@ from .prompt import build_prompt
 from .results import error_result, extract_json_object, validate_cve_result
 from .run_state import (
     load_existing_results,
-    result_has_all_binaries,
-    result_has_status_for_binaries,
     safe_run_id,
     select_cves,
+    should_skip,
 )
 from .runner import run_codex
 from .schema import write_result_schema
@@ -78,17 +80,25 @@ def safe_objdump_helper_for_prompt(cd: Path, script_dir: Path) -> str:
 
 def process_cve(
     cve: str,
-    index: int,
     total: int,
+    counter: itertools.count,
     metadata: dict[str, Any],
     testset: dict[str, list[str]],
     merged: dict[str, Any],
+    lock: threading.Lock,
     paths: dict[str, Path | None],
     args: argparse.Namespace,
     script_dir: Path,
     requested_binaries: list[str] | None = None,
     run_id: str | None = None,
 ) -> None:
+    """Run one task (one CVE, or one CVE/binary pair) end to end.
+
+    Resume/skip is decided before submission (see should_skip), so this always
+    runs the task. ``lock`` guards every ``merged`` mutation + ``write_json`` so
+    concurrent workers never serialize a dict mid-mutation; everything else
+    (codex exec, parsing, remap) stays off the lock so tasks truly overlap.
+    """
     output = require_path(paths["output"])
     raw_dir = require_path(paths["raw_dir"])
     target_dir = require_path(paths["target_dir"])
@@ -97,24 +107,17 @@ def process_cve(
     binaries = requested_binaries or testset[cve]
     run_id = run_id or safe_run_id(cve)
 
-    if args.resume and result_has_all_binaries(merged.get(cve), binaries):
-        if args.retry_errors and result_has_status_for_binaries(merged[cve], binaries, "error"):
-            print(f"[{index}/{total}] retry {cve} (existing status=error)")
-        else:
-            label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
-            print(f"[{index}/{total}] skip {label} (already in output)")
-            return
-
     if cve not in metadata:
-        merged.setdefault(cve, {}).update(
-            error_result(
-                cve,
-                binaries,
-                "Cannot inspect patch presence without metadata.",
-                f"{cve} not found in project metadata JSON",
+        with lock:
+            merged.setdefault(cve, {}).update(
+                error_result(
+                    cve,
+                    binaries,
+                    "Cannot inspect patch presence without metadata.",
+                    f"{cve} not found in project metadata JSON",
+                )
             )
-        )
-        write_json(output, merged)
+            write_json(output, merged)
         return
 
     anonymous_targets = None
@@ -151,7 +154,7 @@ def process_cve(
     )
 
     label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
-    print(f"[{index}/{total}] run {label}")
+    print(f"[{next(counter)}/{total}] run {label}", flush=True)
     if args.dry_run:
         (raw_dir / f"{run_id}.prompt.txt").write_text(prompt, encoding="utf-8")
         if anonymous_targets is not None:
@@ -159,16 +162,19 @@ def process_cve(
             anonymous_targets.cleanup()
         return
 
-    old_cd = args.cd
-    old_target_dir = args.target_dir
-    old_safe_objdump_dir = args.safe_objdump_dir
-    args.cd = run_cd
-    args.target_dir = run_target_dir
-    args.safe_objdump_dir = run_safe_objdump_dir
     try:
         if anonymous_targets is not None:
             write_json(raw_dir / f"{run_id}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
-        rc, final_text, stderr_text, _ = run_codex(prompt, run_id, args, raw_dir, schema_path)
+        rc, final_text, stderr_text, _ = run_codex(
+            prompt,
+            run_id,
+            args,
+            raw_dir,
+            schema_path,
+            cd=run_cd,
+            target_dir=run_target_dir,
+            safe_objdump_dir=run_safe_objdump_dir,
+        )
         if rc != 0:
             raise RuntimeError(f"codex exec exited {rc}: {stderr_text[-1000:]}")
         parsed = extract_json_object(final_text)
@@ -180,23 +186,23 @@ def process_cve(
                 binaries,
                 anonymous_targets.target_dir,
             )
-        merged.setdefault(cve, {}).update(result)
+        with lock:
+            merged.setdefault(cve, {}).update(result)
+            write_json(output, merged)
     except Exception as exc:
-        merged.setdefault(cve, {}).update(
-            error_result(
-                cve,
-                binaries,
-                "See raw per-CVE files in raw_dir.",
-                f"codex exec failed or returned invalid JSON: {exc}",
+        with lock:
+            merged.setdefault(cve, {}).update(
+                error_result(
+                    cve,
+                    binaries,
+                    "See raw per-CVE files in raw_dir.",
+                    f"codex exec failed or returned invalid JSON: {exc}",
+                )
             )
-        )
+            write_json(output, merged)
     finally:
-        args.cd = old_cd
-        args.target_dir = old_target_dir
-        args.safe_objdump_dir = old_safe_objdump_dir
         if anonymous_targets is not None:
             anonymous_targets.cleanup()
-    write_json(output, merged)
 
 
 def anonymized_mapping_payload(targets: Any) -> dict[str, Any]:
@@ -246,25 +252,48 @@ def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
     write_result_schema(raw_dir / "single_cve_schema.json")
 
     merged = load_existing_results(output, args.resume)
+    merged_lock = threading.Lock()
+
     if args.binarywise:
-        tasks = [(cve, binary) for cve in selected for binary in testset[cve]]
-        for index, (cve, binary) in enumerate(tasks, 1):
-            process_cve(
+        raw_tasks = [(cve, [binary], safe_run_id(cve, binary)) for cve in selected for binary in testset[cve]]
+    else:
+        raw_tasks = [(cve, testset[cve], safe_run_id(cve)) for cve in selected]
+
+    pending = [task for task in raw_tasks if not should_skip(args, merged, task[0], task[1])]
+    pending_ids = {run_id for _cve, _binaries, run_id in pending}
+    for cve, binaries, run_id in raw_tasks:
+        if run_id not in pending_ids:
+            label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
+            print(f"skip {label} (already in output)")
+
+    total = len(pending)
+    counter = itertools.count(1)
+    jobs = max(1, args.jobs)
+    with ThreadPoolExecutor(max_workers=jobs) as executor:
+        futures = [
+            executor.submit(
+                process_cve,
                 cve,
-                index,
-                len(tasks),
+                total,
+                counter,
                 metadata,
                 testset,
                 merged,
+                merged_lock,
                 paths,
                 args,
                 script_dir,
-                requested_binaries=[binary],
-                run_id=safe_run_id(cve, binary),
+                requested_binaries=binaries,
+                run_id=run_id,
             )
-    else:
-        for index, cve in enumerate(selected, 1):
-            process_cve(cve, index, len(selected), metadata, testset, merged, paths, args, script_dir)
+            for cve, binaries, run_id in pending
+        ]
+        try:
+            for future in as_completed(futures):
+                future.result()
+        except KeyboardInterrupt:
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
 
     if args.dry_run:
         print(f"dry-run complete; prompts written under {raw_dir}")

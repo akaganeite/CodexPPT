@@ -32,6 +32,10 @@ def validate_cve_result(cve: str, binaries: list[str], obj: Any) -> dict[str, An
     if not isinstance(obj, dict):
         raise ValueError("result root is not an object")
 
+    # The canonical shape is {"results": [...]}, enforced by codex's
+    # --output-schema for the openai provider. The dpsk proxy may not honor
+    # --output-schema, so we also accept {cve: {binary: row}} and a bare
+    # {binary: row} object as best-effort fallbacks.
     if isinstance(obj.get("results"), list):
         per_binary = {
             str(row.get("binary")): row
@@ -41,7 +45,6 @@ def validate_cve_result(cve: str, binaries: list[str], obj: Any) -> dict[str, An
     elif cve in obj and isinstance(obj[cve], dict):
         per_binary = obj[cve]
     else:
-        # Be permissive if the model returns the per-binary object directly.
         per_binary = obj
 
     out: dict[str, Any] = {}

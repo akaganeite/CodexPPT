@@ -124,4 +124,14 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
         action="store_true",
         help="Expose original target filenames to codex exec instead of per-CVE anonymous temp copies.",
     )
+    parser.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=1,
+        help=(
+            "Number of codex exec tasks to run concurrently. Default 1 (serial). "
+            "Higher is faster but raises 429 rate-limit risk; lowering --jobs is the throttle."
+        ),
+    )
     return parser.parse_args()

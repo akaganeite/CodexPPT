@@ -13,15 +13,25 @@ from .providers import codex_env, provider_overrides, resolved_model
 
 def run_codex(
     prompt: str,
-    cve: str,
+    run_id: str,
     args: argparse.Namespace,
     raw_dir: Path,
     schema_path: Path,
+    *,
+    cd: Path,
+    target_dir: Path,
+    safe_objdump_dir: Path | None,
 ) -> tuple[int, str, str, Path]:
-    last_message = raw_dir / f"{cve}.last.json"
-    stdout_path = raw_dir / f"{cve}.stdout"
-    stderr_path = raw_dir / f"{cve}.stderr"
-    prompt_path = raw_dir / f"{cve}.prompt.txt"
+    """Run a single ``codex exec`` for one task.
+
+    The codex-visible directories (``cd``, ``target_dir``, ``safe_objdump_dir``)
+    are passed explicitly rather than read off ``args`` so the caller can vary
+    them per task (e.g. anonymized temp dirs) without mutating shared state.
+    """
+    last_message = raw_dir / f"{run_id}.last.json"
+    stdout_path = raw_dir / f"{run_id}.stdout"
+    stderr_path = raw_dir / f"{run_id}.stderr"
+    prompt_path = raw_dir / f"{run_id}.prompt.txt"
     prompt_path.write_text(prompt, encoding="utf-8")
 
     cmd = [
@@ -31,17 +41,16 @@ def run_codex(
         "--sandbox",
         args.sandbox,
         "--cd",
-        str(args.cd),
+        str(cd),
         "--output-schema",
         str(schema_path),
         "--output-last-message",
         str(last_message),
     ]
-    if not is_relative_to(args.target_dir, args.cd):
-        cmd.extend(["--add-dir", str(args.target_dir)])
-    safe_objdump_dir = getattr(args, "safe_objdump_dir", None)
-    if safe_objdump_dir is not None and not is_relative_to(safe_objdump_dir, args.cd):
-        cmd.extend(["--add-dir", str(args.safe_objdump_dir)])
+    if not is_relative_to(target_dir, cd):
+        cmd.extend(["--add-dir", str(target_dir)])
+    if safe_objdump_dir is not None and not is_relative_to(safe_objdump_dir, cd):
+        cmd.extend(["--add-dir", str(safe_objdump_dir)])
     model = resolved_model(args)
     if model:
         cmd.extend(["--model", model])
@@ -64,9 +73,9 @@ def run_codex(
     )
     elapsed_seconds = time.monotonic() - started_monotonic
     write_timing(
-        raw_dir / f"{cve}.timing.json",
-        raw_dir / f"{cve}.timing.md",
-        cve,
+        raw_dir / f"{run_id}.timing.json",
+        raw_dir / f"{run_id}.timing.md",
+        run_id,
         cmd,
         started_at,
         elapsed_seconds,

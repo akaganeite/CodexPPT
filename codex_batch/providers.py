@@ -13,6 +13,10 @@ def resolved_model(args: argparse.Namespace) -> str | None:
 
 
 def provider_overrides(args: argparse.Namespace) -> list[str]:
+    # The "dpsk" provider does not get its own Codex provider entry. Instead we
+    # reuse Codex's built-in "OpenAI" provider slot and repoint its base_url at
+    # the local DeepSeek-compatible proxy, so the provider name stays "OpenAI"
+    # on the wire even though requests actually go to DeepSeek.
     if args.provider != "dpsk":
         return []
     return [
