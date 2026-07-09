@@ -132,6 +132,7 @@ def process_cve(
             cve,
             binaries,
             target_dir,
+            args.compiler,
             args.opt,
             args.safe_objdump_dir,
         )
@@ -148,6 +149,7 @@ def process_cve(
         metadata[cve],
         run_binaries,
         run_target_dir,
+        args.compiler,
         args.opt,
         run_safe_objdump_helper,
         run_binary_resolution,
@@ -176,7 +178,8 @@ def process_cve(
             safe_objdump_dir=run_safe_objdump_dir,
         )
         if rc != 0:
-            raise RuntimeError(f"codex exec exited {rc}: {stderr_text[-1000:]}")
+            detail = stderr_text.strip() or final_text.strip()
+            raise RuntimeError(f"codex exec exited {rc}: {detail[-1000:]}")
         parsed = extract_json_object(final_text)
         result = validate_cve_result(cve, run_binaries, parsed)
         if anonymous_targets is not None:

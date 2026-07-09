@@ -4,34 +4,37 @@ import argparse
 from pathlib import Path
 
 
-# Tool suffixes that source-built testset names end with. A requested name like
-# curl-7.58.0-curl maps to the optimized artifact curl-7.58.0-<opt>-curl by
-# splicing the opt level in before the tool suffix. Extend this list when adding
-# a project whose binaries are named after a different tool.
-KNOWN_TOOL_SUFFIXES = ("readelf", "objdump", "nm", "curl")
+def normalize_opt_for_filename(opt: str) -> str:
+    """Return the optimization spelling used in dataset4ppt target filenames."""
+    if len(opt) == 2 and opt[0].lower() == "o" and opt[1].isdigit():
+        return "O" + opt[1]
+    return opt
 
 
-def requested_binary_to_actual(name: str, opt: str = "o0") -> str:
-    for tool in KNOWN_TOOL_SUFFIXES:
-        suffix = "-" + tool
-        if name.endswith(suffix):
-            return name[: -len(suffix)] + "-" + opt + suffix
-    return name
+def requested_binary_to_actual(name: str, compiler: str = "gcc", opt: str = "O0") -> str:
+    return f"{name}-{compiler}-{normalize_opt_for_filename(opt)}"
 
 
-def resolve_requested_binary(target_dir: Path, name: str, opt: str = "o0") -> str:
+def resolve_requested_binary(
+    target_dir: Path,
+    name: str,
+    compiler: str = "gcc",
+    opt: str = "O0",
+) -> str:
     """Resolve a requested testcase name to a file under target_dir.
 
-    Source-built testsets request names such as curl-7.58.0-curl while the
-    actual optimized binary is curl-7.58.0-o0-curl. Deployed package binaries
-    are already named as concrete package artifacts and should be used as-is.
+    Dataset testsets and groundtruth use canonical binary names without the
+    compiler / optimization suffix. Source-built artifacts under target_dir are
+    named as <canonical>-<compiler>-<opt>, e.g.
+    curl-7.58.0-libcurl-gcc-O0. If a target collection already stores the
+    canonical filename directly, keep using it as-is.
     """
-    opt_name = requested_binary_to_actual(name, opt)
-    if (target_dir / opt_name).is_file():
-        return opt_name
     if (target_dir / name).is_file():
         return name
-    return opt_name
+    actual_name = requested_binary_to_actual(name, compiler, opt)
+    if (target_dir / actual_name).is_file():
+        return actual_name
+    return actual_name
 
 
 def derive_project_paths(args: argparse.Namespace) -> None:

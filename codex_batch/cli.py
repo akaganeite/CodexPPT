@@ -29,9 +29,21 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     )
     parser.add_argument(
         "--opt",
-        default="o0",
-        choices=["o0", "o1", "o2", "o3"],
-        help="Optimization level used in target binary names, e.g. binutils-2.30-o2-objdump.",
+        default="O0",
+        help=(
+            "Optimization suffix used in target filenames. Dataset testsets use "
+            "canonical names without this suffix; target files are resolved as "
+            "<binary>-<compiler>-<opt> when the canonical name is not present."
+        ),
+    )
+    parser.add_argument(
+        "--compiler",
+        default="gcc",
+        help=(
+            "Compiler suffix used in target filenames. Dataset testsets use "
+            "canonical names without this suffix; target files are resolved as "
+            "<binary>-<compiler>-<opt> when the canonical name is not present."
+        ),
     )
     parser.add_argument("--project-json", type=Path)
     parser.add_argument("--testset-json", type=Path)
@@ -76,12 +88,14 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     parser.add_argument("--codex-bin", default="codex")
     parser.add_argument(
         "--provider",
-        choices=["openai", "dpsk"],
+        choices=["openai", "dpsk", "pptagent", "volc"],
         default="openai",
         help=(
             "Backend used by codex exec. "
             "'openai' uses the current Codex config as-is; "
-            "'dpsk' routes Codex through a local DeepSeek-compatible proxy."
+            "'dpsk' routes Codex through a local DeepSeek-compatible proxy; "
+            "'pptagent' routes Codex through a PPTAgent OpenAI-compatible Responses endpoint; "
+            "'volc' routes Codex directly to Volcengine Ark Responses."
         ),
     )
     parser.add_argument("--model", default=None)
@@ -94,6 +108,36 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
         "--dpsk-model",
         default="deepseek-v4-flash",
         help="Default model used when --provider dpsk and --model is not set.",
+    )
+    parser.add_argument(
+        "--pptagent-base-url",
+        default="http://192.168.104.61:4000/v1",
+        help="OpenAI-compatible Responses base URL used when --provider pptagent.",
+    )
+    parser.add_argument(
+        "--pptagent-model",
+        default="glm-5.2",
+        help="Default model used when --provider pptagent and --model is not set.",
+    )
+    parser.add_argument(
+        "--pptagent-api-key-env",
+        default="PPTAGENT_API_KEY",
+        help="Environment variable containing the API key when --provider pptagent.",
+    )
+    parser.add_argument(
+        "--volc-base-url",
+        default="https://ark.cn-beijing.volces.com/api/plan/v3",
+        help="Volcengine Ark Responses base URL used when --provider volc.",
+    )
+    parser.add_argument(
+        "--volc-model",
+        default="glm-5.2",
+        help="Default model used when --provider volc and --model is not set.",
+    )
+    parser.add_argument(
+        "--volc-api-key-env",
+        default="VOLC_AGENT_PLAN_API_KEY",
+        help="Environment variable containing the API key when --provider volc.",
     )
     parser.add_argument(
         "--reasoning-effort",

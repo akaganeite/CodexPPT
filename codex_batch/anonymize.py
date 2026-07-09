@@ -30,6 +30,7 @@ def prepare_anonymous_targets(
     cve: str,
     requested_binaries: list[str],
     source_target_dir: Path,
+    compiler: str,
     opt: str,
     safe_objdump_source_dir: Path,
 ) -> AnonymousTargetSet:
@@ -47,7 +48,7 @@ def prepare_anonymous_targets(
     for index, requested in enumerate(requested_binaries, 1):
         anonymous_requested = f"target_{index:03d}"
         anonymous_actual = anonymous_requested
-        original_actual = resolve_requested_binary(source_target_dir, requested, opt)
+        original_actual = resolve_requested_binary(source_target_dir, requested, compiler, opt)
         src = source_target_dir / original_actual
         dst = target_dir / anonymous_actual
         if src.is_file():

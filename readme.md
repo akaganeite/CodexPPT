@@ -52,6 +52,8 @@ python3 codex_patch_presence_batch.py \
 
 - `--provider openai`:沿用当前 Codex/OpenAI 配置。
 - `--provider dpsk`:把 Codex 路由到本地 DeepSeek 兼容代理。
+- `--provider pptagent`:把 Codex 路由到 PPTAgent OpenAI-compatible Responses endpoint。
+- `--provider volc`:直连 Volcengine Ark Responses endpoint,默认读 `VOLC_AGENT_PLAN_API_KEY`。
 
 dpsk 示例(其余 flag 同上):
 
@@ -69,6 +71,25 @@ python3 codex_patch_presence_batch.py \
   --dpsk-base-url http://127.0.0.1:18080/v1 \
   --dpsk-model deepseek-v4-flash \
   --reasoning-effort high \
+  --codex-json-events \
+  --timeout 3600
+```
+
+pptagent 示例(默认读 `PPTAGENT_API_KEY`,默认模型 `glm-5.2`):
+
+```bash
+python3 codex_patch_presence_batch.py \
+  --project-json metadata/curl/curl_project_source_analysis.behavior.json \
+  --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
+  --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
+  --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
+  --opt o0 \
+  --output runs/curl_stripped_o0_pptagent_results.json \
+  --prompt-template prompts/patch_presence_stripped_unbounded.md \
+  --binarywise \
+  --provider pptagent \
+  --pptagent-base-url http://192.168.104.61:4000/v1 \
+  --pptagent-model glm-5.2 \
   --codex-json-events \
   --timeout 3600
 ```

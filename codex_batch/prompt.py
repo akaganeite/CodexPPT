@@ -13,6 +13,7 @@ def build_prompt(
     metadata: Any,
     binaries: list[str],
     target_dir: Path,
+    compiler: str,
     opt: str,
     safe_objdump_helper: str,
     binary_resolution: dict[str, str] | None = None,
@@ -20,7 +21,7 @@ def build_prompt(
     actual_map = (
         binary_resolution
         if binary_resolution is not None
-        else {b: resolve_requested_binary(target_dir, b, opt) for b in binaries}
+        else {b: resolve_requested_binary(target_dir, b, compiler, opt) for b in binaries}
     )
     payload = {
         "cve": cve,
@@ -28,6 +29,7 @@ def build_prompt(
         "requested_binaries": binaries,
         "binary_resolution": actual_map,
         "target_dir": str(target_dir),
+        "compiler": compiler,
         "optimization": opt,
     }
     variables = {

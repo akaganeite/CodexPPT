@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import re
 from typing import Any
-
-
-VERSION_RE = re.compile(r"^[A-Za-z0-9_+.-]+-([0-9]+(?:\.[0-9]+){1,3})-[A-Za-z0-9_+.-]+$")
 
 
 def normalize_groundtruth(raw: Any) -> dict[str, dict[str, list[str]]]:
@@ -44,13 +40,7 @@ def normalize_groundtruth(raw: Any) -> dict[str, dict[str, list[str]]]:
 
 
 def expected_status_for_binary(binary: str, gt: dict[str, Any]) -> str | None:
-    """Return present/absent/not_affected, or None if missing.
-
-    Groundtruth entries can be either full binary names, e.g.
-    curl-7.58.0-2ubuntu3.24-curl, or legacy upstream versions such as 7.58.0.
-    Full binary names are checked first so distribution package revisions can
-    have different labels under the same upstream version.
-    """
+    """Return present/absent/not_affected, or None if missing."""
     patched = {str(x) for x in gt.get("patch", [])}
     vulnerable = {str(x) for x in gt.get("vuln", [])}
     not_affected = {str(x) for x in gt.get("not_affected", [])}
@@ -60,17 +50,6 @@ def expected_status_for_binary(binary: str, gt: dict[str, Any]) -> str | None:
     if binary in vulnerable:
         return "absent"
     if binary in not_affected:
-        return "not_affected"
-
-    match = VERSION_RE.match(binary)
-    if not match:
-        return None
-    version = match.group(1)
-    if version in patched:
-        return "present"
-    if version in vulnerable:
-        return "absent"
-    if version in not_affected:
         return "not_affected"
     return None
 
