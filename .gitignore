@@ -6,6 +6,9 @@ __pycache__/
 
 detect*/
 runs/
+analysis/
+groundtruth/
+testset/
 binutils/gcc/
 binutils/gcc_strip_debug_keep_symbols/
 metadata/**/*.json

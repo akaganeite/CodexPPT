@@ -1,22 +1,59 @@
-# straight_detect — 二进制 patch-presence 检测
+# straight_detect - Binary Patch-Presence Detection
 
-用 `codex exec` 驱动的 LLM agent,对目标二进制做 **patch-presence 检测**:判断某个 CVE 的
-patch 是否存在于 binary 中(`present` / `absent` / `not_affected` / `inconclusive` /
-`not_found`)。检测本身由 agent 完成,本仓库的 Python wrapper 负责构造 prompt、批量调度、
-解析校验 JSON 结果、并对照 groundtruth 算 metrics。
+`straight_detect` runs an LLM agent through `codex exec` to perform
+**patch-presence detection** on binaries. For each CVE/binary pair, the agent
+decides whether the relevant patch is `present`, `absent`, `not_affected`,
+`inconclusive`, or `not_found`.
 
-入口是 `codex_patch_presence_batch.py`(`codex_batch/` 包的薄壳)。架构细节见 `CLAUDE.md`。
+The agent performs the actual binary reasoning. This repository provides the
+Python wrapper that builds prompts, schedules batch jobs, anonymizes target
+binaries, parses and validates JSON answers, and computes metrics against
+ground truth.
 
-## 检测原则(写进 prompt,agent 必须遵守)
+The main entry point is `codex_patch_presence_batch.py`, a thin wrapper around
+the `codex_batch/` package. See `CLAUDE.md` for implementation-level notes.
 
-- 不可联网搜索。
-- 不可用版本号匹配作为证据。
-- 不可读取 metadata 里引用的源码文件;每个推断都要有本地二进制证据和清晰逻辑。
-- 只看 `--target-dir` 内的二进制 + 供给的 `safe_objdump` helper。
+## Detection Rules
 
-## 运行示例
+These rules are embedded in the prompt and are enforced as part of the agent
+contract:
 
-在仓库根目录运行。下面是 curl stripped 二进制、OpenAI/Codex provider 的 binarywise 跑法:
+- Do not use network access.
+- Do not use version strings, release banners, package labels, or embedded
+  `curl x.y.z`-style strings as patch evidence.
+- Do not inspect source files referenced by metadata, DWARF paths, debug paths,
+  or diff paths.
+- Base every decision on local binary evidence and explicit reasoning.
+- Only use binaries under `--target-dir` plus the supplied `safe_objdump`
+  helper.
+
+## Configuration
+
+Install and configure the following before running a batch:
+
+- Python 3.10+.
+- A working `codex` CLI available on `PATH`, or pass its path with
+  `--codex-bin`.
+- Valid Codex/OpenAI credentials when using `--provider openai`.
+- For DeepSeek-compatible runs, a local OpenAI-compatible proxy endpoint and
+  `--provider dpsk --dpsk-base-url ...`.
+- For PPTAgent runs, set `PPTAGENT_API_KEY` or override the variable name with
+  `--pptagent-api-key-env`.
+- For Volcengine Ark runs, set `VOLC_AGENT_PLAN_API_KEY` or override the
+  variable name with `--volc-api-key-env`.
+- Project metadata JSON, usually
+  `metadata/<project>/*_project_source_analysis.behavior.json`.
+- Dataset export-list `testset.json` and `groundtruth.json`.
+- A target binary directory passed with `--target-dir`.
+
+Important path constraint: `--groundtruth-json` must be outside both
+`--target-dir` and the `--cd` directory passed to `codex exec`. The wrapper
+rejects unsafe layouts so the agent cannot read the answer key.
+
+## Quick Start
+
+Run commands from the repository root. This example evaluates stripped curl
+binaries with the default Codex/OpenAI provider in binarywise mode:
 
 ```bash
 python3 codex_patch_presence_batch.py \
@@ -34,28 +71,35 @@ python3 codex_patch_presence_batch.py \
   --timeout 3600
 ```
 
-常用辅助 flag:`--jobs N`(并发跑 N 个 `codex exec` 任务,默认 1=串行;调高提速但有 429
-限流风险,调低 `--jobs` 就是限流手段)、`--resume`(跳过 `--output` 里已有的任务)、
-`--retry-errors`(配合 `--resume` 只重跑 `status=error`)、`--dry-run`(只写 prompt 不调
-模型)、`--limit` / `--cve`(缩小范围)。完整参数见 `codex_batch/cli.py`。
+Useful flags:
 
-> 并发(`--jobs > 1`)下:进度 `[i/total]` 的 `i` 是"第几个进入运行"而非完成顺序;output
-> 落盘顺序非确定但最终内容一致(每任务写自己的 key);Ctrl-C 会取消未启动任务、等在跑的
-> 任务自然结束,已完成结果已落盘,`--resume` 可接续。
+- `--jobs N`: run `N` concurrent `codex exec` tasks. The default is `1`.
+  Higher values improve throughput but increase rate-limit risk.
+- `--resume`: skip tasks already present in `--output`.
+- `--retry-errors`: with `--resume`, rerun tasks whose previous result contains
+  `status=error`.
+- `--dry-run`: write prompts without calling the model.
+- `--limit` and `--cve`: restrict the run to a smaller subset.
+- `--binarywise`: run one `codex exec` per CVE/binary pair instead of one
+  `codex exec` per CVE.
+- `--codex-json-events`: pass `--json` to `codex exec` while still reading the
+  final message from `--output-last-message`.
 
-> groundtruth JSON 必须放在 `--target-dir` 和 `--cd` 之外,否则 wrapper 会直接报错,以保证
-> agent 看不到答案。
+With `--jobs > 1`, the progress prefix `[i/total]` reports launch order, not
+completion order. Output write order is not deterministic, but completed tasks
+are merged by key and are safe to resume after interruption.
 
-## provider 参数
+## Providers
 
-`--provider` 选择 `codex exec` 的后端:
+`--provider` selects how `codex exec` is routed:
 
-- `--provider openai`:沿用当前 Codex/OpenAI 配置。
-- `--provider dpsk`:把 Codex 路由到本地 DeepSeek 兼容代理。
-- `--provider pptagent`:把 Codex 路由到 PPTAgent OpenAI-compatible Responses endpoint。
-- `--provider volc`:直连 Volcengine Ark Responses endpoint,默认读 `VOLC_AGENT_PLAN_API_KEY`。
+- `openai`: use the current Codex/OpenAI configuration unchanged.
+- `dpsk`: route Codex through a local DeepSeek-compatible proxy.
+- `pptagent`: route Codex through a PPTAgent OpenAI-compatible Responses
+  endpoint.
+- `volc`: route Codex directly to the Volcengine Ark Responses endpoint.
 
-dpsk 示例(其余 flag 同上):
+DeepSeek-compatible example:
 
 ```bash
 python3 codex_patch_presence_batch.py \
@@ -75,7 +119,7 @@ python3 codex_patch_presence_batch.py \
   --timeout 3600
 ```
 
-pptagent 示例(默认读 `PPTAGENT_API_KEY`,默认模型 `glm-5.2`):
+PPTAgent example:
 
 ```bash
 python3 codex_patch_presence_batch.py \
@@ -94,27 +138,61 @@ python3 codex_patch_presence_batch.py \
   --timeout 3600
 ```
 
-## 数据文件格式
+## Data Format
 
-`--testset-json` 和 `--groundtruth-json` **只支持 dataset export list 格式**(顶层是 list,
-每项含 `CVE` 以及 `binaries` 或 `vuln`/`patch`/`not_affected` 字符串列表):
+`--testset-json` and `--groundtruth-json` only support the dataset export-list
+format. The top-level JSON value must be a list.
+
+Testset example:
 
 ```json
 [
-  {"CVE": "CVE-...", "functions": [...], "binaries": [...]},
-  {"CVE": "CVE-...", "vuln": [...], "patch": [...], "not_affected": [...]}
+  {
+    "CVE": "CVE-...",
+    "functions": ["target_function"],
+    "binaries": ["binary_name_1", "binary_name_2"]
+  }
 ]
 ```
 
-旧的 `CVE -> [binary]` / `CVE -> {vuln, patch}` 顶层对象格式已不再支持。当前实验用的数据集
-导出在 `/home/zhangxb/extdisk/dataset4ppt/<project>/exports/` 下;仓库内 `testset/` 和
-`groundtruth/` 保留的是历史数据(旧格式,当前代码不再加载),仅供对照。
+Ground-truth example:
 
-`--project-json` 是 metadata 流水线的产物 `metadata/<project>/*_project_source_analysis.behavior.json`
-(含 root-cause / patch-intent / behavior-changes 等检测所需的语义 metadata)。
+```json
+[
+  {
+    "CVE": "CVE-...",
+    "vuln": ["binary_name_1"],
+    "patch": ["binary_name_2"],
+    "not_affected": []
+  }
+]
+```
 
-## 实验结果(参考)
+Legacy top-level object formats such as `CVE -> [binary]` and
+`CVE -> {vuln, patch}` are no longer supported. The current experimental
+dataset exports are expected under
+`/home/zhangxb/extdisk/dataset4ppt/<project>/exports/`. Historical files under
+`testset/` and `groundtruth/` are kept only for reference.
 
-| Project | PS³ A | PS³ P | PS³ R | PS³ F1 | PS³ DSR | React A | React P | React R | React F1 | React DSR | BinXray A | BinXray P | BinXray R | BinXray F1 | BinXray DSR | PatchDiscovery A | PatchDiscovery P | PatchDiscovery R | PatchDiscovery F1 | PatchDiscovery DSR | Robin A | Robin P | Robin R | Robin F1 | Robin DSR | Ours A | Ours P | Ours R | Ours F1 | Ours DSR |
+`--project-json` points to metadata generated by the offline metadata pipeline,
+typically `metadata/<project>/*_project_source_analysis.behavior.json`. It
+contains root-cause, patch-intent, and behavior-change information used by the
+prompt.
+
+## Outputs
+
+Each run writes:
+
+- `--output`: merged JSON results keyed by CVE or CVE/binary task.
+- `--metrics-output`: metrics JSON. Defaults to `<output>.metrics.json`.
+- `--raw-dir`: per-task prompts, stdout, stderr, and raw agent outputs.
+
+The wrapper reports Accuracy, Precision, Recall, F1, and DSR. `not_affected`
+counts as a decisive status, while `inconclusive`, `error`, and `not_found`
+reduce DSR.
+
+## Reference Results
+
+| Project | PS3 A | PS3 P | PS3 R | PS3 F1 | PS3 DSR | React A | React P | React R | React F1 | React DSR | BinXray A | BinXray P | BinXray R | BinXray F1 | BinXray DSR | PatchDiscovery A | PatchDiscovery P | PatchDiscovery R | PatchDiscovery F1 | PatchDiscovery DSR | Robin A | Robin P | Robin R | Robin F1 | Robin DSR | Ours A | Ours P | Ours R | Ours F1 | Ours DSR |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Binutils | 0.74 | 0.86 | 0.77 | 0.81 | 0.63 | 0.67 | 0.51 | 0.88 | 0.64 | 0.41 | 0.89 | 0.97 | 0.87 | 0.92 | 0.72 | 0.78 | 0.95 | 0.73 | 0.83 | 0.75 | 0.90 | 0.87 | 0.80 | 0.83 | 0.18 | 0.92 | 0.92 | 0.97 | 0.94 | 0.87 |
