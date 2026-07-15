@@ -23,14 +23,16 @@ def resolve_requested_binary(
 ) -> str:
     """Resolve a requested testcase name to a file under target_dir.
 
-    Dataset testsets and groundtruth use canonical binary names without the
-    compiler / optimization suffix. Source-built artifacts under target_dir are
-    named as <canonical>-<compiler>-<opt>, e.g.
-    curl-7.58.0-libcurl-gcc-O0. If a target collection already stores the
-    canonical filename directly, keep using it as-is.
+    Dataset testsets and groundtruth use canonical binary names. Target
+    collections may store those names directly, deployed package artifacts as
+    <canonical>-deployed, or source-built artifacts as
+    <canonical>-<compiler>-<opt>, e.g. curl-7.58.0-libcurl-gcc-O0.
     """
     if (target_dir / name).is_file():
         return name
+    deployed_name = f"{name}-deployed"
+    if (target_dir / deployed_name).is_file():
+        return deployed_name
     actual_name = requested_binary_to_actual(name, compiler, opt)
     if (target_dir / actual_name).is_file():
         return actual_name

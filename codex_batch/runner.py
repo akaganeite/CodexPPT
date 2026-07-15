@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from .io import is_relative_to
-from .providers import codex_env, provider_overrides, resolved_model
+from .providers import codex_env, provider_overrides, resolve_profile, resolved_reasoning_effort
 
 
 def run_codex(
@@ -51,12 +51,13 @@ def run_codex(
         cmd.extend(["--add-dir", str(target_dir)])
     if safe_objdump_dir is not None and not is_relative_to(safe_objdump_dir, cd):
         cmd.extend(["--add-dir", str(safe_objdump_dir)])
-    model = resolved_model(args)
-    if model:
-        cmd.extend(["--model", model])
-    cmd.extend(provider_overrides(args))
-    if args.reasoning_effort:
-        cmd.extend(["-c", f'model_reasoning_effort="{args.reasoning_effort}"'])
+    model_profile = resolve_profile(args)
+    if model_profile.model:
+        cmd.extend(["--model", model_profile.model])
+    cmd.extend(provider_overrides(model_profile))
+    reasoning_effort = resolved_reasoning_effort(args, model_profile)
+    if reasoning_effort:
+        cmd.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
     if args.profile:
         cmd.extend(["--profile", args.profile])
     if args.codex_json_events:
@@ -69,7 +70,7 @@ def run_codex(
         cmd=cmd,
         stdin_text=prompt,
         timeout=args.timeout,
-        env=codex_env(args),
+        env=codex_env(model_profile),
     )
     elapsed_seconds = time.monotonic() - started_monotonic
     write_timing(

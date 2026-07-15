@@ -1,0 +1,14 @@
+{
+  "active_profile": "codex_default",
+  "aliases": {
+    "openai": "codex_default"
+  },
+  "profiles": {
+    "codex_default": {
+      "provider": "codex",
+      "reasoning": {
+        "mode": "inherit"
+      }
+    }
+  }
+}

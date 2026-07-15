@@ -86,58 +86,22 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="Write prompts but do not call codex.")
     parser.add_argument("--codex-bin", default="codex")
-    parser.add_argument(
-        "--provider",
-        choices=["openai", "dpsk", "pptagent", "volc"],
-        default="openai",
+    profile_group = parser.add_mutually_exclusive_group()
+    profile_group.add_argument(
+        "--model-profile",
+        default=None,
         help=(
-            "Backend used by codex exec. "
-            "'openai' uses the current Codex config as-is; "
-            "'dpsk' routes Codex through a local DeepSeek-compatible proxy; "
-            "'pptagent' routes Codex through a PPTAgent OpenAI-compatible Responses endpoint; "
-            "'volc' routes Codex directly to Volcengine Ark Responses."
+            "Profile name in straight_detect/model_config.json. Defaults to its "
+            "active_profile; the config path is fixed and cannot be overridden."
         ),
     )
-    parser.add_argument("--model", default=None)
-    parser.add_argument(
-        "--dpsk-base-url",
-        default="http://127.0.0.1:18080/v1",
-        help="Local proxy base URL used when --provider dpsk.",
-    )
-    parser.add_argument(
-        "--dpsk-model",
-        default="deepseek-v4-flash",
-        help="Default model used when --provider dpsk and --model is not set.",
-    )
-    parser.add_argument(
-        "--pptagent-base-url",
-        default="http://192.168.104.61:4000/v1",
-        help="OpenAI-compatible Responses base URL used when --provider pptagent.",
-    )
-    parser.add_argument(
-        "--pptagent-model",
-        default="glm-5.2",
-        help="Default model used when --provider pptagent and --model is not set.",
-    )
-    parser.add_argument(
-        "--pptagent-api-key-env",
-        default="PPTAGENT_API_KEY",
-        help="Environment variable containing the API key when --provider pptagent.",
-    )
-    parser.add_argument(
-        "--volc-base-url",
-        default="https://ark.cn-beijing.volces.com/api/plan/v3",
-        help="Volcengine Ark Responses base URL used when --provider volc.",
-    )
-    parser.add_argument(
-        "--volc-model",
-        default="glm-5.2",
-        help="Default model used when --provider volc and --model is not set.",
-    )
-    parser.add_argument(
-        "--volc-api-key-env",
-        default="VOLC_AGENT_PLAN_API_KEY",
-        help="Environment variable containing the API key when --provider volc.",
+    profile_group.add_argument(
+        "--provider",
+        default=None,
+        help=(
+            "Deprecated profile alias loaded from model_config.json. "
+            "Use --model-profile instead."
+        ),
     )
     parser.add_argument(
         "--reasoning-effort",

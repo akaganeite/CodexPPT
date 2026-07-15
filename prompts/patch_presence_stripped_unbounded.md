@@ -39,7 +39,6 @@ Tool guidance for stripped binaries:
 - You may use `objdump`, `readelf`, `xxd`, `dd`, `rg`, `perl`, `python3`, or the repository helper `python3 {{SAFE_OBJDUMP_HELPER}} --binary PATH ...`.
 - There is no fixed disassembly-call budget, window limit, or objdump output-size limit in this experiment. Still keep commands purposeful and stop once evidence is decisive.
 - Without symbols, locate relevant code by imported calls such as `sprintf`, `strlen`, `printf`, nearby format strings, constants, relative call targets, byte patterns, and local control-flow differences within the single target binary.
-- For CVE-2021-20294-like evidence, distinguish the vulnerable behavior `sprintf(buffer, "@%s", version_string)` from the patched behavior `strlen(version_string) + 1` used for length calculation while retaining bounded integer formatting for `" (%d)"`.
 
 Status semantics:
 - present: patch is present in the binary.

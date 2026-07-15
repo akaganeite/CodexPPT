@@ -34,13 +34,12 @@ Install and configure the following before running a batch:
 - Python 3.10+.
 - A working `codex` CLI available on `PATH`, or pass its path with
   `--codex-bin`.
-- Valid Codex/OpenAI credentials when using `--provider openai`.
-- For DeepSeek-compatible runs, a local OpenAI-compatible proxy endpoint and
-  `--provider dpsk --dpsk-base-url ...`.
-- For PPTAgent runs, set `PPTAGENT_API_KEY` or override the variable name with
-  `--pptagent-api-key-env`.
-- For Volcengine Ark runs, set `VOLC_AGENT_PLAN_API_KEY` or override the
-  variable name with `--volc-api-key-env`.
+- Model/provider settings live only in `model_config.json` at this repository
+  root. The wrapper always loads that fixed path; there is no CLI flag for a
+  different config file.
+- `PPTAGENT_API_KEY` for the `cliproxy_gpt55_medium` and `pptagent_glm52`
+  profiles, and `VOLC_AGENT_PLAN_API_KEY` for `volc_glm52`.
+- Valid Codex/OpenAI credentials for `codex_default` and `dpsk_flash`.
 - Project metadata JSON, usually
   `metadata/<project>/*_project_source_analysis.behavior.json`.
 - Dataset export-list `testset.json` and `groundtruth.json`.
@@ -53,7 +52,7 @@ rejects unsafe layouts so the agent cannot read the answer key.
 ## Quick Start
 
 Run commands from the repository root. This example evaluates stripped curl
-binaries with the default Codex/OpenAI provider in binarywise mode:
+binaries with the current Codex/OpenAI configuration in binarywise mode:
 
 ```bash
 python3 codex_patch_presence_batch.py \
@@ -61,12 +60,13 @@ python3 codex_patch_presence_batch.py \
   --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
   --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
   --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt o0 \
+  --opt O0 \
+  --compiler gcc \
   --output runs/curl_stripped_o0_results.json \
   --raw-dir runs/curl_stripped_o0_raw \
   --prompt-template prompts/patch_presence_stripped_unbounded.md \
   --binarywise \
-  --provider openai \
+  --model-profile codex_default \
   --codex-json-events \
   --timeout 3600
 ```
@@ -89,15 +89,21 @@ With `--jobs > 1`, the progress prefix `[i/total]` reports launch order, not
 completion order. Output write order is not deterministic, but completed tasks
 are merged by key and are safe to resume after interruption.
 
-## Providers
+## Model Profiles
 
-`--provider` selects how `codex exec` is routed:
+`model_config.json` contains all model/provider configuration. If
+`--model-profile` is omitted, the wrapper uses `active_profile`; it is currently
+`cliproxy_gpt55_medium`.
 
-- `openai`: use the current Codex/OpenAI configuration unchanged.
-- `dpsk`: route Codex through a local DeepSeek-compatible proxy.
-- `pptagent`: route Codex through a PPTAgent OpenAI-compatible Responses
-  endpoint.
-- `volc`: route Codex directly to the Volcengine Ark Responses endpoint.
+- `codex_default`: leave the current Codex provider configuration unchanged.
+- `dpsk_flash`: DeepSeek-compatible local endpoint, `deepseek-v4-flash`.
+- `pptagent_glm52`: PPTAgent endpoint, `glm-5.2`.
+- `cliproxy_gpt55_medium`: local CLIProxyAPI, `gpt-5.5`, medium reasoning.
+- `volc_glm52`: Volcengine Ark Responses endpoint, `glm-5.2`.
+
+`--reasoning-effort` is an optional per-run override. It takes precedence over
+the profile reasoning setting. The legacy `--provider` aliases are also loaded
+from this JSON file, but new commands should use `--model-profile`.
 
 DeepSeek-compatible example:
 
@@ -107,14 +113,12 @@ python3 codex_patch_presence_batch.py \
   --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
   --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
   --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt o0 \
+  --opt O0 \
+  --compiler gcc \
   --output runs/curl_stripped_o0_dpsk_results.json \
   --prompt-template prompts/patch_presence_stripped_unbounded.md \
   --binarywise \
-  --provider dpsk \
-  --dpsk-base-url http://127.0.0.1:18080/v1 \
-  --dpsk-model deepseek-v4-flash \
-  --reasoning-effort high \
+  --model-profile dpsk_flash \
   --codex-json-events \
   --timeout 3600
 ```
@@ -127,13 +131,30 @@ python3 codex_patch_presence_batch.py \
   --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
   --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
   --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt o0 \
+  --opt O0 \
+  --compiler gcc \
   --output runs/curl_stripped_o0_pptagent_results.json \
   --prompt-template prompts/patch_presence_stripped_unbounded.md \
   --binarywise \
-  --provider pptagent \
-  --pptagent-base-url http://192.168.104.61:4000/v1 \
-  --pptagent-model glm-5.2 \
+  --model-profile pptagent_glm52 \
+  --codex-json-events \
+  --timeout 3600
+```
+
+CLIProxyAPI gpt-5.5 medium example:
+
+```bash
+python3 codex_patch_presence_batch.py \
+  --project-json metadata/curl/curl_project_source_analysis.behavior.json \
+  --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
+  --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
+  --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
+  --opt O0 \
+  --compiler gcc \
+  --output runs/curl_stripped_o0_cliproxy_gpt55_results.json \
+  --prompt-template prompts/patch_presence_stripped_unbounded.md \
+  --binarywise \
+  --model-profile cliproxy_gpt55_medium \
   --codex-json-events \
   --timeout 3600
 ```
