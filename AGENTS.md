@@ -65,7 +65,8 @@ its own to discover the remaining files instead of asking the user. From the
 dataset directory, resolve the following automatically:
 
 - Target binary directory: `<dataset>/binaries/target/<project>_stripped`.
-- Metadata JSON: `<dataset>/exports/<project>_behavior.json`.
+- Behavior JSON: `<dataset>/exports/<project>_behavior.json`. This is the
+  required `--project-json` input for detection runs.
 - Testset JSON: `<dataset>/exports/testset.json` or a subset such as
   `<dataset>/exports/pretest.pick.json`.
 - Groundtruth JSON: `<dataset>/exports/groundtruth_with_not_affected.json`.
@@ -257,6 +258,54 @@ Not every project has every optional file, but a normal detection run needs:
 - `exports/groundtruth_with_not_affected.json`
 - `binaries/target/<project>_stripped` or another target directory
 
+The `--project-json` argument must point to `<project>_behavior.json`, not a
+plain `<project>_metadata.json`. The behavior JSON is the patch-presence input
+because it includes the root-cause, patch-intent, and behavior-change
+annotations used by the prompt. If only `<project>_metadata.json` exists, stop
+and generate or copy the matching behavior JSON before running detection.
+
+### Deployed Dataset Layout
+
+Deployed-package datasets may live under a nested project root such as:
+
+```text
+/home/USER/extdisk/dataset4ppt/deployed/openssl/
+  exports/
+    openssl_behavior.json
+    openssl_metadata.json
+    openssl_reference.json
+    testset.ubuntu-amd64.json
+    groundtruth.ubuntu-amd64.json
+  binaries/
+    target/
+      openssl_stripped/
+        <canonical-binary-name>-deployed
+  deployed/
+    audit/
+    input/
+    logs/
+    state/
+    trace/
+```
+
+For deployed datasets, use `prompts/patch_presence_deployed.md`. The
+`--project-json` file must still be `<project>_behavior.json`. Do not run
+detection with `<project>_metadata.json` as a substitute. If a deployed dataset
+is missing `<project>_behavior.json`, generate it or copy it from the
+corresponding source-built dataset when the CVE set matches, for example:
+
+```bash
+cp /home/USER/extdisk/dataset4ppt/openssl/exports/openssl_behavior.json \
+  /home/USER/extdisk/dataset4ppt/deployed/openssl/exports/openssl_behavior.json
+```
+
+Use the deployed testset and groundtruth files directly:
+
+```text
+exports/testset.ubuntu-amd64.json
+exports/groundtruth.ubuntu-amd64.json
+```
+
 ### JSON Meanings
 
 `<project>_behavior.json`:
@@ -322,7 +371,8 @@ Target binaries:
   such as `openssl-1.0.1j-openssl-gcc-O2`.
 - The wrapper resolves names by checking:
   1. `<target-dir>/<canonical-name>`
-  2. `<target-dir>/<canonical-name>-<compiler>-<opt>`
+  2. `<target-dir>/<canonical-name>-deployed`
+  3. `<target-dir>/<canonical-name>-<compiler>-<opt>`
 - `--opt o2` is normalized to `O2` for filenames.
 
 Legacy top-level object formats like `{"CVE-...": ["binary"]}` are no longer
@@ -377,7 +427,7 @@ test -f "$DATASET/exports/groundtruth_with_not_affected.json"
 test -d "$TARGET"
 ```
 
-Check metadata is an object keyed by CVE:
+Check behavior JSON is an object keyed by CVE:
 
 ```bash
 jq -e 'type == "object" and (keys | length > 0)' \
