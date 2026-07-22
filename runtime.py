@@ -38,6 +38,7 @@ def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("observation_counter", 0)
     AGENT_CONTEXT.setdefault("evidence_counter", 0)
     AGENT_CONTEXT.setdefault("script_counter", 0)
+    AGENT_CONTEXT.setdefault("semantic_probe_counter", 0)
     AGENT_CONTEXT.setdefault("metrics", {})
 
 
@@ -97,6 +98,7 @@ def initialize_agent_context(
         "observation_counter": 0,
         "evidence_counter": 0,
         "script_counter": 0,
+        "semantic_probe_counter": 0,
         "metrics": {},
     })
 

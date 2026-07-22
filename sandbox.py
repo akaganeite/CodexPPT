@@ -91,8 +91,13 @@ def run_in_sandbox(
     ``script_path`` is the host path; we translate it to its sandbox path under
     ``/scratch``. Returns a ``run_host_cmd``-shaped dict.
     """
-    script_name = Path(script_path).name
-    script_in_sandbox = f"{SANDBOX_SCRATCH}/{script_name}"
+    resolved_scratch = Path(scratch_dir).resolve()
+    resolved_script = Path(script_path).resolve()
+    try:
+        relative_script = resolved_script.relative_to(resolved_scratch)
+    except ValueError as exc:
+        raise ValueError("script_path must resolve beneath scratch_dir") from exc
+    script_in_sandbox = f"{SANDBOX_SCRATCH}/{relative_script.as_posix()}"
     argv = bwrap_argv(script_in_sandbox=script_in_sandbox, scratch_dir=scratch_dir, binary_path=binary_path)
     return run_host_cmd(argv, timeout=timeout, max_output_chars=max_output_chars)
 

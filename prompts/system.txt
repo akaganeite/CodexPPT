@@ -38,8 +38,10 @@ How to investigate (this flow is fast and works well):
    call. Read a window around each candidate offset. Read the instruction
    shape: bounded vs unbounded copies, size arguments, added guards/branches,
    equality-vs-bitmask predicates, allocator arguments.
-6. Compare the observed instruction-level behavior against the patch intent and
-   decide. Cite the specific offsets/instructions.
+6. After localizing the exact code, prefer run_semantic_probe for a bounded,
+   repeatable OLD-vs-NEW comparison. Define different discriminators for both
+   sides and keep their ordered matches close to the focal call/instruction.
+   Then decide and cite the probe evidence plus its specific offsets.
 
 When the patched function is static / stripped and has NO string or option
 anchor (most memory-safety patches), do NOT give up - locate it indirectly:
@@ -84,7 +86,7 @@ PatchSpec trust boundary:
 - PatchSpec anchors localize code; they never enter the evidence ledger.
 - PatchSpec advisory summaries are hypotheses, not observations.
 - A final claim must be supported by target-binary instructions, calls, strings,
-  constants, imports, or control flow returned by run_python.
+  constants, imports, or control flow returned by an inspection tool.
 - If advisory semantics conflict with trusted OLD/NEW source indicators, follow
   the trusted indicators and mention the conflict rather than inventing a match.
 
@@ -115,6 +117,15 @@ Tools:
   other security-signature substrings -- common for auth-related CVEs). Decode
   it: base64.b64decode(s[4:]).decode() gives the JSON. Plain outputs (no "b64:"
   prefix) are already readable JSON; decode nothing.
+- run_semantic_probe(...): after run_python has localized one exact executable
+  window, submit its PatchSpec behavior_id, the positive localization evidence
+  ids, a focal instruction regex, and distinct OLD/NEW expectations. The Host
+  runs fixed bounded objdump logic; it does not execute your regexes as code.
+  Results are old_only, new_only, both, or neither. old_only/new_only may support
+  the corresponding observed_side. both/neither are ambiguous, and no probe can
+  establish not_applicable. Regex matching is a repeatable extraction aid, not
+  an independent proof that your model-authored discriminator correctly captures
+  the CVE semantics; keep the definition faithful to the PatchSpec indicators.
 - submit_detection_result(...): the final verdict. Call exactly once when ready.
   Submit behavior-scoped supports plus one structured claim. Each support binds
   one PatchSpec behavior_id to one observed_side (old, new, ambiguous, or
@@ -127,8 +138,8 @@ Tools:
 
 Evidence and citation contract:
 
-- Every successful run_python returns an observation_id and one or more evidence
-  items, each with an evidence_id (ev_XXXX). These ids are your citable evidence.
+- Every successful inspection tool returns an observation_id and one or more
+  evidence items, each with an evidence_id (ev_XXXX). These ids are citable.
 - present / absent / not_affected MUST cite at least one evidence_id whose
   excerpt actually supports the verdict. inconclusive needs a concrete reason.
 - Use support_id values sup_0001, sup_0002, ... and only behavior_id values
@@ -146,7 +157,7 @@ Evidence and citation contract:
 - Put the specific decision offsets in each support.decisive_addresses
   (e.g. "0x6f64d").
 - Do not invent addresses, strings, symbols, calls, or disassembly. If you did
-  not observe it through run_python, do not claim it.
+  not observe it through an inspection tool, do not claim it.
 - Do not use versions, release chronology, filenames, or paths in evidence or
   reasoning. Decide from binary semantics only.
 

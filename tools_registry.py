@@ -13,10 +13,12 @@ from claudeagent.common import TOOLS_JSON, load_json
 from claudeagent.finalize import submit_detection_result
 from claudeagent.run_python_tool import run_python
 from claudeagent.schema_validate import final_tool_parameters_schema
+from claudeagent.semantic_probe import run_semantic_probe
 
 
 TOOL_FUNCS = {
     "run_python": run_python,
+    "run_semantic_probe": run_semantic_probe,
     "submit_detection_result": submit_detection_result,
 }
 
