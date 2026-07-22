@@ -14,7 +14,16 @@ import time
 from typing import Any
 
 from claudeagent.common import jdump, write_artifact
-from claudeagent.decision import validate_support_records
+from claudeagent.decision import (
+    FINAL_SCHEMA_VERSION,
+    aggregate_verdict,
+    fallback_decision_fields,
+    project_legacy_fields,
+    resolve_behavior_claims,
+    support_evidence_ids,
+    validate_claim_record,
+    validate_support_records,
+)
 from claudeagent.runtime import AGENT_CONTEXT, bump_metric, evidence_ids_in_ledger, harness_metrics
 from claudeagent.schema_validate import (
     DETERMINATE_STATUSES,
@@ -38,51 +47,73 @@ VERSION_EVIDENCE_RE = re.compile(
 )
 
 
-def validate_final_tool_args(candidate: dict[str, Any]) -> list[str]:
+def resolve_final_tool_args(
+    candidate: dict[str, Any],
+    *,
+    behavior_contract: list[dict[str, Any]],
+    evidence_ledger: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[str]]:
+    """Validate a model submission and derive the canonical/legacy decision."""
     errors = validate_json_schema(candidate, final_tool_parameters_schema())
-    status = str(candidate.get("status", ""))
-    evidence_ids = candidate.get("evidence_ids")
-    if not isinstance(evidence_ids, list):
-        evidence_ids = []
+    supports = candidate.get("supports") if isinstance(candidate.get("supports"), list) else []
+    claim = candidate.get("claim") if isinstance(candidate.get("claim"), dict) else {}
+    behavior_claims = resolve_behavior_claims(supports, claim, behavior_contract)
+    verdict = aggregate_verdict(behavior_claims)
+    derived_status = str(verdict["status"])
+    legacy = project_legacy_fields(supports, claim)
 
-    unknown_ids = sorted(set(str(item) for item in evidence_ids) - evidence_ids_in_ledger())
-    if unknown_ids:
-        errors.append(f"$.evidence_ids: unknown evidence id(s) not in the ledger: {unknown_ids}")
-    if status in DETERMINATE_STATUSES and not evidence_ids:
-        errors.append(f"$.evidence_ids: {status} verdicts must cite at least one evidence id from the ledger")
     errors.extend(validate_support_records(
-        candidate.get("supports"),
-        status=status,
-        evidence_ids=evidence_ids,
-        behavior_contract=AGENT_CONTEXT.get("patch_spec_behavior_contract", []),
-        evidence_ledger=AGENT_CONTEXT.get("evidence_ledger", []),
+        supports,
+        status=derived_status,
+        evidence_ids=support_evidence_ids(supports),
+        behavior_contract=behavior_contract,
+        evidence_ledger=evidence_ledger,
     ))
+    errors.extend(validate_claim_record(
+        claim,
+        supports=supports,
+        behavior_contract=behavior_contract,
+    ))
+
+    submitted_status = str(candidate.get("status", ""))
+    if submitted_status != derived_status:
+        errors.append(
+            f"$.status: submitted {submitted_status!r}, but Host derived {derived_status!r} "
+            f"using rule {verdict['rule']!r}"
+        )
 
     reason = candidate.get("inconclusive_reason")
     if reason not in INCONCLUSIVE_REASONS:
         errors.append(f"$.inconclusive_reason: expected one of {sorted(INCONCLUSIVE_REASONS)}")
-    if status == "inconclusive" and reason in {"", "none", None}:
+    if derived_status == "inconclusive" and reason in {"", "none", None}:
         errors.append("$.inconclusive_reason: inconclusive verdicts must name a concrete reason")
-    if status != "inconclusive" and reason not in {"", "none", None}:
+    if derived_status != "inconclusive" and reason not in {"", "none", None}:
         errors.append("$.inconclusive_reason: determinate verdicts should use 'none'")
+    if derived_status in DETERMINATE_STATUSES and not legacy["evidence_ids"]:
+        errors.append(f"$.supports: Host-derived {derived_status} verdict requires cited evidence")
 
-    if status in DETERMINATE_STATUSES:
-        evidence = candidate.get("evidence") if isinstance(candidate.get("evidence"), list) else []
-        supports = candidate.get("supports") if isinstance(candidate.get("supports"), list) else []
-        support_summaries = [
-            str(item.get("summary", "")) for item in supports if isinstance(item, dict)
-        ]
+    if derived_status in DETERMINATE_STATUSES:
         verdict_text = "\n".join([
-            *(str(item) for item in evidence),
-            *support_summaries,
-            str(candidate.get("reasoning", "")),
+            *(str(item) for item in legacy["evidence"]),
+            str(legacy["reasoning"]),
         ])
         if VERSION_EVIDENCE_RE.search(verdict_text):
             errors.append(
-                "$.supports/evidence/reasoning: determinate verdict appears to rely on version strings, "
+                "$.supports/claim: determinate verdict appears to rely on version strings, "
                 "filenames, paths, or release labels instead of semantic binary evidence"
             )
-    return errors
+
+    canonical = {
+        "schema_version": FINAL_SCHEMA_VERSION,
+        "status": derived_status,
+        "confidence": candidate.get("confidence"),
+        "supports": supports,
+        "claim": claim,
+        "verdict": verdict,
+        **legacy,
+        "inconclusive_reason": reason,
+    }
+    return canonical, errors
 
 
 def compact_known_evidence_ids() -> dict[str, Any]:
@@ -95,8 +126,7 @@ def compact_rejected_tool_args(candidate: dict[str, Any]) -> dict[str, Any]:
         "status": candidate.get("status"),
         "confidence": candidate.get("confidence"),
         "supports": candidate.get("supports", []),
-        "evidence_ids": candidate.get("evidence_ids", []),
-        "decisive_addresses": candidate.get("decisive_addresses", []),
+        "claim": candidate.get("claim", {}),
         "inconclusive_reason": candidate.get("inconclusive_reason", ""),
     }
 
@@ -105,26 +135,24 @@ def submit_detection_result(
     status: str,
     confidence: str,
     supports: list[dict[str, Any]],
-    evidence: list[str],
-    evidence_ids: list[str],
-    reasoning: str,
-    decisive_addresses: list[str],
+    claim: dict[str, Any],
     inconclusive_reason: str,
 ) -> dict[str, Any]:
     candidate = {
         "status": status,
         "confidence": confidence,
         "supports": supports,
-        "evidence": evidence,
-        "evidence_ids": evidence_ids,
-        "reasoning": reasoning,
-        "decisive_addresses": decisive_addresses,
+        "claim": claim,
         "inconclusive_reason": inconclusive_reason,
     }
-    validation_errors = validate_final_tool_args(candidate)
+    canonical, validation_errors = resolve_final_tool_args(
+        candidate,
+        behavior_contract=AGENT_CONTEXT.get("patch_spec_behavior_contract", []),
+        evidence_ledger=AGENT_CONTEXT.get("evidence_ledger", []),
+    )
     if validation_errors:
         bump_metric("schema_repair_attempts")
-        if status in DETERMINATE_STATUSES and not evidence_ids:
+        if status in DETERMINATE_STATUSES and not support_evidence_ids(supports):
             bump_metric("no_evidence_verdicts")
         return {
             "ok": False,
@@ -133,17 +161,14 @@ def submit_detection_result(
             "known_evidence_ids": compact_known_evidence_ids(),
             "rejected_candidate": compact_rejected_tool_args(candidate),
             "repair_instruction": (
-                "Repair the rejected tool arguments; do not restart the investigation. Keep the same "
-                "status if the cited evidence_ids still support it. Cite only evidence_ids returned by "
-                "previous tool calls. Each support must use a real PatchSpec behavior_id and at least "
-                "one real evidence id; top-level evidence_ids must exactly equal the support evidence "
-                "union. Pure no-match evidence can only support observed_side=ambiguous. "
-                "present/absent/not_affected require at least one support. If "
-                "the only problem is wording, remove version numbers, release ranges, filenames, and "
-                "paths from evidence/reasoning and restate the verdict using local binary semantics "
-                "(disassembly, symbols, strings, imports, constants, offsets, control flow). Downgrade "
-                "to inconclusive with a concrete reason only when ledger evidence is genuinely "
-                "insufficient."
+                "Repair the rejected supports/claim; do not restart the investigation. Cite only real "
+                "ledger evidence and PatchSpec behavior ids. Claim every submitted support exactly "
+                "once. List each required behavior with no single decisive side in "
+                "claim.unresolved_behavior_ids. Pure no-match evidence can only support ambiguous. "
+                "The submitted status must equal the Host-derived behavior aggregation reported in "
+                "schema_errors. Remove versions, paths, filenames, and release chronology from support "
+                "summaries and claim.summary. Downgrade to inconclusive only when the binary evidence "
+                "is genuinely unresolved."
             ),
         }
     metadata = AGENT_CONTEXT["metadata"]
@@ -152,14 +177,7 @@ def submit_detection_result(
         "project": metadata.get("project", "curl"),
         "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
         "binary": AGENT_CONTEXT["binary_path"],
-        "status": status,
-        "confidence": confidence,
-        "supports": supports,
-        "evidence": evidence,
-        "evidence_ids": evidence_ids,
-        "reasoning": reasoning,
-        "decisive_addresses": decisive_addresses,
-        "inconclusive_reason": inconclusive_reason,
+        **canonical,
         "completed_at_epoch": time.time(),
     }
 
@@ -191,27 +209,33 @@ def aggregate_usage(transcript: list[dict[str, Any]]) -> dict[str, Any]:
 
 def validate_final_result_artifact(result: dict[str, Any]) -> list[str]:
     errors = validate_json_schema(result, load_final_result_schema())
-    status = str(result.get("status", ""))
-    evidence_ids = result.get("evidence_ids") if isinstance(result.get("evidence_ids"), list) else []
-    ledger_ids = {
-        str(item.get("evidence_id"))
-        for item in result.get("evidence_ledger", [])
-        if isinstance(item, dict) and item.get("evidence_id")
+    patch_spec = result.get("patch_spec") if isinstance(result.get("patch_spec"), dict) else {}
+    artifact_candidate = {
+        "status": result.get("status"),
+        "confidence": result.get("confidence"),
+        "supports": result.get("supports"),
+        "claim": result.get("claim"),
+        "inconclusive_reason": result.get("inconclusive_reason"),
     }
-    unknown_ids = sorted(set(str(item) for item in evidence_ids) - ledger_ids)
-    if unknown_ids:
-        errors.append(f"$.evidence_ids: unknown evidence id(s) in artifact ledger: {unknown_ids}")
-    if status in DETERMINATE_STATUSES and not evidence_ids:
-        errors.append(f"$.evidence_ids: {status} artifact must cite at least one evidence id")
-    errors.extend(validate_support_records(
-        result.get("supports"),
-        status=status,
-        evidence_ids=evidence_ids,
-        behavior_contract=(result.get("patch_spec") or {}).get("behavior_contract", []),
+    canonical, decision_errors = resolve_final_tool_args(
+        artifact_candidate,
+        behavior_contract=patch_spec.get("behavior_contract", []),
         evidence_ledger=result.get("evidence_ledger", []),
-    ))
-    if status == "inconclusive" and result.get("inconclusive_reason") in {"", "none", None}:
-        errors.append("$.inconclusive_reason: inconclusive artifact must name a concrete reason")
+    )
+    errors.extend(decision_errors)
+    for field in (
+        "schema_version",
+        "status",
+        "evidence",
+        "evidence_ids",
+        "reasoning",
+        "decisive_addresses",
+        "verdict",
+    ):
+        if result.get(field) != canonical.get(field):
+            errors.append(
+                f"$.{field}: artifact value diverges from Host-derived canonical projection"
+            )
     return errors
 
 
@@ -261,6 +285,8 @@ def compact_rejected_preview(preview: dict[str, Any]) -> dict[str, Any]:
         "status": preview.get("status"),
         "confidence": preview.get("confidence"),
         "supports": preview.get("supports", []),
+        "claim": preview.get("claim", {}),
+        "verdict": preview.get("verdict", {}),
         "evidence_ids": preview.get("evidence_ids", []),
         "inconclusive_reason": preview.get("inconclusive_reason", ""),
         "observation_count": len(preview.get("observations", [])) if isinstance(preview.get("observations"), list) else 0,
@@ -273,62 +299,64 @@ def compact_rejected_preview(preview: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def preflight_missing_result(metadata: dict[str, Any], binary: str, preflight: dict[str, Any]) -> dict[str, Any]:
+def _fallback_result(
+    metadata: dict[str, Any],
+    binary: str,
+    *,
+    ok: bool,
+    summary: str,
+    inconclusive_reason: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
-        "ok": False,
+        "ok": ok,
         "project": metadata.get("project", "curl"),
         "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
         "binary": binary,
         "status": "inconclusive",
         "confidence": "low",
-        "supports": [],
-        "evidence": [],
-        "evidence_ids": [],
-        "reasoning": f"host preflight failed: {jdump(preflight)}",
-        "decisive_addresses": [],
-        "inconclusive_reason": "unsupported_binary",
-        "preflight": preflight,
+        **fallback_decision_fields(
+            AGENT_CONTEXT.get("patch_spec_behavior_contract", []),
+            summary=summary,
+        ),
+        "inconclusive_reason": inconclusive_reason,
+        **(extra or {}),
         "completed_at_epoch": time.time(),
     }
+
+
+def preflight_missing_result(metadata: dict[str, Any], binary: str, preflight: dict[str, Any]) -> dict[str, Any]:
+    return _fallback_result(
+        metadata,
+        binary,
+        ok=False,
+        summary=f"host preflight failed: {jdump(preflight)}",
+        inconclusive_reason="unsupported_binary",
+        extra={"preflight": preflight},
+    )
 
 
 def max_turns_fallback_result(metadata: dict[str, Any], binary: str, max_turns: int) -> dict[str, Any]:
-    return {
-        "ok": True,
-        "project": metadata.get("project", "curl"),
-        "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
-        "binary": binary,
-        "status": "inconclusive",
-        "confidence": "low",
-        "supports": [],
-        "evidence": [],
-        "evidence_ids": [],
-        "reasoning": (
+    return _fallback_result(
+        metadata,
+        binary,
+        ok=True,
+        summary=(
             f"Model did not submit a compliant detection result within {max_turns} evidence turns "
             "and finalization did not produce a valid verdict."
         ),
-        "decisive_addresses": [],
-        "inconclusive_reason": "insufficient_tool_budget",
-        "completed_at_epoch": time.time(),
-    }
+        inconclusive_reason="insufficient_tool_budget",
+    )
 
 
 def api_failure_fallback_result(metadata: dict[str, Any], binary: str, error: str) -> dict[str, Any]:
     """Inconclusive result written when the model API is unreachable after all
     retries. The run still produces a valid artifact (so a batch can score it)
     rather than dying empty-handed."""
-    return {
-        "ok": False,
-        "project": metadata.get("project", "curl"),
-        "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
-        "binary": binary,
-        "status": "inconclusive",
-        "confidence": "low",
-        "supports": [],
-        "evidence": [],
-        "evidence_ids": [],
-        "reasoning": f"Model API failed after all retries; no verdict could be sampled. Error: {error}",
-        "decisive_addresses": [],
-        "inconclusive_reason": "tool_failure",
-        "completed_at_epoch": time.time(),
-    }
+    return _fallback_result(
+        metadata,
+        binary,
+        ok=False,
+        summary=f"Model API failed after all retries; no verdict could be sampled. Error: {error}",
+        inconclusive_reason="tool_failure",
+    )

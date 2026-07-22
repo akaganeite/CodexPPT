@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from claudeagent.common import ROOT, VERDICTS, expand, jdump, load_json
+from claudeagent.decision import FINAL_SCHEMA_VERSION
 from claudeagent.host import import_env_from_interactive_shell
 from claudeagent.model_config import resolve_api_key, resolve_profile
 from claudeagent.patchspec import (
@@ -551,7 +552,11 @@ def _existing_case_artifact(case_dir: Path) -> dict[str, Any] | None:
         final = load_json(final_path)
     except Exception:
         return None
-    if not isinstance(final, dict) or final.get("status") not in _COMPLETED_STATUSES:
+    if (
+        not isinstance(final, dict)
+        or final.get("schema_version") != FINAL_SCHEMA_VERSION
+        or final.get("status") not in _COMPLETED_STATUSES
+    ):
         return None
     return final
 

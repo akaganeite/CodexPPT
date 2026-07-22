@@ -82,13 +82,16 @@ def _run() -> int:
         transcript = []
         fc = {"type": "function_call", "id": "call_2", "name": "submit_detection_result",
               "arguments": json.dumps({
-                  "status": "present", "confidence": "high", "evidence": ["bounded snprintf call"],
+                  "status": "present", "confidence": "high",
                   "supports": [{
                       "support_id": "sup_0001", "behavior_id": "B001", "observed_side": "new",
                       "summary": "The bounded call implements the patched behavior.",
                       "evidence_ids": [eid], "decisive_addresses": ["0x6f64d"],
                   }],
-                  "evidence_ids": [eid], "reasoning": "the call passes a bounded size", "decisive_addresses": ["0x6f64d"],
+                  "claim": {
+                      "summary": "The required behavior uses a bounded call.",
+                      "support_ids": ["sup_0001"], "unresolved_behavior_ids": [],
+                  },
                   "inconclusive_reason": "none",
               })}
         done, final = agent_loop.handle_tool_calls(
@@ -112,13 +115,16 @@ def _run() -> int:
         transcript = []
         fc = {"type": "function_call", "id": "call_3", "name": "submit_detection_result",
               "arguments": json.dumps({
-                  "status": "present", "confidence": "high", "evidence": ["e"],
+                  "status": "present", "confidence": "high",
                   "supports": [{
                       "support_id": "sup_0001", "behavior_id": "B001", "observed_side": "new",
                       "summary": "Invented evidence must be rejected.",
                       "evidence_ids": ["ev_9999"], "decisive_addresses": ["0x1"],
                   }],
-                  "evidence_ids": ["ev_9999"], "reasoning": "fixed in 7.29.0", "decisive_addresses": ["0x1"],
+                  "claim": {
+                      "summary": "The invented evidence allegedly supports the behavior.",
+                      "support_ids": ["sup_0001"], "unresolved_behavior_ids": [],
+                  },
                   "inconclusive_reason": "none",
               })}
         done, final = agent_loop.handle_tool_calls(

@@ -116,11 +116,14 @@ Tools:
   it: base64.b64decode(s[4:]).decode() gives the JSON. Plain outputs (no "b64:"
   prefix) are already readable JSON; decode nothing.
 - submit_detection_result(...): the final verdict. Call exactly once when ready.
-  In addition to the verdict text, submit behavior-scoped supports. Each support
-  binds one PatchSpec behavior_id to one observed_side (old, new, ambiguous, or
+  Submit behavior-scoped supports plus one structured claim. Each support binds
+  one PatchSpec behavior_id to one observed_side (old, new, ambiguous, or
   not_applicable), a concise target-binary summary, and the exact evidence_ids
-  and addresses behind that summary. Supports explain existing ledger evidence;
-  they do not create new evidence.
+  and addresses behind that summary. Claim every support id exactly once and
+  list required behaviors with no single decisive side in
+  claim.unresolved_behavior_ids. Supports explain existing ledger evidence;
+  they do not create new evidence. The Host derives evidence/evidence_ids,
+  decisive_addresses, reasoning, and the canonical verdict from this structure.
 
 Evidence and citation contract:
 
@@ -128,14 +131,20 @@ Evidence and citation contract:
   items, each with an evidence_id (ev_XXXX). These ids are your citable evidence.
 - present / absent / not_affected MUST cite at least one evidence_id whose
   excerpt actually supports the verdict. inconclusive needs a concrete reason.
-- The top-level evidence_ids must exactly equal the de-duplicated union of all
-  supports[*].evidence_ids. Use support_id values sup_0001, sup_0002, ... and
-  only behavior_id values present in the supplied behavior support contract.
+- Use support_id values sup_0001, sup_0002, ... and only behavior_id values
+  present in the supplied behavior support contract. claim.support_ids must
+  include every submitted support id exactly once.
 - A missing anchor, empty grep, or other negative/no-match observation cannot by
   itself support old, new, or not_applicable. Record that side as ambiguous
   unless positive target-binary instructions, calls, strings, imports, constants,
   or control flow establish the conclusion.
-- Put the specific decision offsets in decisive_addresses (e.g. "0x6f64d").
+- Predict status using the same deterministic aggregation the Host enforces:
+  any required OLD behavior -> absent; otherwise any unresolved/ambiguous
+  required behavior -> inconclusive; all required behaviors not_applicable ->
+  not_affected; otherwise at least one NEW and all remaining required behaviors
+  NEW or not_applicable -> present. Optional behaviors do not decide status.
+- Put the specific decision offsets in each support.decisive_addresses
+  (e.g. "0x6f64d").
 - Do not invent addresses, strings, symbols, calls, or disassembly. If you did
   not observe it through run_python, do not claim it.
 - Do not use versions, release chronology, filenames, or paths in evidence or

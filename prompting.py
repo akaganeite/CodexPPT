@@ -49,12 +49,13 @@ def build_task(
             "an anchor miss alone cannot prove absent or not_affected",
             "determinate verdicts require target-binary evidence_ids returned by run_python calls",
             "group cited evidence into behavior-scoped supports with observed_side old/new/ambiguous/not_applicable",
-            "top-level evidence_ids must exactly equal the union of supports[*].evidence_ids",
+            "claim every support id and explicitly list unresolved required behavior ids",
+            "Host derives the canonical verdict and legacy evidence fields from supports + claim",
             "use inconclusive with a concrete reason when evidence or applicability is unresolved",
         ],
         "observation_contract": {
             "tool_outputs_include": "observation_id, tool, command, exit_code, stdout_head/tail, stderr_tail, truncation, parsed_facts, evidence",
-            "final_verdict_must_cite": "evidence_ids returned in tool output evidence items",
+            "final_verdict_must_cite": "evidence_ids returned in tool output evidence items through supports",
             "support_must_bind": "one PatchSpec behavior_id, one observed_side, and one or more cited evidence_ids",
             "if_truncated": "use stdout_head/stdout_tail and run a narrower command/window before relying on omitted content",
         },
@@ -67,6 +68,7 @@ def build_task(
             "trusted_indicators_require_binary_confirmation": True,
             "supports_are_not_new_evidence": True,
             "negative_anchor_miss_only_supports_ambiguous": True,
+            "host_derives_status_and_legacy_fields": True,
             "finish_tool": "submit_detection_result",
             "determinate_status_requires_evidence_ids": True,
         },
@@ -87,8 +89,8 @@ def append_finalization_prompt(input_items: list[dict[str, Any]], max_turns: int
             "deciding run_python call (a targeted strings/objdump window), then submit. Do not "
             "start a broad new search. Determinate evidence/reasoning must be target-binary "
             "semantics only: no versions, filenames, paths, or release chronology. If evidence "
-            "remains insufficient, submit inconclusive with a concrete reason. For every cited "
-            "evidence id, create a behavior-scoped support; evidence_ids must equal the support union."
+            "remains insufficient, submit inconclusive with a concrete reason. Create behavior-scoped "
+            "supports, claim every support id, and list every unresolved required behavior id."
         ),
     })
 
@@ -100,7 +102,7 @@ def append_finalization_budget_prompt(input_items: list[dict[str, Any]], remaini
             "valid JSON using existing evidence_ids. Do not inspect further. If the evidence is not "
             "decisive, submit inconclusive with a concrete reason. Determinate wording must omit "
             "versions, paths, filenames, and release chronology. Include behavior-scoped supports "
-            "whose evidence-id union exactly matches the top-level evidence_ids."
+            "and a claim that covers every submitted support and required behavior."
         )
     else:
         content = (

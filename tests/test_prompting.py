@@ -124,6 +124,8 @@ def _run() -> int:
     )
     submit_schema = payload.get("submit_detection_result_schema", {})
     check("submit schema requires supports", "supports" in submit_schema.get("required", []))
+    check("submit schema requires claim", "claim" in submit_schema.get("required", []))
+    check("submit schema omits legacy evidence", "evidence_ids" not in submit_schema.get("properties", {}))
 
     with tempfile.TemporaryDirectory() as tmp:
         args = argparse.Namespace(

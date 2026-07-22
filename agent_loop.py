@@ -512,8 +512,9 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                 "content": (
                     "Repair/finalization only: the previous response did not produce an accepted "
                     "submit_detection_result. Do not call run_python. Call submit_detection_result "
-                    "now using existing evidence_ids from the ledger; if the evidence is not decisive, "
-                    "submit inconclusive with a concrete reason."
+                    "now using supports that cite existing evidence_ids from the ledger and a claim "
+                    "covering every required behavior; if the evidence is not decisive, submit "
+                    "inconclusive with a concrete reason."
                 ),
             })
             resp = _sample_turn(args, instructions, input_items, submit_tool_only(tools), api_key, base_url, model, profile)

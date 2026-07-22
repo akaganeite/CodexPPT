@@ -250,7 +250,11 @@ def _run() -> int:
             case_dir = batch.safe_case_dir(out_root, "CVE-A", binary_name)
             case_dir.mkdir(parents=True)
             (case_dir / "final_result.json").write_text(
-                json.dumps({"status": "present", "patch_spec": {"cache_key": key}}),
+                json.dumps({
+                    "schema_version": "final_result.v2",
+                    "status": "present",
+                    "patch_spec": {"cache_key": key},
+                }),
                 encoding="utf-8",
             )
         to_run, to_reuse, counts = batch._select_resume_cases(
@@ -259,6 +263,22 @@ def _run() -> int:
         check("matching result reused", [item["binary_name"] for item in to_reuse] == ["matching"])
         check("stale result rerun", [item["binary_name"] for item in to_run] == ["stale"])
         check("stale counted", counts["stale_patchspec"] == 1)
+
+    # Resume never reuses a pre-claim legacy artifact, even with a matching key.
+    with tempfile.TemporaryDirectory() as tmp:
+        args = _args(tmp)
+        out_root = Path(args.out_root)
+        case = {"cve_id": "CVE-A", "binary_name": "legacy", "expected": "present"}
+        case_dir = batch.safe_case_dir(out_root, "CVE-A", "legacy")
+        case_dir.mkdir(parents=True)
+        (case_dir / "final_result.json").write_text(
+            json.dumps({"status": "present", "patch_spec": {"cache_key": "a" * 64}}),
+            encoding="utf-8",
+        )
+        to_run, to_reuse, unused_counts = batch._select_resume_cases(
+            [case], out_root, args, patchspec_keys={"CVE-A": "a" * 64}
+        )
+        check("legacy artifact rerun", to_run == [case] and to_reuse == [])
 
     if failures:
         print("FAIL:", failures)

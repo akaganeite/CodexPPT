@@ -9,20 +9,14 @@
         "status": { "$ref": "#/properties/status" },
         "confidence": { "$ref": "#/properties/confidence" },
         "supports": { "$ref": "#/properties/supports" },
-        "evidence": { "$ref": "#/properties/evidence" },
-        "evidence_ids": { "$ref": "#/properties/evidence_ids" },
-        "reasoning": { "$ref": "#/properties/reasoning" },
-        "decisive_addresses": { "$ref": "#/properties/decisive_addresses" },
+        "claim": { "$ref": "#/properties/claim" },
         "inconclusive_reason": { "$ref": "#/properties/inconclusive_reason" }
       },
       "required": [
         "status",
         "confidence",
         "supports",
-        "evidence",
-        "evidence_ids",
-        "reasoning",
-        "decisive_addresses",
+        "claim",
         "inconclusive_reason"
       ],
       "additionalProperties": false
@@ -58,10 +52,81 @@
         }
       },
       "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "required": ["summary", "support_ids", "unresolved_behavior_ids"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "support_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 30
+        },
+        "unresolved_behavior_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 30
+        }
+      },
+      "additionalProperties": false
+    },
+    "behavior_claim": {
+      "type": "object",
+      "required": ["behavior_id", "required", "resolved_side", "resolution", "support_ids"],
+      "properties": {
+        "behavior_id": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "resolved_side": {
+          "type": "string",
+          "enum": ["old", "new", "ambiguous", "not_applicable"]
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "consistent",
+            "consistent_with_ambiguous",
+            "conflicting",
+            "ambiguous_only",
+            "declared_unresolved",
+            "missing_support"
+          ]
+        },
+        "support_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 30
+        }
+      },
+      "additionalProperties": false
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["status", "rule", "behavior_claims"],
+      "properties": {
+        "status": { "$ref": "#/properties/status" },
+        "rule": {
+          "type": "string",
+          "enum": [
+            "required_old_behavior",
+            "unresolved_required_behavior",
+            "all_required_not_applicable",
+            "all_applicable_required_new",
+            "no_required_behaviors",
+            "unsupported_behavior_combination"
+          ]
+        },
+        "behavior_claims": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/behavior_claim" }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "type": "object",
   "required": [
+    "schema_version",
     "ok",
     "project",
     "cve_id",
@@ -69,6 +134,8 @@
     "status",
     "confidence",
     "supports",
+    "claim",
+    "verdict",
     "evidence",
     "evidence_ids",
     "reasoning",
@@ -83,6 +150,7 @@
     "usage_metrics"
   ],
   "properties": {
+    "schema_version": { "enum": ["final_result.v2"] },
     "ok": { "type": "boolean" },
     "project": { "type": "string" },
     "cve_id": { "type": "string" },
@@ -103,6 +171,8 @@
       "items": { "$ref": "#/$defs/support" },
       "maxItems": 30
     },
+    "claim": { "$ref": "#/$defs/claim" },
+    "verdict": { "$ref": "#/$defs/verdict" },
     "evidence": {
       "type": "array",
       "description": "Compact human-readable evidence summaries. Determinate verdicts must be backed by evidence_ids.",
