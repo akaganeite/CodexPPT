@@ -13,9 +13,15 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+from types import SimpleNamespace
 
 from claudeagent import agent_loop
-from claudeagent.runtime import AGENT_CONTEXT, initialize_agent_context, record_evidence
+from claudeagent.runtime import (
+    AGENT_CONTEXT,
+    configure_evidence_verifier,
+    initialize_agent_context,
+    record_evidence,
+)
 
 
 PATCH_SPEC = {"behaviors": [{"behavior_id": "B001", "required": True}]}
@@ -168,6 +174,136 @@ def _run() -> int:
         # 2 calls * 2 items (echo + output) = 4 input items.
         check("multi-call 4 items", len(input_items) == 4)
         check("multi-call transcript 2", len([t for t in transcript if t.get("tool") == "run_python"]) == 2)
+
+    # --- 6. verifier repair is recognized and restricts the next action to submit-only. ---
+    verifier_repair_transcript = [{
+        "tool": "submit_detection_result",
+        "result": {
+            "ok": False,
+            "verifier_repair_required": True,
+            "error": "repair claim",
+        },
+    }]
+    check(
+        "verifier repair recognized",
+        agent_loop.last_submit_needs_repair(verifier_repair_transcript),
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        initialize_agent_context(
+            {"cve_id": "CVE-Z", "project": "curl"},
+            "/tmp/curl",
+            "CVE-Z",
+            tmp,
+            tmp,
+        )
+        configure_evidence_verifier(SimpleNamespace(mode="llm", repair_pending=True))
+        input_items = []
+        transcript = []
+        fc = {
+            "type": "function_call",
+            "id": "repair-run",
+            "name": "run_python",
+            "arguments": json.dumps({
+                "script": "print('should not run')",
+                "timeout_sec": 0,
+                "max_output_chars": 0,
+            }),
+        }
+        done, final = agent_loop.handle_tool_calls(
+            output_items=[fc],
+            input_items=input_items,
+            transcript=transcript,
+            turn_label="verifier-repair",
+            allowed_tools=allowed,
+            output_dir=tmp,
+            start_epoch=0.0,
+        )
+        check("verifier repair run_python blocked", done is False and final is None)
+        check(
+            "verifier repair block recorded",
+            "submit only" in str(transcript[-1].get("result", {}).get("error", "")),
+        )
+
+    # --- 7. a parallel second submit cannot consume repair before feedback. ---
+    with tempfile.TemporaryDirectory() as tmp:
+        initialize_agent_context(
+            {"cve_id": "CVE-P", "project": "curl"},
+            "/tmp/curl",
+            "CVE-P",
+            tmp,
+            tmp,
+            patch_spec=PATCH_SPEC,
+            evidence_verifier_mode="llm",
+        )
+        ev = record_evidence(
+            observation_id="obs_0001",
+            kind="disassembly_predicates",
+            claim="guard",
+            excerpts=["0x1010: test eax,eax"],
+        )
+        repair_state = SimpleNamespace(mode="llm", repair_pending=False)
+        configure_evidence_verifier(repair_state)
+        submit_args = json.dumps({
+            "status": "present",
+            "confidence": "high",
+            "supports": [{
+                "support_id": "sup_0001",
+                "behavior_id": "B001",
+                "observed_side": "new",
+                "summary": "The bounded code implements the NEW behavior.",
+                "evidence_ids": [ev["evidence_id"]],
+                "decisive_addresses": ["0x1010"],
+            }],
+            "claim": {
+                "summary": "The required behavior is established as NEW.",
+                "support_ids": ["sup_0001"],
+                "unresolved_behavior_ids": [],
+            },
+            "inconclusive_reason": "none",
+        })
+        calls = [
+            {"type": "function_call", "id": "parallel-1", "name": "submit_detection_result", "arguments": submit_args},
+            {"type": "function_call", "id": "parallel-2", "name": "submit_detection_result", "arguments": submit_args},
+        ]
+        verifier_calls = 0
+        original_verify = agent_loop.verify_detection_result
+
+        def reject_once(result):
+            nonlocal verifier_calls
+            verifier_calls += 1
+            repair_state.repair_pending = True
+            return {
+                "ok": False,
+                "tool": "submit_detection_result",
+                "verifier_repair_required": True,
+                "error": "repair claim",
+                "verification": {},
+                "repair_instruction": "Use direct evidence or submit inconclusive.",
+            }
+
+        agent_loop.verify_detection_result = reject_once
+        try:
+            input_items = []
+            transcript = []
+            done, final = agent_loop.handle_tool_calls(
+                output_items=calls,
+                input_items=input_items,
+                transcript=transcript,
+                turn_label=7,
+                allowed_tools=allowed,
+                output_dir=tmp,
+                start_epoch=0.0,
+            )
+        finally:
+            agent_loop.verify_detection_result = original_verify
+        check("parallel submit waits for feedback", done is False and final is None)
+        check("parallel submit invokes verifier once", verifier_calls == 1)
+        check(
+            "parallel second submit blocked",
+            len(transcript) == 2
+            and "wait for the evidence-verifier feedback"
+            in str(transcript[1].get("result", {}).get("error", "")),
+        )
 
     if failures:
         print("FAIL:", failures)

@@ -35,6 +35,8 @@ def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("observations", [])
     AGENT_CONTEXT.setdefault("evidence_ledger", [])
     AGENT_CONTEXT.setdefault("patch_spec_behavior_contract", [])
+    AGENT_CONTEXT.setdefault("evidence_verifier_mode", "off")
+    AGENT_CONTEXT.setdefault("evidence_verifier_session", None)
     AGENT_CONTEXT.setdefault("observation_counter", 0)
     AGENT_CONTEXT.setdefault("evidence_counter", 0)
     AGENT_CONTEXT.setdefault("script_counter", 0)
@@ -76,6 +78,7 @@ def initialize_agent_context(
     scratch_dir: str = "",
     patch_spec_info: dict[str, Any] | None = None,
     patch_spec: dict[str, Any] | None = None,
+    evidence_verifier_mode: str = "off",
 ) -> None:
     AGENT_CONTEXT.clear()
     AGENT_CONTEXT.update({
@@ -93,6 +96,8 @@ def initialize_agent_context(
             "usage": {},
         },
         "patch_spec_behavior_contract": patch_spec_behavior_contract(patch_spec),
+        "evidence_verifier_mode": evidence_verifier_mode,
+        "evidence_verifier_session": None,
         "observations": [],
         "evidence_ledger": [],
         "observation_counter": 0,
@@ -101,6 +106,19 @@ def initialize_agent_context(
         "semantic_probe_counter": 0,
         "metrics": {},
     })
+
+
+def configure_evidence_verifier(session: Any) -> None:
+    """Attach the per-run verifier session after provider/PatchSpec resolution."""
+    AGENT_CONTEXT["evidence_verifier_session"] = session
+    mode = getattr(session, "mode", None)
+    if isinstance(mode, str):
+        AGENT_CONTEXT["evidence_verifier_mode"] = mode
+
+
+def evidence_verifier_repair_pending() -> bool:
+    session = AGENT_CONTEXT.get("evidence_verifier_session")
+    return bool(getattr(session, "repair_pending", False))
 
 
 def record_evidence(
@@ -150,4 +168,9 @@ def harness_metrics() -> dict[str, int]:
     metrics.setdefault("truncated_observations", 0)
     metrics.setdefault("schema_repair_attempts", 0)
     metrics.setdefault("no_evidence_verdicts", 0)
+    metrics.setdefault("evidence_verifier_calls", 0)
+    metrics.setdefault("evidence_verifier_accepts", 0)
+    metrics.setdefault("evidence_verifier_rejections", 0)
+    metrics.setdefault("evidence_verifier_repairs", 0)
+    metrics.setdefault("evidence_verifier_failures", 0)
     return metrics

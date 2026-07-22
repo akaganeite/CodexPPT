@@ -146,11 +146,12 @@
     "evidence_ledger",
     "harness_metrics",
     "patch_spec",
+    "evidence_verification",
     "timing",
     "usage_metrics"
   ],
   "properties": {
-    "schema_version": { "enum": ["final_result.v2"] },
+    "schema_version": { "enum": ["final_result.v3"] },
     "ok": { "type": "boolean" },
     "project": { "type": "string" },
     "cve_id": { "type": "string" },
@@ -296,6 +297,61 @@
             "properties": {
               "behavior_id": { "type": "string", "minLength": 1 },
               "required": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence_verification": {
+      "type": "object",
+      "required": [
+        "mode",
+        "outcome",
+        "prompt_version",
+        "model",
+        "reasoning",
+        "config_digest",
+        "repair_pending",
+        "attempts"
+      ],
+      "properties": {
+        "mode": { "type": "string", "enum": ["llm", "off"] },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "off",
+            "not_run",
+            "skipped_inconclusive",
+            "repaired_to_inconclusive",
+            "accepted",
+            "accepted_after_repair",
+            "repair_requested",
+            "rejected_after_repair",
+            "tool_failure",
+            "repair_not_completed"
+          ]
+        },
+        "prompt_version": { "type": "string", "minLength": 1 },
+        "model": { "type": "string" },
+        "reasoning": { "type": ["object", "null"], "additionalProperties": true },
+        "config_digest": { "type": "string" },
+        "repair_pending": { "type": "boolean" },
+        "attempts": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["attempt", "outcome"],
+            "properties": {
+              "attempt": { "type": "integer", "minimum": 1 },
+              "outcome": {
+                "type": "string",
+                "enum": ["accept", "repair", "error", "abandoned"]
+              },
+              "verification": { "type": "object", "additionalProperties": true },
+              "error": { "type": "string" }
             },
             "additionalProperties": false
           }

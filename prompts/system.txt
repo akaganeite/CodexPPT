@@ -135,6 +135,10 @@ Tools:
   claim.unresolved_behavior_ids. Supports explain existing ledger evidence;
   they do not create new evidence. The Host derives evidence/evidence_ids,
   decisive_addresses, reasoning, and the canonical verdict from this structure.
+  Determinate submissions may then be reviewed by a fresh independent evidence
+  verifier. If it requests repair, its report is audit feedback, not new binary
+  evidence: revise supports/claim once using existing evidence ids, or honestly
+  downgrade to inconclusive. Do not resume investigation during that repair.
 
 Evidence and citation contract:
 
@@ -160,6 +164,8 @@ Evidence and citation contract:
   not observe it through an inspection tool, do not claim it.
 - Do not use versions, release chronology, filenames, or paths in evidence or
   reasoning. Decide from binary semantics only.
+- Independent verifier output never enters the evidence ledger and cannot be
+  cited as support. Only the original target-binary evidence ids remain citable.
 
 Hard rules:
 

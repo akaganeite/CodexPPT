@@ -260,7 +260,7 @@ def _run() -> int:
     tamper_errors = validate_final_result_artifact(artifact)
     check("legacy tamper rejected", not errors and any("diverges" in item for item in tamper_errors))
 
-    # 18-20. Every host fallback emits the canonical v2 claim/verdict shape.
+    # 18-20. Every host fallback emits the canonical v3 claim/verdict shape.
     fallback_results = [
         preflight_missing_result(
             {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", {"ok": False}
@@ -277,16 +277,29 @@ def _run() -> int:
         check(
             f"fallback {index} schema-valid",
             not fallback_errors
-            and fallback_artifact.get("schema_version") == "final_result.v2"
+            and fallback_artifact.get("schema_version") == "final_result.v3"
+            and fallback_artifact.get("evidence_verification", {}).get("mode") == "off"
             and fallback_artifact.get("verdict", {}).get("status") == "inconclusive",
         )
+
+    # 21. Long transport errors remain a valid bounded fallback claim.
+    long_fallback = api_failure_fallback_result(
+        {"cve_id": "CVE-X", "project": "curl"},
+        "/tmp/binary",
+        "X" * 6000,
+    )
+    long_artifact, long_errors = build_final_artifact(long_fallback, [], time.time())
+    check(
+        "long fallback summary bounded",
+        not long_errors and len(long_artifact.get("claim", {}).get("summary", "")) <= 4000,
+    )
 
     if failures:
         print("FINALIZE TESTS FAILED:")
         for line in failures:
             print("  -", line)
         return 1
-    print("FINALIZE TESTS PASSED (20 cases)")
+    print("FINALIZE TESTS PASSED (21 cases)")
     return 0
 
 

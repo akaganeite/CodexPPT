@@ -42,8 +42,11 @@ from claudeagent.finalize import (
     compact_rejected_preview,
     max_turns_fallback_result,
     preflight_missing_result,
+    verify_detection_result,
+    verifier_pending_fallback_result,
     write_run_outputs,
 )
+from claudeagent.evidence_verifier import EvidenceVerifierConfig, EvidenceVerifierSession
 from claudeagent.host import (
     import_env_from_interactive_shell,
     load_cve_metadata,
@@ -69,7 +72,12 @@ from claudeagent.patchspec import (
 )
 from claudeagent.prompting import append_finalization_budget_prompt, append_finalization_prompt, build_task
 from claudeagent.responses_client import responses_create
-from claudeagent.runtime import bump_metric, initialize_agent_context
+from claudeagent.runtime import (
+    bump_metric,
+    configure_evidence_verifier,
+    evidence_verifier_repair_pending,
+    initialize_agent_context,
+)
 from claudeagent.sandbox import preflight_sandbox
 from claudeagent.schema_validate import DETERMINATE_STATUSES, load_final_result_schema
 from claudeagent.tools_registry import TOOL_FUNCS, load_tools, submit_tool_only
@@ -117,6 +125,34 @@ def handle_tool_calls(
         })
         return False, None
 
+    repair_pending_at_start = evidence_verifier_repair_pending()
+
+    def block_remaining(start_index: int, message: str) -> None:
+        """A verifier repair must be generated after feedback, never in parallel."""
+        for remaining_index, remaining in enumerate(
+            function_calls[start_index:],
+            start_index + 1,
+        ):
+            bump_metric("tool_calls")
+            bump_metric("tool_failures")
+            remaining_fn = remaining.get("name")
+            remaining_args = remaining.get("arguments") or "{}"
+            remaining_call_id = remaining.get("call_id") or remaining.get("id") or ""
+            blocked = {"ok": False, "error": message, "tool": remaining_fn}
+            transcript.append({
+                "turn": turn_label,
+                "tool": remaining_fn,
+                "call_index": remaining_index,
+                "arguments": remaining_args,
+                "result": blocked,
+            })
+            input_items.append(remaining)
+            input_items.append(_function_call_output(
+                remaining_call_id,
+                blocked,
+                raw=remaining_fn == "submit_detection_result",
+            ))
+
     for call_index, call in enumerate(function_calls, 1):
         bump_metric("tool_calls")
         fn = call.get("name")
@@ -131,7 +167,13 @@ def handle_tool_calls(
             call_args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
             if not isinstance(call_args, dict):
                 raise ValueError("tool arguments must be a JSON object")
-            if fn not in allowed_tools:
+            if evidence_verifier_repair_pending() and fn != "submit_detection_result":
+                result = {
+                    "ok": False,
+                    "error": "tool not available during evidence-verifier repair: submit only",
+                }
+                bump_metric("tool_failures")
+            elif fn not in allowed_tools:
                 result = {"ok": False, "error": f"tool not available in this phase: {fn}"}
                 bump_metric("tool_failures")
             else:
@@ -151,7 +193,15 @@ def handle_tool_calls(
         })
 
         if fn == "submit_detection_result" and result.get("ok"):
-            preview, schema_errors = build_final_artifact(result, transcript, start_epoch)
+            # Validate every Host-derived artifact field before spending a
+            # verifier call. The independent semantic gate is checked only
+            # after this structural preflight succeeds.
+            preview, schema_errors = build_final_artifact(
+                result,
+                transcript,
+                start_epoch,
+                check_verifier=False,
+            )
             if schema_errors:
                 bump_metric("schema_repair_attempts")
                 if result.get("status") in DETERMINATE_STATUSES and not result.get("evidence_ids"):
@@ -168,8 +218,56 @@ def handle_tool_calls(
                 # raw=True: the repair carries schema_errors/known_evidence_ids the compactor would drop.
                 input_items.append(call)
                 input_items.append(_function_call_output(call_id, repair_result, raw=True))
+                if repair_pending_at_start:
+                    block_remaining(
+                        call_index,
+                        "tool not executed: the single evidence-verifier repair response "
+                        "already contained an invalid submit",
+                    )
+                    return False, None
                 continue
-            return True, write_run_outputs(output_dir, result, transcript, start_epoch)
+
+            result = verify_detection_result(result)
+            transcript[-1]["result"] = result
+            terminal_submit = bool(result.pop("_terminal_submit", False))
+            if result.get("ok") or terminal_submit:
+                preview, schema_errors = build_final_artifact(result, transcript, start_epoch)
+                if schema_errors:
+                    bump_metric("schema_repair_attempts")
+                    # At this point the model payload and all non-verifier
+                    # artifact fields already passed preflight. A remaining
+                    # error is a Host/audit invariant failure, not something
+                    # another model turn can repair. Write the invalid artifact
+                    # with schema_validation_errors and stop; batch rejects it.
+                    result["ok"] = False
+                    result["post_verifier_validation_errors"] = schema_errors
+                    transcript[-1]["result"] = result
+                    return True, write_run_outputs(
+                        output_dir,
+                        result,
+                        transcript,
+                        start_epoch,
+                    )
+                return True, write_run_outputs(output_dir, result, transcript, start_epoch)
+
+            # The first semantic rejection must be shown to the model in a new
+            # response. Ignore parallel calls generated before that feedback.
+            input_items.append(call)
+            input_items.append(_function_call_output(call_id, result, raw=True))
+            if result.get("verifier_repair_required"):
+                block_remaining(
+                    call_index,
+                    "tool not executed: wait for the evidence-verifier feedback and repair "
+                    "in the next submit-only response",
+                )
+                return False, None
+            if repair_pending_at_start:
+                block_remaining(
+                    call_index,
+                    "tool not executed: the single evidence-verifier repair response was invalid",
+                )
+                return False, None
+            continue
 
         # Echo the function_call then feed its output back. A failed submit carries
         # schema_errors/known_evidence_ids/repair_instruction that the compactor would
@@ -178,6 +276,12 @@ def handle_tool_calls(
         submit_repair = fn == "submit_detection_result" and not result.get("ok")
         input_items.append(call)
         input_items.append(_function_call_output(call_id, result, raw=submit_repair))
+        if repair_pending_at_start:
+            block_remaining(
+                call_index,
+                "tool not executed: the single evidence-verifier repair response was invalid",
+            )
+            return False, None
     return False, None
 
 
@@ -192,6 +296,8 @@ def last_submit_needs_repair(transcript: list[dict[str, Any]]) -> bool:
         return False
     if result.get("schema_errors"):
         return True
+    if result.get("verifier_repair_required"):
+        return True
     return bool(result.get("error") and result.get("tool") == "submit_detection_result")
 
 
@@ -204,7 +310,7 @@ def last_tool_call_needs_forced_submit(transcript: list[dict[str, Any]]) -> bool
     result = last.get("result")
     if not isinstance(result, dict) or result.get("ok"):
         return False
-    return "tool not available in this phase" in str(result.get("error", ""))
+    return "tool not available" in str(result.get("error", ""))
 
 
 def provider_config(args: argparse.Namespace) -> tuple[str, str, str, ModelProfile]:
@@ -393,7 +499,14 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
 
     preflight = preflight_detection_inputs(binary, metadata)
     if not preflight.get("ok"):
-        initialize_agent_context(metadata, binary, args.cve_id, args.output_dir, scratch)
+        initialize_agent_context(
+            metadata,
+            binary,
+            args.cve_id,
+            args.output_dir,
+            scratch,
+            evidence_verifier_mode=args.evidence_verifier,
+        )
         result = preflight_missing_result(metadata, binary, preflight)
         transcript = [{"stage": "host_preflight", "result": preflight}]
         print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
@@ -438,10 +551,25 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
         scratch,
         patch_spec_info,
         patch_spec_result.spec,
+        args.evidence_verifier,
     )
     transcript.append(_patch_spec_transcript_entry(patch_spec_info))
     task_patch_spec = prompt_view(patch_spec_result.spec)
     source_excerpts = resolve_source_excerpts(metadata, patch_spec_result.spec)
+    configure_evidence_verifier(EvidenceVerifierSession(
+        mode=args.evidence_verifier,
+        config=EvidenceVerifierConfig(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            reasoning=reasoning_param(profile),
+            timeout=args.api_timeout,
+            max_retries=args.api_max_retries,
+            strict=not args.no_strict,
+        ),
+        patch_spec=task_patch_spec,
+        source_excerpts=source_excerpts,
+    ))
 
     tools = load_tools(strict=not args.no_strict)
     instructions = SYSTEM_PROMPT.read_text()
@@ -455,13 +583,38 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
 
     # Phase 1: bounded exploration.
     for turn in range(1, args.max_turns + 1):
+        verifier_repair_only = evidence_verifier_repair_pending()
+        turn_tools = submit_tool_only(tools) if verifier_repair_only else tools
+        allowed = (
+            {"submit_detection_result": TOOL_FUNCS["submit_detection_result"]}
+            if verifier_repair_only
+            else TOOL_FUNCS
+        )
         try:
-            resp = _sample_turn(args, instructions, input_items, tools, api_key, base_url, model, profile)
+            resp = _sample_turn(
+                args,
+                instructions,
+                input_items,
+                turn_tools,
+                api_key,
+                base_url,
+                model,
+                profile,
+            )
         except Exception as exc:
             # The proxy upstream is intermittently flaky (connection resets). After all
             # retries are exhausted, write an inconclusive artifact so a batch can still
             # score the case instead of dying empty-handed.
-            result = api_failure_fallback_result(metadata, binary, repr(exc))
+            result = (
+                verifier_pending_fallback_result(
+                    metadata,
+                    binary,
+                    error=f"Verifier repair sampling failed: {exc!r}",
+                    inconclusive_reason="tool_failure",
+                )
+                if evidence_verifier_repair_pending()
+                else api_failure_fallback_result(metadata, binary, repr(exc))
+            )
             transcript.append({"turn": turn, "stage": "api_failure", "error": repr(exc)})
             print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
             return 1
@@ -472,10 +625,14 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             print(jdump(output_items), file=sys.stderr)
         done, final_result = handle_tool_calls(
             output_items=output_items, input_items=input_items, transcript=transcript, turn_label=turn,
-            allowed_tools=TOOL_FUNCS, output_dir=args.output_dir, start_epoch=start_epoch,
+            allowed_tools=allowed, output_dir=args.output_dir, start_epoch=start_epoch,
         )
         if done and final_result is not None:
             print(jdump(final_result))
+            return 0
+        if verifier_repair_only:
+            result = verifier_pending_fallback_result(metadata, binary)
+            print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
             return 0
 
     if args.finalize_on_max_turns:
@@ -485,9 +642,42 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             remaining = args.finalization_turns - finalize_turn
             if finalize_turn > 1:
                 append_finalization_budget_prompt(input_items, remaining + 1)
-            turn_tools = submit_tool_only(tools) if remaining == 0 else tools
-            allowed = {"submit_detection_result": TOOL_FUNCS["submit_detection_result"]} if remaining == 0 else TOOL_FUNCS
-            resp = _sample_turn(args, instructions, input_items, turn_tools, api_key, base_url, model, profile)
+            verifier_repair_only = evidence_verifier_repair_pending()
+            turn_tools = submit_tool_only(tools) if remaining == 0 or verifier_repair_only else tools
+            allowed = (
+                {"submit_detection_result": TOOL_FUNCS["submit_detection_result"]}
+                if remaining == 0 or verifier_repair_only
+                else TOOL_FUNCS
+            )
+            try:
+                resp = _sample_turn(
+                    args,
+                    instructions,
+                    input_items,
+                    turn_tools,
+                    api_key,
+                    base_url,
+                    model,
+                    profile,
+                )
+            except Exception as exc:
+                result = (
+                    verifier_pending_fallback_result(
+                        metadata,
+                        binary,
+                        error=f"Verifier repair sampling failed: {exc!r}",
+                        inconclusive_reason="tool_failure",
+                    )
+                    if evidence_verifier_repair_pending()
+                    else api_failure_fallback_result(metadata, binary, repr(exc))
+                )
+                transcript.append({
+                    "turn": f"finalize-{finalize_turn}",
+                    "stage": "api_failure",
+                    "error": repr(exc),
+                })
+                print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
+                return 1
             output_items = _extract_output_items(resp)
             turn_label = f"finalize-{finalize_turn}"
             transcript.append({"turn": turn_label, "output": output_items, "usage": resp.get("usage", {})})
@@ -501,11 +691,16 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             if done and final_result is not None:
                 print(jdump(final_result))
                 return 0
+            if verifier_repair_only:
+                result = verifier_pending_fallback_result(metadata, binary)
+                print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
+                return 0
 
         # Phase 3: forced repair (submit-only).
         for repair_turn in range(1, 3):
             if not last_tool_call_needs_forced_submit(transcript):
                 break
+            verifier_repair_only = evidence_verifier_repair_pending()
             input_items.append({
                 "type": "message",
                 "role": "user",
@@ -517,7 +712,35 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                     "inconclusive with a concrete reason."
                 ),
             })
-            resp = _sample_turn(args, instructions, input_items, submit_tool_only(tools), api_key, base_url, model, profile)
+            try:
+                resp = _sample_turn(
+                    args,
+                    instructions,
+                    input_items,
+                    submit_tool_only(tools),
+                    api_key,
+                    base_url,
+                    model,
+                    profile,
+                )
+            except Exception as exc:
+                result = (
+                    verifier_pending_fallback_result(
+                        metadata,
+                        binary,
+                        error=f"Verifier repair sampling failed: {exc!r}",
+                        inconclusive_reason="tool_failure",
+                    )
+                    if evidence_verifier_repair_pending()
+                    else api_failure_fallback_result(metadata, binary, repr(exc))
+                )
+                transcript.append({
+                    "turn": f"repair-{repair_turn}",
+                    "stage": "api_failure",
+                    "error": repr(exc),
+                })
+                print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
+                return 1
             output_items = _extract_output_items(resp)
             turn_label = f"repair-{repair_turn}"
             transcript.append({"turn": turn_label, "output": output_items, "usage": resp.get("usage", {})})
@@ -532,8 +755,64 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             if done and final_result is not None:
                 print(jdump(final_result))
                 return 0
+            if verifier_repair_only:
+                result = verifier_pending_fallback_result(metadata, binary)
+                print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
+                return 0
 
-    result = max_turns_fallback_result(metadata, binary, args.max_turns)
+    if evidence_verifier_repair_pending():
+        input_items.append({
+            "type": "message",
+            "role": "user",
+            "content": (
+                "Evidence-verifier repair only: revise supports/claim using existing evidence_ids "
+                "and call submit_detection_result now. Do not inspect further. This is the single "
+                "semantic repair opportunity; downgrade to inconclusive if the cited evidence "
+                "cannot support a determinate claim."
+            ),
+        })
+        try:
+            resp = _sample_turn(
+                args,
+                instructions,
+                input_items,
+                submit_tool_only(tools),
+                api_key,
+                base_url,
+                model,
+                profile,
+            )
+            output_items = _extract_output_items(resp)
+            turn_label = "verifier-repair"
+            transcript.append({
+                "turn": turn_label,
+                "output": output_items,
+                "usage": resp.get("usage", {}),
+            })
+            done, final_result = handle_tool_calls(
+                output_items=output_items,
+                input_items=input_items,
+                transcript=transcript,
+                turn_label=turn_label,
+                allowed_tools={"submit_detection_result": TOOL_FUNCS["submit_detection_result"]},
+                output_dir=args.output_dir,
+                start_epoch=start_epoch,
+            )
+            if done and final_result is not None:
+                print(jdump(final_result))
+                return 0
+        except Exception as exc:
+            result = verifier_pending_fallback_result(
+                metadata,
+                binary,
+                error=f"Verifier repair sampling failed: {exc!r}",
+                inconclusive_reason="tool_failure",
+            )
+            print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
+            return 1
+        result = verifier_pending_fallback_result(metadata, binary)
+    else:
+        result = max_turns_fallback_result(metadata, binary, args.max_turns)
     print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
     return 0
 
@@ -568,6 +847,7 @@ def dry_run(args: argparse.Namespace) -> int:
             args.cve_id,
             patch_spec_info=patch_spec_info,
             patch_spec=patch_spec_result.spec,
+            evidence_verifier_mode=args.evidence_verifier,
         )
         task_patch_spec = prompt_view(patch_spec_result.spec)
         source_excerpts = resolve_source_excerpts(metadata, patch_spec_result.spec)
@@ -582,6 +862,7 @@ def dry_run(args: argparse.Namespace) -> int:
         print("PATCH_SPEC_GENERATION_MODE", patch_spec_info["generation_mode"])
         print("PATCH_SPEC_RESOLUTION_MODE", resolution_mode)
         print("PATCH_SPEC_CACHE_HIT", patch_spec_info["cache_hit"])
+        print("EVIDENCE_VERIFIER", args.evidence_verifier)
         print("SYSTEM_PROMPT_CHARS", len(SYSTEM_PROMPT.read_text()))
         print("TASK_CHARS", len(build_task(task_patch_spec, source_excerpts, binary, preflight)))
         print("SANDBOX_PREFLIGHT")
@@ -615,6 +896,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", default="")
     parser.add_argument("--import-interactive-env", action="store_true")
     parser.add_argument("--no-strict", action="store_true", help="drop tool 'strict' flags (non-strict tool schemas)")
+    parser.add_argument(
+        "--evidence-verifier",
+        default="llm",
+        choices=["llm", "off"],
+        help="independently verify determinate supports/claim before writing (default: llm)",
+    )
     parser.add_argument("--reasoning-effort", default="low", help="GPT-5.5 reasoning effort: low|medium|high (default low; high can exceed the API timeout)")
     parser.add_argument("--max-turns", type=int, default=20)
     parser.add_argument("--finalize-on-max-turns", action="store_true", default=True)

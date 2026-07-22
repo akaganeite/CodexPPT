@@ -59,7 +59,7 @@ Run all commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `c
 - **PatchSpec** (`patchspec/`): normalize source metadata into stable hunks, anchors, trusted OLD/NEW indicators, and model-generated advisory semantics. Generation is metadata-only, validated against exact JSON references, cached per metadata/model fingerprint, and never enters the binary evidence ledger.
 - **Tools** (`run_python_tool.py`, `semantic_probe.py`, `tools.json`): `run_python` provides general sandboxed localization; `run_semantic_probe` applies Host-controlled OLD/NEW discriminators to one bounded executable window; `submit_detection_result` finalizes. Every successful inspection mints a typed observation (`obs_XXXX`) and evidence-ledger item (`ev_XXXX`).
 - **Sandbox** (`sandbox.py`): bubblewrap exposes only `/workspace/binary` read-only plus writable `/scratch`, system Python/binutils, and no network. Model-authored Python remains confined; semantic probes use a fixed script rather than model code.
-- **Finalize** (`decision.py`, `finalize.py`, `schemas/final_result.schema.json`): the model submits behavior-scoped supports plus a structured claim. The Host resolves every PatchSpec behavior, derives the canonical verdict, and projects legacy `evidence*`/`reasoning` fields for batch compatibility. Support/claim references and evidence polarity are validated before write; failures return a repair payload, never crash. Artifacts use `final_result.v2`, so batch resume rejects pre-claim results.
+- **Finalize** (`decision.py`, `finalize.py`, `evidence_verifier.py`, `schemas/final_result.schema.json`): the model submits behavior-scoped supports plus a structured claim. The Host resolves every PatchSpec behavior and derives the canonical verdict. Determinate claims then receive an independent, fresh LLM review over only cited evidence; one rejection can repair supports/claim, while a second rejection or verifier failure fails closed to inconclusive. Verifier output is audit data, never ledger evidence. Artifacts use `final_result.v3`.
 - **Verdicts**: `present` / `absent` / `not_affected` / `inconclusive`. Default model mode is flash/non-thinking (`thinking:{type:disabled}`).
 
 ### Run a single case
@@ -73,6 +73,8 @@ python3 -m claudeagent.agent_loop \
 ```
 
 Add `--dry-run` to validate tool/result schemas, render the prompt, and run host preflight with no API call or writes. `--verbose` streams per-turn model messages to stderr. Other flags: `--model`, `--base-url`, `--env-file`, `--no-strict`, `--thinking`/`--reasoning-effort`, `--api-timeout`, `--api-max-retries`, `--no-finalize-on-max-turns`.
+
+Independent evidence verification defaults to `--evidence-verifier llm`; use `--evidence-verifier off` only for controlled compatibility runs. Verifier usage and audit are stored separately from investigator turns.
 
 Generate or inspect a PatchSpec independently with `python3 -m claudeagent.patchspec --metadata-json <metadata.json> --cve-id <CVE> --output <patch_spec.json>`. Pass a prebuilt artifact to a case with `--patchspec-json`; otherwise the case lazily resolves `<output-dir>/patch_spec.json`.
 
@@ -99,4 +101,4 @@ Single-case: CVE-2013-0249 → `present` on patched (7.29.0) and `absent` on vul
 
 ### Known limitation
 
-Generic `run_python` output is still checked structurally rather than semantically. Semantic-probe evidence additionally binds a PatchSpec behavior and enforces OLD/NEW side compatibility, but the independent evidence verifier remains responsible for judging whether model-authored discriminators truly express the patch semantics.
+Generic `run_python` output cannot prove its own provenance because the model authors the script, so the independent verifier can assess relevance and direction but cannot make it as strong as a fixed semantic probe. Prefer `run_semantic_probe` once code is localized.

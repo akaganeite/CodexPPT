@@ -16,7 +16,7 @@ SUPPORT_ID_RE = re.compile(r"^sup_[0-9]{4}$")
 OBSERVED_SIDES = {"old", "new", "ambiguous", "not_applicable"}
 POSITIVE_REQUIRED_SIDES = {"old", "new", "not_applicable"}
 DECISIVE_SIDES = {"old", "new", "not_applicable"}
-FINAL_SCHEMA_VERSION = "final_result.v2"
+FINAL_SCHEMA_VERSION = "final_result.v3"
 
 
 def support_evidence_ids(supports: Any) -> list[str]:

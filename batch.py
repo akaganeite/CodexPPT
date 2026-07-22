@@ -29,8 +29,13 @@ from typing import Any
 
 from claudeagent.common import ROOT, VERDICTS, expand, jdump, load_json
 from claudeagent.decision import FINAL_SCHEMA_VERSION
+from claudeagent.evidence_verifier import (
+    EvidenceVerifierConfig,
+    evidence_verifier_config_digest,
+)
+from claudeagent.finalize import validate_final_result_artifact
 from claudeagent.host import import_env_from_interactive_shell
-from claudeagent.model_config import resolve_api_key, resolve_profile
+from claudeagent.model_config import reasoning_param, resolve_api_key, resolve_profile
 from claudeagent.patchspec import (
     PatchSpecModelConfig,
     ensure_patch_spec,
@@ -297,6 +302,20 @@ def build_patchspec_config(
     )
 
 
+def requested_evidence_verifier_digest(args: argparse.Namespace, profile: Any) -> str:
+    if str(getattr(args, "evidence_verifier", "llm")) != "llm":
+        return ""
+    return evidence_verifier_config_digest(EvidenceVerifierConfig(
+        api_key="",
+        base_url=str(getattr(args, "base_url", "") or profile.base_url),
+        model=str(getattr(args, "model", "") or profile.model),
+        reasoning=reasoning_param(profile),
+        timeout=int(getattr(args, "api_timeout", 240)),
+        max_retries=int(getattr(args, "api_max_retries", 3)),
+        strict=not bool(getattr(args, "no_strict", False)),
+    ))
+
+
 def required_patchspec_keys(
     metadata_by_cve: dict[str, dict[str, Any]],
     cve_ids: set[str] | list[str],
@@ -522,6 +541,59 @@ def _patch_spec_fields(final: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _evidence_verifier_fields(final: dict[str, Any]) -> dict[str, Any]:
+    """Extract independent verifier audit/usage without mixing investigation cost."""
+    audit = (
+        final.get("evidence_verification")
+        if isinstance(final.get("evidence_verification"), dict)
+        else {}
+    )
+    usage_metrics = final.get("usage_metrics") if isinstance(final.get("usage_metrics"), dict) else {}
+    usage = (
+        usage_metrics.get("evidence_verifier")
+        if isinstance(usage_metrics.get("evidence_verifier"), dict)
+        else {}
+    )
+    raw_turns = usage.get("model_turns", 0)
+    model_turns = (
+        int(raw_turns)
+        if isinstance(raw_turns, (int, float)) and not isinstance(raw_turns, bool)
+        else 0
+    )
+    return {
+        "evidence_verification": audit,
+        "evidence_verifier_mode": str(audit.get("mode", "")),
+        "evidence_verifier_outcome": str(audit.get("outcome", "")),
+        "evidence_verifier_config_digest": str(audit.get("config_digest", "")),
+        "evidence_verifier_model_turns": model_turns,
+        "evidence_verifier_usage_totals": rename_usage(usage.get("totals", {})),
+    }
+
+
+def evidence_verifier_batch_metrics(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate verifier outcomes and tokens separately from investigator usage."""
+    mode_counts = Counter(str(item.get("evidence_verifier_mode", "") or "unknown") for item in records)
+    outcome_counts = Counter(
+        str(item.get("evidence_verifier_outcome", "") or "unknown") for item in records
+    )
+    totals: dict[str, int | float] = {}
+    model_turns = 0
+    for item in records:
+        raw_turns = item.get("evidence_verifier_model_turns", 0)
+        if isinstance(raw_turns, (int, float)) and not isinstance(raw_turns, bool):
+            model_turns += int(raw_turns)
+        for key, value in (item.get("evidence_verifier_usage_totals") or {}).items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                totals[key] = totals.get(key, 0) + value
+    return {
+        "mode_counts": dict(sorted(mode_counts.items())),
+        "outcome_counts": dict(sorted(outcome_counts.items())),
+        "model_turns": model_turns,
+        "usage_totals": totals,
+        "usage_mean": _mean_usage(totals, len(records)),
+    }
+
+
 # Resume modes decide which already-run cases get re-run vs. reused as-is.
 #   auto        - skip every case with a completed final_result.json (present/
 #                 absent/not_affected/inconclusive); re-run only missing/error/
@@ -543,6 +615,20 @@ _COMPLETED_STATUSES = {"present", "absent", "not_affected", "inconclusive"}
 # both surface as None below and get re-run under auto/error.
 
 
+def _artifact_validation_errors(final: Any) -> list[str]:
+    """Reject artifacts that could bypass Host/verifier fail-closed rules."""
+    if not isinstance(final, dict):
+        return ["final_result.json is not an object"]
+    errors: list[str] = []
+    recorded = final.get("schema_validation_errors")
+    if isinstance(recorded, list) and recorded:
+        errors.append("artifact records schema_validation_errors")
+    errors.extend(validate_final_result_artifact(final))
+    if final.get("status") in {"present", "absent", "not_affected"} and final.get("ok") is not True:
+        errors.append("determinate artifact requires ok=true")
+    return errors
+
+
 def _existing_case_artifact(case_dir: Path) -> dict[str, Any] | None:
     """Load a completed case artifact, or return None when it is unusable."""
     final_path = case_dir / "final_result.json"
@@ -556,6 +642,7 @@ def _existing_case_artifact(case_dir: Path) -> dict[str, Any] | None:
         not isinstance(final, dict)
         or final.get("schema_version") != FINAL_SCHEMA_VERSION
         or final.get("status") not in _COMPLETED_STATUSES
+        or _artifact_validation_errors(final)
     ):
         return None
     return final
@@ -587,6 +674,7 @@ def _select_resume_cases(
     out_root: Path,
     args: argparse.Namespace,
     patchspec_keys: dict[str, str] | None = None,
+    evidence_verifier_digest: str = "",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     """Split ``cases`` into (to_run, to_reuse) under the resume policy.
 
@@ -602,6 +690,7 @@ def _select_resume_cases(
         "completed": 0,
         "inconclusive": 0,
         "stale_patchspec": 0,
+        "stale_evidence_verifier": 0,
         "retry": 0,
         "skipped": 0,
     }
@@ -613,17 +702,39 @@ def _select_resume_cases(
         required_key = (patchspec_keys or {}).get(case["cve_id"], "")
         actual_key = _patch_spec_fields(artifact or {}).get("patch_spec_cache_key", "")
         stale_patchspec = bool(status and required_key and actual_key != required_key)
+        requested_verifier_mode = str(getattr(args, "evidence_verifier", "llm"))
+        actual_verifier_mode = _evidence_verifier_fields(artifact or {}).get(
+            "evidence_verifier_mode", ""
+        )
+        actual_verifier_digest = _evidence_verifier_fields(artifact or {}).get(
+            "evidence_verifier_config_digest", ""
+        )
+        stale_evidence_verifier = bool(
+            status
+            and (
+                actual_verifier_mode != requested_verifier_mode
+                or (
+                    requested_verifier_mode == "llm"
+                    and evidence_verifier_digest
+                    and actual_verifier_digest
+                    and actual_verifier_digest != evidence_verifier_digest
+                )
+            )
+        )
         if status is not None:
             counts["completed"] += 1
             if status == "inconclusive":
                 counts["inconclusive"] += 1
             if stale_patchspec:
                 counts["stale_patchspec"] += 1
+            if stale_evidence_verifier:
+                counts["stale_evidence_verifier"] += 1
 
         # auto/error are consistency-preserving resume modes: a completed case
         # from a different PatchSpec fingerprint is not reusable. The explicit
         # inconclusive-only mode retains its narrow selection contract.
-        policy_status = None if stale_patchspec and mode in {"auto", "error"} else status
+        stale = stale_patchspec or stale_evidence_verifier
+        policy_status = None if stale and mode in {"auto", "error"} else status
 
         if mode == "all":
             run_it = True
@@ -669,6 +780,7 @@ def _case_command(
         "--api-timeout", str(args.api_timeout),
         "--api-max-retries", str(args.api_max_retries),
         "--api-turn-retries", str(args.api_turn_retries),
+        "--evidence-verifier", str(getattr(args, "evidence_verifier", "llm")),
     ]
     if args.model:
         cmd += ["--model", args.model]
@@ -700,6 +812,9 @@ def run_one_case(
         "usage_totals": {},
         "timing": {},
         "model_turns": 0,
+        "evidence_verifier_config_digest": "",
+        "evidence_verifier_model_turns": 0,
+        "evidence_verifier_usage_totals": {},
     }
     if not binary_path.is_file():
         record.update({"predicted": "not_found", "ok": False, "error": "binary file missing", "correct": False})
@@ -742,6 +857,16 @@ def run_one_case(
     except Exception as exc:
         record.update({"predicted": "error", "ok": False, "error": f"unreadable final_result: {exc}", "correct": False})
         return record
+    artifact_errors = _artifact_validation_errors(final)
+    if artifact_errors:
+        record.update({
+            "predicted": "error",
+            "ok": False,
+            "error": "invalid final_result artifact",
+            "schema_validation_errors": artifact_errors,
+            "correct": False,
+        })
+        return record
 
     predicted = str(final.get("status", "error"))
     usage_metrics = final.get("usage_metrics") if isinstance(final.get("usage_metrics"), dict) else {}
@@ -760,6 +885,7 @@ def run_one_case(
         "timing": final.get("timing", {}),
         "model_turns": usage_metrics.get("model_turns", 0),
         **_patch_spec_fields(final),
+        **_evidence_verifier_fields(final),
     })
     return record
 
@@ -782,6 +908,9 @@ def _record_patchspec_failure(
         "usage_totals": {},
         "timing": {},
         "model_turns": 0,
+        "evidence_verifier_config_digest": "",
+        "evidence_verifier_model_turns": 0,
+        "evidence_verifier_usage_totals": {},
         "correct": False,
         "ok": False,
     }
@@ -809,6 +938,9 @@ def _record_from_artifact(case: dict[str, Any], case_dir: Path) -> dict[str, Any
         "usage_totals": {},
         "timing": {},
         "model_turns": 0,
+        "evidence_verifier_config_digest": "",
+        "evidence_verifier_model_turns": 0,
+        "evidence_verifier_usage_totals": {},
         "reused": True,
     }
     final_path = case_dir / "final_result.json"
@@ -819,6 +951,16 @@ def _record_from_artifact(case: dict[str, Any], case_dir: Path) -> dict[str, Any
         final = load_json(final_path)
     except Exception as exc:
         record.update({"predicted": "error", "ok": False, "error": f"unreadable reused final_result: {exc}", "correct": False})
+        return record
+    artifact_errors = _artifact_validation_errors(final)
+    if artifact_errors:
+        record.update({
+            "predicted": "error",
+            "ok": False,
+            "error": "invalid reused final_result artifact",
+            "schema_validation_errors": artifact_errors,
+            "correct": False,
+        })
         return record
     predicted = str(final.get("status", "error"))
     usage_metrics = final.get("usage_metrics") if isinstance(final.get("usage_metrics"), dict) else {}
@@ -836,6 +978,7 @@ def _record_from_artifact(case: dict[str, Any], case_dir: Path) -> dict[str, Any
         "timing": final.get("timing", {}),
         "model_turns": usage_metrics.get("model_turns", 0),
         **_patch_spec_fields(final),
+        **_evidence_verifier_fields(final),
     })
     return record
 
@@ -845,7 +988,17 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
     confusion = {exp: {pred: 0 for pred in outcomes} for exp in VERDICTS}
     correct = 0
     scored = 0
-    repair_totals = {"schema_repair_attempts": 0, "no_evidence_verdicts": 0, "tool_failures": 0, "command_failures": 0}
+    repair_totals = {
+        "schema_repair_attempts": 0,
+        "no_evidence_verdicts": 0,
+        "tool_failures": 0,
+        "command_failures": 0,
+        "evidence_verifier_calls": 0,
+        "evidence_verifier_accepts": 0,
+        "evidence_verifier_rejections": 0,
+        "evidence_verifier_repairs": 0,
+        "evidence_verifier_failures": 0,
+    }
     for rec in records:
         exp = rec.get("expected")
         pred = rec.get("predicted", "error")
@@ -919,11 +1072,16 @@ def run_batch(args: argparse.Namespace) -> int:
     missing_metadata = sorted(selected_cves - set(patchspec_keys))
     if missing_metadata:
         raise SystemExit(f"metadata missing for selected CVE(s): {missing_metadata}")
+    verifier_digest = requested_evidence_verifier_digest(args, profile)
 
     # Resume selection is PatchSpec-aware under auto/error: completed results
     # produced with a different metadata/prompt/model fingerprint are stale.
     to_run, to_reuse, counts = _select_resume_cases(
-        cases, out_root, args, patchspec_keys=patchspec_keys
+        cases,
+        out_root,
+        args,
+        patchspec_keys=patchspec_keys,
+        evidence_verifier_digest=verifier_digest,
     )
     patchspec_cves = {case["cve_id"] for case in to_run}
 
@@ -948,6 +1106,7 @@ def run_batch(args: argparse.Namespace) -> int:
         print("total_cases:", len(cases))
         print("by_expected:", {v: sum(1 for c in cases if c["expected"] == v) for v in VERDICTS})
         print("resume_mode:", args.resume, "retry_inconclusive:", getattr(args, "retry_inconclusive", False))
+        print("evidence_verifier:", args.evidence_verifier)
         print("resume_counts:", counts)
         print("patchspec_cves:", len(patchspec_cves))
         print("patchspec_metrics:", patchspec_batch_metrics(patchspec_results, patchspec_failures, patchspec_wall))
@@ -1058,7 +1217,8 @@ def run_batch(args: argparse.Namespace) -> int:
         f"resume={args.resume} retry_inconclusive={getattr(args, 'retry_inconclusive', False)} "
         f"total={counts['total']} retry={counts['retry']} skipped={counts['skipped']} "
         f"(completed={counts['completed']} inconclusive={counts['inconclusive']} "
-        f"stale_patchspec={counts['stale_patchspec']})",
+        f"stale_patchspec={counts['stale_patchspec']} "
+        f"stale_evidence_verifier={counts['stale_evidence_verifier']})",
         file=sys.stderr,
     )
     records: list[dict[str, Any]] = [
@@ -1091,6 +1251,7 @@ def run_batch(args: argparse.Namespace) -> int:
     # pptagent batch_metrics.json / batch_results.json).
     metrics = batch_metrics_pptagent(records, batch_wall_seconds=wall_seconds)
     metrics["patchspec_metrics"] = patchspec_metrics
+    metrics["evidence_verifier_metrics"] = evidence_verifier_batch_metrics(records)
     (out_root / "batch_metrics.json").write_text(jdump(metrics) + "\n", encoding="utf-8")
     by_cve: dict[str, list[dict[str, Any]]] = {}
     for rec in records:
@@ -1138,6 +1299,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-profile", default="",
                         help="config profile name or alias (see model_config.json); default is the config's active_profile")
     parser.add_argument("--no-strict", action="store_true")
+    parser.add_argument(
+        "--evidence-verifier",
+        default="llm",
+        choices=["llm", "off"],
+        help="single-case independent evidence verifier mode (default: llm)",
+    )
     parser.add_argument("--max-turns", type=int, default=20)
     parser.add_argument("--finalization-turns", type=int, default=3)
     parser.add_argument("--api-timeout", type=int, default=240)

@@ -16,7 +16,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from claudeagent import batch
+from claudeagent.evidence_verifier import VERIFIER_PROMPT_VERSION
+from claudeagent.finalize import build_final_artifact, preflight_missing_result
 from claudeagent.patchspec import PatchSpecModelConfig
+from claudeagent.runtime import initialize_agent_context
 
 
 METADATA = {
@@ -64,6 +67,7 @@ def _args(tmp: str) -> argparse.Namespace:
         base_url="",
         model_profile="",
         no_strict=False,
+        evidence_verifier="llm",
         resume="auto",
         retry_inconclusive=False,
     )
@@ -79,6 +83,129 @@ def _result(cve_id: str, path: Path | None = None, *, usage=None, mode="generate
         cache_hit=mode == "cache_hit",
         path=str(path) if path is not None else None,
     )
+
+
+def _valid_final(
+    *,
+    cache_key: str,
+    verifier_mode: str = "llm",
+    verifier_digest: str = "d" * 64,
+) -> dict:
+    support = {
+        "support_id": "sup_0001",
+        "behavior_id": "B001",
+        "observed_side": "new",
+        "summary": "The cited target code implements the required guarded behavior.",
+        "evidence_ids": ["ev_0001"],
+        "decisive_addresses": ["0x1010"],
+    }
+    claim = {
+        "summary": "The sole required behavior is established as NEW.",
+        "support_ids": ["sup_0001"],
+        "unresolved_behavior_ids": [],
+    }
+    verdict = {
+        "status": "present",
+        "rule": "all_applicable_required_new",
+        "behavior_claims": [{
+            "behavior_id": "B001",
+            "required": True,
+            "resolved_side": "new",
+            "resolution": "consistent",
+            "support_ids": ["sup_0001"],
+        }],
+    }
+    if verifier_mode == "llm":
+        audit = {
+            "mode": "llm",
+            "outcome": "accepted",
+            "prompt_version": VERIFIER_PROMPT_VERSION,
+            "model": "gpt-5.5",
+            "reasoning": {"effort": "medium"},
+            "config_digest": verifier_digest,
+            "repair_pending": False,
+            "attempts": [{
+                "attempt": 1,
+                "outcome": "accept",
+                "verification": {
+                    "action": "accept",
+                    "claim_relation": "supported",
+                    "support_checks": [{
+                        "support_id": "sup_0001",
+                        "checked_evidence_ids": ["ev_0001"],
+                        "relation": "direct",
+                        "assessed_side": "new",
+                        "reason": "The cited target predicate implements the NEW behavior.",
+                    }],
+                    "missing_behavior_ids": [],
+                    "repair_instruction": "",
+                },
+            }],
+        }
+    else:
+        audit = {
+            "mode": "off",
+            "outcome": "off",
+            "prompt_version": VERIFIER_PROMPT_VERSION,
+            "model": "",
+            "reasoning": None,
+            "config_digest": "",
+            "repair_pending": False,
+            "attempts": [],
+        }
+    return {
+        "schema_version": "final_result.v3",
+        "ok": True,
+        "project": "curl",
+        "cve_id": "CVE-A",
+        "binary": "/anonymous/target_binary",
+        "status": "present",
+        "confidence": "high",
+        "supports": [support],
+        "claim": claim,
+        "verdict": verdict,
+        "evidence": [support["summary"]],
+        "evidence_ids": ["ev_0001"],
+        "reasoning": claim["summary"],
+        "decisive_addresses": ["0x1010"],
+        "inconclusive_reason": "none",
+        "completed_at_epoch": 1.0,
+        "observations": [],
+        "evidence_ledger": [{
+            "evidence_id": "ev_0001",
+            "observation_id": "obs_0001",
+            "kind": "disassembly_predicates",
+            "claim": "The guarded target predicate is present.",
+            "supporting_excerpt": ["0x1010: test eax,eax"],
+            "location": {},
+            "confidence": "supporting",
+            "polarity": "positive",
+        }],
+        "harness_metrics": {},
+        "patch_spec": {
+            "digest": "spec-digest",
+            "generation_mode": "generated",
+            "resolution_mode": "provided",
+            "cache_key": cache_key,
+            "cache_hit": False,
+            "behavior_contract": [{"behavior_id": "B001", "required": True}],
+        },
+        "evidence_verification": audit,
+        "timing": {"wall_seconds": 1.0},
+        "usage_metrics": {
+            "provider": "openai-responses",
+            "model_turns": 1,
+            "totals": {},
+            "by_turn": [],
+            "evidence_verifier": {
+                "provider": "openai-responses",
+                "model": "gpt-5.5" if verifier_mode == "llm" else "",
+                "model_turns": 1 if verifier_mode == "llm" else 0,
+                "totals": {},
+                "by_attempt": [],
+            },
+        },
+    }
 
 
 def _run() -> int:
@@ -203,8 +330,10 @@ def _run() -> int:
         )
         patch_index = command.index("--patchspec-json")
         metadata_index = command.index("--metadata-json")
+        verifier_index = command.index("--evidence-verifier")
         check("case gets explicit PatchSpec", command[patch_index + 1].endswith("shared-spec.json"))
         check("case retains host metadata", command[metadata_index + 1] == args.metadata_json)
+        check("case gets verifier mode", command[verifier_index + 1] == "llm")
 
         # A CVE-level hard failure produces error records without starting a child.
         binary = Path(tmp) / "variant" / "bin"
@@ -245,24 +374,129 @@ def _run() -> int:
         cases = [
             {"cve_id": "CVE-A", "binary_name": "matching", "expected": "present"},
             {"cve_id": "CVE-A", "binary_name": "stale", "expected": "present"},
+            {"cve_id": "CVE-A", "binary_name": "stale-verifier", "expected": "present"},
+            {"cve_id": "CVE-A", "binary_name": "stale-digest", "expected": "present"},
+            {"cve_id": "CVE-A", "binary_name": "invalid-verifier", "expected": "present"},
+            {"cve_id": "CVE-A", "binary_name": "preflight-inconclusive", "expected": "present"},
         ]
-        for binary_name, key in [("matching", "a" * 64), ("stale", "c" * 64)]:
+        expected_verifier_digest = "d" * 64
+        for binary_name, key, verifier_mode, verifier_digest in [
+            ("matching", "a" * 64, "llm", expected_verifier_digest),
+            ("stale", "c" * 64, "llm", expected_verifier_digest),
+            ("stale-verifier", "a" * 64, "off", ""),
+            ("stale-digest", "a" * 64, "llm", "e" * 64),
+            ("invalid-verifier", "a" * 64, "llm", expected_verifier_digest),
+        ]:
             case_dir = batch.safe_case_dir(out_root, "CVE-A", binary_name)
             case_dir.mkdir(parents=True)
+            artifact = _valid_final(
+                cache_key=key,
+                verifier_mode=verifier_mode,
+                verifier_digest=verifier_digest,
+            )
+            if binary_name == "invalid-verifier":
+                artifact["ok"] = False
+                artifact["evidence_verification"]["outcome"] = "not_run"
+                artifact["evidence_verification"]["attempts"] = []
             (case_dir / "final_result.json").write_text(
-                json.dumps({
-                    "schema_version": "final_result.v2",
-                    "status": "present",
-                    "patch_spec": {"cache_key": key},
-                }),
+                json.dumps(artifact),
                 encoding="utf-8",
             )
-        to_run, to_reuse, counts = batch._select_resume_cases(
-            cases, out_root, args, patchspec_keys={"CVE-A": "a" * 64}
+        initialize_agent_context(
+            {"cve_id": "CVE-A", "project": "curl"},
+            "/anonymous/target_binary",
+            patch_spec_info={
+                "digest": "spec-digest",
+                "generation_mode": "generated",
+                "resolution_mode": "provided",
+                "cache_key": "a" * 64,
+                "cache_hit": False,
+                "usage": {},
+            },
+            patch_spec={"behaviors": [{"behavior_id": "B001", "required": True}]},
+            evidence_verifier_mode="llm",
         )
-        check("matching result reused", [item["binary_name"] for item in to_reuse] == ["matching"])
-        check("stale result rerun", [item["binary_name"] for item in to_run] == ["stale"])
+        preflight_artifact, preflight_errors = build_final_artifact(
+            preflight_missing_result(
+                {"cve_id": "CVE-A", "project": "curl"},
+                "/anonymous/target_binary",
+                {"ok": False, "error": "unsupported"},
+            ),
+            [],
+            0.0,
+        )
+        check("preflight inconclusive fixture valid", not preflight_errors)
+        preflight_dir = batch.safe_case_dir(out_root, "CVE-A", "preflight-inconclusive")
+        preflight_dir.mkdir(parents=True)
+        (preflight_dir / "final_result.json").write_text(
+            json.dumps(preflight_artifact),
+            encoding="utf-8",
+        )
+        to_run, to_reuse, counts = batch._select_resume_cases(
+            cases,
+            out_root,
+            args,
+            patchspec_keys={"CVE-A": "a" * 64},
+            evidence_verifier_digest=expected_verifier_digest,
+        )
+        check(
+            "matching and preflight results reused",
+            [item["binary_name"] for item in to_reuse]
+            == ["matching", "preflight-inconclusive"],
+        )
+        check(
+            "stale result rerun",
+            [item["binary_name"] for item in to_run]
+            == ["stale", "stale-verifier", "stale-digest", "invalid-verifier"],
+        )
         check("stale counted", counts["stale_patchspec"] == 1)
+        check("stale verifier counted", counts["stale_evidence_verifier"] == 2)
+
+    verifier_metrics = batch.evidence_verifier_batch_metrics([
+        {
+            "evidence_verifier_mode": "llm",
+            "evidence_verifier_outcome": "accepted",
+            "evidence_verifier_model_turns": 1,
+            "evidence_verifier_usage_totals": {"prompt_tokens": 10, "completion_tokens": 2},
+        },
+        {
+            "evidence_verifier_mode": "llm",
+            "evidence_verifier_outcome": "accepted_after_repair",
+            "evidence_verifier_model_turns": 2,
+            "evidence_verifier_usage_totals": {"prompt_tokens": 12, "completion_tokens": 3},
+        },
+    ])
+    check("verifier outcome counts", verifier_metrics["outcome_counts"] == {
+        "accepted": 1,
+        "accepted_after_repair": 1,
+    })
+    check("verifier usage separate aggregate", verifier_metrics["usage_totals"].get("prompt_tokens") == 22)
+    check("verifier model turns aggregate", verifier_metrics["model_turns"] == 3)
+
+    valid_artifact = _valid_final(cache_key="a" * 64)
+    check("valid determinate artifact accepted", not batch._artifact_validation_errors(valid_artifact))
+    invalid_artifact = _valid_final(cache_key="a" * 64)
+    invalid_artifact["ok"] = False
+    invalid_artifact["evidence_verification"]["outcome"] = "not_run"
+    invalid_artifact["evidence_verification"]["attempts"] = []
+    check(
+        "unverified determinate artifact rejected",
+        bool(batch._artifact_validation_errors(invalid_artifact)),
+    )
+    malformed_usage = _valid_final(cache_key="a" * 64)
+    malformed_usage["usage_metrics"]["evidence_verifier"]["model_turns"] = "bad"
+    malformed_fields = batch._evidence_verifier_fields(malformed_usage)
+    malformed_metrics = batch.evidence_verifier_batch_metrics([{
+        "evidence_verifier_mode": "llm",
+        "evidence_verifier_outcome": "accepted",
+        "evidence_verifier_model_turns": "bad",
+        "evidence_verifier_usage_totals": {},
+    }])
+    check(
+        "malformed verifier usage cannot crash batch",
+        malformed_fields["evidence_verifier_model_turns"] == 0
+        and malformed_metrics["model_turns"] == 0,
+    )
 
     # Resume never reuses a pre-claim legacy artifact, even with a matching key.
     with tempfile.TemporaryDirectory() as tmp:

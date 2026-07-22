@@ -22,7 +22,7 @@ python3 -m claudeagent.patchspec --metadata-json <metadata.json> \
 ```sh
 for test in test_finalize test_model_config test_responses_loop test_sandbox test_waf \
   test_patchspec test_prompting test_batch_patchspec test_supports test_decision \
-  test_semantic_probe; do
+  test_semantic_probe test_evidence_verifier; do
   python3 -m claudeagent.tests.$test || exit 1
 done
 ```
