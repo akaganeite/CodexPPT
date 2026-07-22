@@ -1,9 +1,9 @@
 """Task payload and finalization prompt construction.
 
-The per-case user message reproduces the inputs that made direct `codex exec`
-detection effective: the CVE metadata up front, the target-binary facts
-(including ELF class/arch, for early not_affected filtering), and an explicit
-evidence-citation contract.
+The per-case user message carries a prompt-safe PatchSpec plus its exact source
+excerpts, target-binary facts (including ELF class/arch), and the evidence
+citation contract. Full CVE metadata and PatchSpec generation provenance stay
+host-side.
 """
 
 from __future__ import annotations
@@ -11,21 +11,32 @@ from __future__ import annotations
 from typing import Any
 
 from claudeagent.common import FINAL_RESULT_SCHEMA, jdump
-from claudeagent.runtime import AGENT_CONTEXT
 from claudeagent.schema_validate import final_tool_parameters_schema, load_final_result_schema
 
 
-def build_task(metadata: dict[str, Any], binary: str, preflight: dict[str, Any]) -> str:
+def build_task(
+    patch_spec: dict[str, Any],
+    source_excerpts: list[dict[str, Any]],
+    binary: str,
+    preflight: dict[str, Any],
+) -> str:
     final_schema = load_final_result_schema()
+    binary_facts = dict(preflight.get("binary", {}))
+    binary_facts["path"] = "/workspace/binary"
+    if isinstance(binary_facts.get("file"), str) and binary:
+        binary_facts["file"] = binary_facts["file"].replace(binary, "/workspace/binary")
     payload = {
-        "cve": metadata.get("cve_id", ""),
-        "cve_metadata": metadata,
-        "target_binary": binary,
-        "scratch_dir": AGENT_CONTEXT.get("scratch_dir", ""),
-        "binary_facts": preflight.get("binary", {}),
+        "cve": (patch_spec.get("source") or {}).get("cve_id", ""),
+        "patch_spec": patch_spec,
+        "patch_spec_source_excerpts": source_excerpts,
+        "target_binary": "/workspace/binary",
+        "scratch_dir": "/scratch",
+        "binary_facts": binary_facts,
         "symbol_hint": preflight.get("symbol_hint", {}),
         "harness_protocol": [
-            "read metadata -> check arch early -> extract anchors -> find offsets -> disassemble -> decide",
+            "read PatchSpec -> check arch early -> use localization anchors -> find offsets -> compare trusted old/new indicators -> decide",
+            "PatchSpec advisory semantics guide investigation but are not target-binary evidence",
+            "an anchor miss alone cannot prove absent or not_affected",
             "determinate verdicts require target-binary evidence_ids returned by run_python calls",
             "use inconclusive with a concrete reason when evidence or applicability is unresolved",
         ],
@@ -39,6 +50,8 @@ def build_task(metadata: dict[str, Any], binary: str, preflight: dict[str, Any])
             "no_debug_or_source_artifacts": True,
             "do_not_use_version_or_path_as_evidence": True,
             "do_not_invent_observations": True,
+            "patch_spec_is_not_evidence": True,
+            "trusted_indicators_require_binary_confirmation": True,
             "finish_tool": "submit_detection_result",
             "determinate_status_requires_evidence_ids": True,
         },

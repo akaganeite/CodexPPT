@@ -167,6 +167,18 @@
       "type": "object",
       "additionalProperties": { "type": "integer" }
     },
+    "patch_spec": {
+      "type": "object",
+      "required": ["digest", "generation_mode", "resolution_mode", "cache_key", "cache_hit"],
+      "properties": {
+        "digest": { "type": "string" },
+        "generation_mode": { "type": "string" },
+        "resolution_mode": { "type": "string" },
+        "cache_key": { "type": "string" },
+        "cache_hit": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "timing": { "type": "object", "additionalProperties": true },
     "usage_metrics": { "type": "object", "additionalProperties": true }
   },

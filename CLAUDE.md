@@ -17,7 +17,7 @@ The verdict **must** be produced by the model calling a finalization tool after 
 
 These come from `../AGENTS.md` and define what "correct" means here. Read that file before changing input handling, evidence flow, or verdict validation.
 
-- **Model input is bounded.** The model may see only: (1) the initial CVE metadata prompt, (2) the target binary itself, and (3) controlled `binutils` observations derived directly from that binary.
+- **Model input is bounded.** The investigation model may see only: (1) the host-compiled PatchSpec and its exact metadata source excerpts, (2) the target binary itself, and (3) controlled `binutils` observations derived directly from that binary. Full CVE metadata and PatchSpec generation provenance remain host-side.
 - **Never leak debug/source signals** into the model, transcript, evidence ledger, or default verdict validation. Forbidden as default inputs/evidence: sibling debug/unstripped artifacts (`curl_debug`, `.debug` files), local source repos (e.g. `~/extrepo/...`), source files, DWARF / source-line tables, `addr2line` source mapping, `objdump -S`, `readelf --debug-dump=*`. Humans may diagnose with these *outside* the harness, but such facts cannot become model input or final evidence.
 - **Determinate verdicts must cite evidence.** `present` / `absent` / `not_affected` must reference concrete `evidence_id`s emitted by tools. Free-text-only evidence is rejected and returned to the model for repair rather than silently accepted.
 - **Schema failures repair, not crash.** When the finalization payload fails schema validation, send the error back as tool output so the model can fix it, instead of ending the run.
@@ -56,6 +56,7 @@ Working end-to-end. The harness is a lean tool loop (distilled from the codex ag
 Run all commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `claudeagent` imports resolve.
 
 - **Loop** (`agent_loop.py`): build prompt → sample model → dispatch tool calls → feed bounded results back → repeat until `submit_detection_result` is accepted. Three bounded phases: explore (`--max-turns`, default 12) → finalize-nudge (`--finalization-turns`, default 3) → forced repair (≤2). Tool/schema failures repair in-band; only model-API failures (after retries) abort.
+- **PatchSpec** (`patchspec/`): normalize source metadata into stable hunks, anchors, trusted OLD/NEW indicators, and model-generated advisory semantics. Generation is metadata-only, validated against exact JSON references, cached per metadata/model fingerprint, and never enters the binary evidence ledger.
 - **Tools** (`tools.py`, `tools.json`): general `run_command` + `strings_grep` + `objdump_window` + `submit_detection_result`. Every successful command mints a typed observation (`obs_XXXX`) and one or more evidence-ledger items (`ev_XXXX`); the model cites those ids. "The observation is the citable evidence."
 - **Policy** (`command_policy.py`): default-deny allowlist (binutils + safe filters), debug/source denylist, and **path confinement** — every path argument must resolve to the one target binary, so sibling `.debug`/source artifacts are blocked at the policy layer.
 - **Finalize** (`finalize.py`, `schemas/final_result.schema.json`): JSON-schema + evidence-id gate (determinate verdicts need ≥1 real ledger id) + version/path-string rejection. Failures return a repair payload, never crash.
@@ -72,6 +73,8 @@ python3 -m claudeagent.agent_loop \
 ```
 
 Add `--dry-run` to validate tool/result schemas, render the prompt, and run host preflight with no API call or writes. `--verbose` streams per-turn model messages to stderr. Other flags: `--model`, `--base-url`, `--env-file`, `--no-strict`, `--thinking`/`--reasoning-effort`, `--api-timeout`, `--api-max-retries`, `--no-finalize-on-max-turns`.
+
+Generate or inspect a PatchSpec independently with `python3 -m claudeagent.patchspec --metadata-json <metadata.json> --cve-id <CVE> --output <patch_spec.json>`. Pass a prebuilt artifact to a case with `--patchspec-json`; otherwise the case lazily resolves `<output-dir>/patch_spec.json`.
 
 Per-case artifacts in `--output-dir`: `final_result.json` (verdict + observations + evidence_ledger + harness_metrics + usage), `transcript.json`, `usage_metrics.json`.
 

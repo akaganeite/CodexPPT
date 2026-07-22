@@ -15,6 +15,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -28,7 +29,13 @@ from typing import Any
 
 from claudeagent.common import ROOT, VERDICTS, expand, jdump, load_json
 from claudeagent.host import import_env_from_interactive_shell
-from claudeagent.model_config import interactive_env_keys, resolve_profile
+from claudeagent.model_config import resolve_api_key, resolve_profile
+from claudeagent.patchspec import (
+    PatchSpecModelConfig,
+    ensure_patch_spec,
+    patch_spec_cache_key,
+    patch_spec_cache_path,
+)
 
 
 PACKAGE_PARENT = ROOT.parent  # so `python3 -m claudeagent.agent_loop` resolves
@@ -80,15 +87,25 @@ def rename_usage(totals: dict[str, Any]) -> dict[str, int | float]:
     """
     if not isinstance(totals, dict):
         return {}
+
+    def numeric_leaves(value: Any, prefix: str = "") -> list[tuple[str, int | float]]:
+        leaves: list[tuple[str, int | float]] = []
+        if isinstance(value, dict):
+            for key, item in value.items():
+                child = f"{prefix}.{key}" if prefix else str(key)
+                leaves.extend(numeric_leaves(item, child))
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            leaves.append((prefix, value))
+        return leaves
+
     out: dict[str, int | float] = {}
-    for key, value in totals.items():
+    for key, value in numeric_leaves(totals):
         if key in _USAGE_DROP_KEYS:
             continue
         mapped = _USAGE_KEY_MAP.get(key)
         if mapped is None:
             continue  # unknown key -> drop (strict pptagent-only schema)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            out[mapped] = value
+        out[mapped] = value
     input_tokens = totals.get("input_tokens")
     cached = (totals.get("input_tokens_details") or {}).get("cached_tokens") \
         if isinstance(totals.get("input_tokens_details"), dict) \
@@ -229,6 +246,75 @@ def load_cases(groundtruth_path: str, cve_filter: str) -> list[dict[str, Any]]:
     return cases
 
 
+def load_metadata_index(metadata_path: str) -> dict[str, dict[str, Any]]:
+    """Load batch metadata once and index normalized objects by CVE id."""
+    raw = load_json(metadata_path)
+    indexed: dict[str, dict[str, Any]] = {}
+    if isinstance(raw, dict) and isinstance(raw.get("cve_id"), str):
+        candidates = [raw]
+    elif isinstance(raw, dict):
+        candidates = []
+        for key, value in raw.items():
+            if not isinstance(value, dict):
+                continue
+            item = dict(value)
+            item.setdefault("cve_id", str(key))
+            candidates.append(item)
+    elif isinstance(raw, list):
+        candidates = [item for item in raw if isinstance(item, dict)]
+    else:
+        raise ValueError("metadata JSON must be a CVE object, object map, or list")
+
+    for candidate in candidates:
+        cve_id = candidate.get("cve_id")
+        if not isinstance(cve_id, str) or not cve_id:
+            continue
+        item = dict(candidate)
+        item.setdefault("project", "curl")
+        indexed[cve_id] = item
+    return indexed
+
+
+def build_patchspec_config(
+    args: argparse.Namespace, profile: Any, api_key: str
+) -> PatchSpecModelConfig:
+    """Resolve the same effective provider settings for batch pre-generation."""
+    timeout = profile.api_timeout if profile.api_timeout is not None else args.api_timeout
+    max_retries = (
+        profile.api_max_retries
+        if profile.api_max_retries is not None
+        else args.api_max_retries
+    )
+    return PatchSpecModelConfig.from_profile(
+        profile,
+        api_key=api_key,
+        base_url=args.base_url or None,
+        model=args.model or None,
+        reasoning_effort=profile.reasoning_effort,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
+
+
+def required_patchspec_keys(
+    metadata_by_cve: dict[str, dict[str, Any]],
+    cve_ids: set[str] | list[str],
+    config: PatchSpecModelConfig,
+) -> dict[str, str]:
+    """Compute cache fingerprints without performing model or filesystem I/O."""
+    return {
+        cve_id: patch_spec_cache_key(
+            metadata_by_cve[cve_id],
+            cve_id=cve_id,
+            model=config.model,
+            reasoning_effort=config.reasoning_effort,
+            reasoning=config.reasoning,
+        )
+        for cve_id in sorted(set(cve_ids))
+        if cve_id in metadata_by_cve
+    }
+
+
 # A binary name already carrying a ``-<compiler>-O[0-3]`` suffix needs no further
 # decoration (mirrors pptagent's COMPILER_OPT_RE). Anchored at the end so a
 # mid-name ``-O0`` does not falsely match.
@@ -307,6 +393,134 @@ def safe_case_dir(out_root: Path, cve_id: str, binary_name: str) -> Path:
     return out_root / cve_id / safe
 
 
+def prepare_patch_specs(
+    metadata_by_cve: dict[str, dict[str, Any]],
+    cve_ids: set[str] | list[str],
+    *,
+    config: PatchSpecModelConfig,
+    cache_dir: Path,
+    dry_run: bool,
+    max_workers: int,
+    ensure_fn: Any = None,
+) -> tuple[dict[str, Any], dict[str, str], float]:
+    """Resolve exactly one PatchSpec per distinct CVE.
+
+    The returned result map is the sole source of paths handed to case workers;
+    failures are isolated by CVE so unrelated cases can continue. ``dry_run`` is
+    passed through unchanged, relying on the PatchSpec layer's no-network,
+    no-write contract.
+    """
+    ensure = ensure_fn or ensure_patch_spec
+    ordered = sorted(set(cve_ids))
+    results: dict[str, Any] = {}
+    failures: dict[str, str] = {}
+    started = time.time()
+
+    def resolve_one(cve_id: str) -> Any:
+        metadata = metadata_by_cve.get(cve_id)
+        if metadata is None:
+            raise ValueError(f"CVE not found in metadata JSON: {cve_id}")
+        return ensure(
+            metadata,
+            cve_id=cve_id,
+            config=config,
+            cache_dir=cache_dir,
+            dry_run=dry_run,
+        )
+
+    if ordered:
+        with ThreadPoolExecutor(max_workers=min(max(1, max_workers), len(ordered))) as pool:
+            futures = {pool.submit(resolve_one, cve_id): cve_id for cve_id in ordered}
+            for done in as_completed(futures):
+                cve_id = futures[done]
+                try:
+                    results[cve_id] = done.result()
+                except Exception as exc:
+                    failures[cve_id] = repr(exc)
+    return results, failures, round(time.time() - started, 3)
+
+
+def patchspec_manifest_entry(
+    result: Any, *, cache_dir: Path | None = None, cve_id: str = ""
+) -> dict[str, Any]:
+    """Return a JSON-safe audit record without duplicating the full spec."""
+    usage = result.usage if isinstance(getattr(result, "usage", None), dict) else {}
+    cache_hit = bool(getattr(result, "cache_hit", False))
+    result_mode = str(getattr(result, "generation_mode", "unknown"))
+    spec = result.spec if isinstance(getattr(result, "spec", None), dict) else {}
+    generation = spec.get("generation") if isinstance(spec.get("generation"), dict) else {}
+    generation_mode = str(generation.get("mode", result_mode))
+    if cache_hit:
+        resolution_mode = "cache_hit"
+    elif result_mode == "dry_run_skeleton":
+        resolution_mode = "deterministic_skeleton"
+    else:
+        resolution_mode = "generated"
+    path = str(getattr(result, "path", "") or "")
+    if not path and cache_dir is not None and cve_id:
+        path = str(patch_spec_cache_path(cache_dir, cve_id, str(result.cache_key)))
+    return {
+        "path": path,
+        "digest": str(getattr(result, "digest", "") or ""),
+        "cache_key": str(getattr(result, "cache_key", "") or ""),
+        "generation_mode": generation_mode,
+        "resolution_mode": resolution_mode,
+        "cache_hit": cache_hit,
+        "usage": usage,
+    }
+
+
+def patchspec_batch_metrics(
+    results: dict[str, Any], failures: dict[str, str], wall_seconds: float
+) -> dict[str, Any]:
+    """Aggregate current-run PatchSpec cost once per CVE, never per case."""
+    manifest_entries = [patchspec_manifest_entry(result) for result in results.values()]
+    generation_counts = Counter(entry["generation_mode"] for entry in manifest_entries)
+    resolution_counts = Counter(entry["resolution_mode"] for entry in manifest_entries)
+    totals: dict[str, int | float] = {}
+    model_turns = 0
+    for result in results.values():
+        usage = result.usage if isinstance(getattr(result, "usage", None), dict) else {}
+        attempts = usage.get("attempts")
+        turns = usage.get("model_turns", len(attempts) if isinstance(attempts, list) else 0)
+        if isinstance(turns, (int, float)) and not isinstance(turns, bool):
+            model_turns += int(turns)
+        raw_totals = usage.get("total", usage.get("totals", usage))
+        renamed = rename_usage(raw_totals if isinstance(raw_totals, dict) else {})
+        for key, value in renamed.items():
+            totals[key] = totals.get(key, 0) + value
+    return {
+        "cves": len(results) + len(failures),
+        "successful_cves": len(results),
+        "failed_cves": len(failures),
+        "generation_counts": dict(sorted(generation_counts.items())),
+        "resolution_counts": dict(sorted(resolution_counts.items())),
+        "model_turns": model_turns,
+        "usage_totals": totals,
+        "wall_seconds": round(wall_seconds, 3),
+    }
+
+
+def _patch_spec_fields(final: dict[str, Any]) -> dict[str, Any]:
+    """Extract PatchSpec audit fields from current or transitional artifacts."""
+    nested = final.get("patch_spec") if isinstance(final.get("patch_spec"), dict) else {}
+    usage_metrics = final.get("usage_metrics") if isinstance(final.get("usage_metrics"), dict) else {}
+    usage = usage_metrics.get("patch_spec_generation")
+    if not isinstance(usage, dict):
+        usage = final.get("patch_spec_usage") if isinstance(final.get("patch_spec_usage"), dict) else {}
+    return {
+        "patch_spec_digest": nested.get("digest", final.get("patch_spec_digest", "")),
+        "patch_spec_cache_key": nested.get("cache_key", final.get("patch_spec_cache_key", "")),
+        "patch_spec_generation_mode": nested.get(
+            "generation_mode", final.get("patch_spec_generation_mode", "")
+        ),
+        "patch_spec_resolution_mode": nested.get(
+            "resolution_mode", final.get("patch_spec_resolution_mode", "")
+        ),
+        "patch_spec_usage": usage,
+    }
+
+
 # Resume modes decide which already-run cases get re-run vs. reused as-is.
 #   auto        - skip every case with a completed final_result.json (present/
 #                 absent/not_affected/inconclusive); re-run only missing/error/
@@ -328,13 +542,8 @@ _COMPLETED_STATUSES = {"present", "absent", "not_affected", "inconclusive"}
 # both surface as None below and get re-run under auto/error.
 
 
-def _existing_case_status(case_dir: Path) -> str | None:
-    """Return the on-disk ``status`` of a case, or None if it must be re-run.
-
-    None covers: no final_result.json, an unreadable file, a missing/unknown
-    ``status`` field. Any of the four verdicts is returned as-is. A subprocess
-    timeout writes nothing, so it also surfaces as None -> re-run.
-    """
+def _existing_case_artifact(case_dir: Path) -> dict[str, Any] | None:
+    """Load a completed case artifact, or return None when it is unusable."""
     final_path = case_dir / "final_result.json"
     if not final_path.is_file():
         return None
@@ -342,12 +551,37 @@ def _existing_case_status(case_dir: Path) -> str | None:
         final = load_json(final_path)
     except Exception:
         return None
-    status = final.get("status")
-    return str(status) if status in _COMPLETED_STATUSES else None
+    if not isinstance(final, dict) or final.get("status") not in _COMPLETED_STATUSES:
+        return None
+    return final
+
+
+def _artifact_signature(path: Path) -> tuple[int, int, int, str] | None:
+    """Fingerprint an artifact so a failed retry cannot reuse a stale result."""
+    try:
+        stat = path.stat()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+    return stat.st_ino, stat.st_size, stat.st_mtime_ns, digest
+
+
+def _existing_case_status(case_dir: Path) -> str | None:
+    """Return the on-disk ``status`` of a case, or None if it must be re-run.
+
+    None covers: no final_result.json, an unreadable file, a missing/unknown
+    ``status`` field. Any of the four verdicts is returned as-is. A subprocess
+    timeout writes nothing, so it also surfaces as None -> re-run.
+    """
+    final = _existing_case_artifact(case_dir)
+    return str(final["status"]) if final is not None else None
 
 
 def _select_resume_cases(
-    cases: list[dict[str, Any]], out_root: Path, args: argparse.Namespace
+    cases: list[dict[str, Any]],
+    out_root: Path,
+    args: argparse.Namespace,
+    patchspec_keys: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     """Split ``cases`` into (to_run, to_reuse) under the resume policy.
 
@@ -358,15 +592,33 @@ def _select_resume_cases(
     retry_inc = getattr(args, "retry_inconclusive", False)
     to_run: list[dict[str, Any]] = []
     to_reuse: list[dict[str, Any]] = []
-    counts = {"total": len(cases), "completed": 0, "inconclusive": 0, "retry": 0, "skipped": 0}
+    counts = {
+        "total": len(cases),
+        "completed": 0,
+        "inconclusive": 0,
+        "stale_patchspec": 0,
+        "retry": 0,
+        "skipped": 0,
+    }
 
     for case in cases:
         case_dir = safe_case_dir(out_root, case["cve_id"], case["binary_name"])
-        status = _existing_case_status(case_dir)
+        artifact = _existing_case_artifact(case_dir)
+        status = str(artifact["status"]) if artifact is not None else None
+        required_key = (patchspec_keys or {}).get(case["cve_id"], "")
+        actual_key = _patch_spec_fields(artifact or {}).get("patch_spec_cache_key", "")
+        stale_patchspec = bool(status and required_key and actual_key != required_key)
         if status is not None:
             counts["completed"] += 1
             if status == "inconclusive":
                 counts["inconclusive"] += 1
+            if stale_patchspec:
+                counts["stale_patchspec"] += 1
+
+        # auto/error are consistency-preserving resume modes: a completed case
+        # from a different PatchSpec fingerprint is not reusable. The explicit
+        # inconclusive-only mode retains its narrow selection contract.
+        policy_status = None if stale_patchspec and mode in {"auto", "error"} else status
 
         if mode == "all":
             run_it = True
@@ -376,9 +628,9 @@ def _select_resume_cases(
         else:  # auto / error
             # Re-run anything without a completed artifact. inconclusive counts
             # as completed and is skipped, unless --retry-inconclusive opts in.
-            if status is None:
+            if policy_status is None:
                 run_it = True
-            elif status == "inconclusive":
+            elif policy_status == "inconclusive":
                 run_it = bool(retry_inc)
             else:
                 run_it = False
@@ -392,7 +644,41 @@ def _select_resume_cases(
     return to_run, to_reuse, counts
 
 
-def run_one_case(case: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+def _case_command(
+    case: dict[str, Any],
+    args: argparse.Namespace,
+    binary_path: Path,
+    case_dir: Path,
+    patchspec_path: Path,
+) -> list[str]:
+    """Build the isolated single-case command with an explicit shared PatchSpec."""
+    cmd = [
+        sys.executable, "-m", "claudeagent.agent_loop",
+        "--cve-id", case["cve_id"],
+        "--metadata-json", str(expand(args.metadata_json)),
+        "--patchspec-json", str(patchspec_path),
+        "--binary", str(binary_path),
+        "--output-dir", str(case_dir),
+        "--max-turns", str(args.max_turns),
+        "--finalization-turns", str(args.finalization_turns),
+        "--api-timeout", str(args.api_timeout),
+        "--api-max-retries", str(args.api_max_retries),
+        "--api-turn-retries", str(args.api_turn_retries),
+    ]
+    if args.model:
+        cmd += ["--model", args.model]
+    if args.base_url:
+        cmd += ["--base-url", args.base_url]
+    if args.model_profile:
+        cmd += ["--model-profile", args.model_profile]
+    if args.no_strict:
+        cmd += ["--no-strict"]
+    return cmd
+
+
+def run_one_case(
+    case: dict[str, Any], args: argparse.Namespace, patchspec_path: Path
+) -> dict[str, Any]:
     binary_path = resolve_binary(
         args.binaries_root, args.variant, case["binary_name"], args.compiler, args.opt
     )
@@ -414,27 +700,10 @@ def run_one_case(case: dict[str, Any], args: argparse.Namespace) -> dict[str, An
         record.update({"predicted": "not_found", "ok": False, "error": "binary file missing", "correct": False})
         return record
 
-    cmd = [
-        sys.executable, "-m", "claudeagent.agent_loop",
-        "--cve-id", case["cve_id"],
-        "--metadata-json", str(expand(args.metadata_json)),
-        "--binary", str(binary_path),
-        "--output-dir", str(case_dir),
-        "--max-turns", str(args.max_turns),
-        "--finalization-turns", str(args.finalization_turns),
-        "--api-timeout", str(args.api_timeout),
-        "--api-max-retries", str(args.api_max_retries),
-        "--api-turn-retries", str(args.api_turn_retries),
-    ]
-    if args.model:
-        cmd += ["--model", args.model]
-    if args.base_url:
-        cmd += ["--base-url", args.base_url]
-    if args.model_profile:
-        cmd += ["--model-profile", args.model_profile]
-    if args.no_strict:
-        cmd += ["--no-strict"]
+    cmd = _case_command(case, args, binary_path, case_dir, patchspec_path)
 
+    final_path = case_dir / "final_result.json"
+    prior_final_signature = _artifact_signature(final_path)
     started = time.time()
     try:
         proc = subprocess.run(
@@ -449,9 +718,19 @@ def run_one_case(case: dict[str, Any], args: argparse.Namespace) -> dict[str, An
         record.update({"predicted": "timeout", "ok": False, "error": f"case timeout after {args.case_timeout}s", "correct": False})
         return record
 
-    final_path = case_dir / "final_result.json"
     if not final_path.is_file():
         record.update({"predicted": "error", "ok": False, "error": "no final_result.json produced", "correct": False})
+        return record
+    if prior_final_signature is not None and _artifact_signature(final_path) == prior_final_signature:
+        record.update({
+            "predicted": "error",
+            "ok": False,
+            "error": (
+                "case subprocess did not produce a fresh final_result.json; "
+                f"ignored stale artifact (returncode={record.get('agent_returncode')})"
+            ),
+            "correct": False,
+        })
         return record
     try:
         final = load_json(final_path)
@@ -475,7 +754,36 @@ def run_one_case(case: dict[str, Any], args: argparse.Namespace) -> dict[str, An
         "usage_totals": rename_usage(usage_metrics.get("totals", {})),
         "timing": final.get("timing", {}),
         "model_turns": usage_metrics.get("model_turns", 0),
+        **_patch_spec_fields(final),
     })
+    return record
+
+
+def _record_patchspec_failure(
+    case: dict[str, Any], args: argparse.Namespace, error: str
+) -> dict[str, Any]:
+    """Create a scored case record when CVE-level PatchSpec preparation failed."""
+    binary_path = resolve_binary(
+        args.binaries_root, args.variant, case["binary_name"], args.compiler, args.opt
+    )
+    case_dir = safe_case_dir(expand(args.out_root), case["cve_id"], case["binary_name"])
+    record = {
+        "cve_id": case["cve_id"],
+        "binary": case["binary_name"],
+        "binary_path": str(binary_path),
+        "expected": case["expected"],
+        "output_dir": str(case_dir),
+        "inconclusive_reason": "",
+        "usage_totals": {},
+        "timing": {},
+        "model_turns": 0,
+        "correct": False,
+        "ok": False,
+    }
+    if not binary_path.is_file():
+        record.update({"predicted": "not_found", "error": "binary file missing"})
+    else:
+        record.update({"predicted": "error", "error": f"PatchSpec preparation failed: {error}"})
     return record
 
 
@@ -522,6 +830,7 @@ def _record_from_artifact(case: dict[str, Any], case_dir: Path) -> dict[str, Any
         "usage_totals": rename_usage(usage_metrics.get("totals", {})),
         "timing": final.get("timing", {}),
         "model_turns": usage_metrics.get("model_turns", 0),
+        **_patch_spec_fields(final),
     })
     return record
 
@@ -585,18 +894,48 @@ def run_batch(args: argparse.Namespace) -> int:
     if args.limit > 0:
         cases = cases[: args.limit]
     out_root = expand(args.out_root)
+    cache_dir = out_root / "_patchspec"
 
     # Validate the config/profile before launching any subprocess, so a typo in
     # --model-profile or a malformed model_config.json fails fast with a clear
     # message instead of N failing worker cases.
     try:
-        resolve_profile(args)
+        profile = resolve_profile(args)
     except ValueError as exc:
         raise SystemExit(f"model config error: {exc}")
+    try:
+        metadata_by_cve = load_metadata_index(args.metadata_json)
+    except Exception as exc:
+        raise SystemExit(f"metadata error: {exc}") from exc
+
+    selected_cves = {case["cve_id"] for case in cases}
+    key_config = build_patchspec_config(args, profile, api_key="")
+    patchspec_keys = required_patchspec_keys(metadata_by_cve, selected_cves, key_config)
+    missing_metadata = sorted(selected_cves - set(patchspec_keys))
+    if missing_metadata:
+        raise SystemExit(f"metadata missing for selected CVE(s): {missing_metadata}")
+
+    # Resume selection is PatchSpec-aware under auto/error: completed results
+    # produced with a different metadata/prompt/model fingerprint are stale.
+    to_run, to_reuse, counts = _select_resume_cases(
+        cases, out_root, args, patchspec_keys=patchspec_keys
+    )
+    patchspec_cves = {case["cve_id"] for case in to_run}
 
     if args.dry_run:
         missing = [c for c in cases if not resolve_binary(args.binaries_root, args.variant, c["binary_name"], args.compiler, args.opt).is_file()]
-        _, _, counts = _select_resume_cases(cases, out_root, args)
+        patchspec_results, patchspec_failures, patchspec_wall = prepare_patch_specs(
+            metadata_by_cve,
+            patchspec_cves,
+            config=key_config,
+            cache_dir=cache_dir,
+            dry_run=True,
+            max_workers=args.max_workers,
+        )
+        manifest = {
+            cve_id: patchspec_manifest_entry(result, cache_dir=cache_dir, cve_id=cve_id)
+            for cve_id, result in sorted(patchspec_results.items())
+        }
         print("BATCH_DRY_RUN")
         print("groundtruth:", args.groundtruth)
         print("binaries_root:", str(expand(args.binaries_root) / args.variant))
@@ -605,13 +944,26 @@ def run_batch(args: argparse.Namespace) -> int:
         print("by_expected:", {v: sum(1 for c in cases if c["expected"] == v) for v in VERDICTS})
         print("resume_mode:", args.resume, "retry_inconclusive:", getattr(args, "retry_inconclusive", False))
         print("resume_counts:", counts)
+        print("patchspec_cves:", len(patchspec_cves))
+        print("patchspec_metrics:", patchspec_batch_metrics(patchspec_results, patchspec_failures, patchspec_wall))
+        for cve_id, entry in manifest.items():
+            print(
+                "  PATCHSPEC",
+                cve_id,
+                f"mode={entry['generation_mode']}",
+                f"digest={entry['digest']}",
+                f"path={entry['path']}",
+            )
+        for cve_id, error in sorted(patchspec_failures.items()):
+            print("  PATCHSPEC_ERROR", cve_id, error)
         print("missing_binaries:", len(missing))
         for c in missing[:10]:
             print("  MISSING", c["cve_id"], c["binary_name"])
-        return 0
+        return 1 if patchspec_failures else 0
 
     out_root.mkdir(parents=True, exist_ok=True)
     key_env = bootstrap_api_key(args)
+    api_key = resolve_api_key(profile)
     if not key_env:
         profile_name = args.model_profile or "active"
         print(
@@ -621,23 +973,106 @@ def run_batch(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    # Resume: reuse completed cases (auto skips inconclusive too) and only
-    # re-run the ones the mode selects. Metrics are still computed over the
-    # full set: reused cases are rebuilt from their on-disk artifacts.
-    to_run, to_reuse, counts = _select_resume_cases(cases, out_root, args)
+    started = time.time()
+    generation_config = build_patchspec_config(args, profile, api_key=api_key)
+    patchspec_results, patchspec_failures, patchspec_wall = prepare_patch_specs(
+        metadata_by_cve,
+        patchspec_cves,
+        config=generation_config,
+        cache_dir=cache_dir,
+        dry_run=False,
+        max_workers=args.max_workers,
+    )
+    patchspec_paths: dict[str, Path] = {}
+    for cve_id, result in list(patchspec_results.items()):
+        path = Path(result.path).expanduser() if result.path else None
+        if path is None or not path.is_file():
+            patchspec_failures[cve_id] = "ensure_patch_spec returned no persisted artifact"
+            del patchspec_results[cve_id]
+            continue
+        patchspec_paths[cve_id] = path
+
+    patchspec_manifest = {
+        cve_id: patchspec_manifest_entry(result, cache_dir=cache_dir, cve_id=cve_id)
+        for cve_id, result in sorted(patchspec_results.items())
+    }
+    # A full/partial resume may not resolve a spec in this process at all. Keep
+    # the fingerprint used by reused case artifacts in the run manifest, while
+    # charging zero current-run PatchSpec usage.
+    for case in to_reuse:
+        cve_id = case["cve_id"]
+        if cve_id in patchspec_manifest:
+            continue
+        artifact = _existing_case_artifact(
+            safe_case_dir(out_root, cve_id, case["binary_name"])
+        )
+        fields = _patch_spec_fields(artifact or {})
+        cache_key = str(fields.get("patch_spec_cache_key", "") or "")
+        path = ""
+        if re.fullmatch(r"[0-9a-f]{64}", cache_key):
+            path = str(patch_spec_cache_path(cache_dir, cve_id, cache_key))
+        patchspec_manifest[cve_id] = {
+            "path": path,
+            "digest": str(fields.get("patch_spec_digest", "") or ""),
+            "cache_key": cache_key,
+            "generation_mode": str(fields.get("patch_spec_generation_mode", "") or "unknown"),
+            "resolution_mode": "reused",
+            "cache_hit": False,
+            "usage": {},
+        }
+    for cve_id, error in sorted(patchspec_failures.items()):
+        patchspec_manifest[cve_id] = {
+            "path": "",
+            "digest": "",
+            "cache_key": patchspec_keys.get(cve_id, ""),
+            "generation_mode": "error",
+            "resolution_mode": "error",
+            "cache_hit": False,
+            "usage": {},
+            "error": error,
+        }
+    patchspec_metrics = patchspec_batch_metrics(
+        patchspec_results, patchspec_failures, patchspec_wall
+    )
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / "manifest.json").write_text(
+        jdump({"patchspec": patchspec_manifest, "metrics": patchspec_metrics}) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"patchspec_cves={patchspec_metrics['cves']} "
+        f"modes={patchspec_metrics['generation_counts']} "
+        f"failures={patchspec_metrics['failed_cves']} "
+        f"wall_seconds={patchspec_metrics['wall_seconds']}",
+        file=sys.stderr,
+    )
+    for cve_id, error in sorted(patchspec_failures.items()):
+        print(f"PATCHSPEC_ERROR {cve_id}: {error}", file=sys.stderr)
+
     print(
         f"resume={args.resume} retry_inconclusive={getattr(args, 'retry_inconclusive', False)} "
         f"total={counts['total']} retry={counts['retry']} skipped={counts['skipped']} "
-        f"(completed={counts['completed']} inconclusive={counts['inconclusive']})",
+        f"(completed={counts['completed']} inconclusive={counts['inconclusive']} "
+        f"stale_patchspec={counts['stale_patchspec']})",
         file=sys.stderr,
     )
     records: list[dict[str, Any]] = [
         _record_from_artifact(case, safe_case_dir(out_root, case["cve_id"], case["binary_name"]))
         for case in to_reuse
     ]
-    started = time.time()
+    runnable: list[dict[str, Any]] = []
+    for case in to_run:
+        error = patchspec_failures.get(case["cve_id"])
+        if error:
+            records.append(_record_patchspec_failure(case, args, error))
+        else:
+            runnable.append(case)
+
     with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as pool:
-        futures = {pool.submit(run_one_case, case, args): case for case in to_run}
+        futures = {
+            pool.submit(run_one_case, case, args, patchspec_paths[case["cve_id"]]): case
+            for case in runnable
+        }
         for done in as_completed(futures):
             rec = done.result()
             records.append(rec)
@@ -650,12 +1085,14 @@ def run_batch(args: argparse.Namespace) -> int:
     # pptagent-shaped metrics + case-detail file (directly comparable to
     # pptagent batch_metrics.json / batch_results.json).
     metrics = batch_metrics_pptagent(records, batch_wall_seconds=wall_seconds)
+    metrics["patchspec_metrics"] = patchspec_metrics
     (out_root / "batch_metrics.json").write_text(jdump(metrics) + "\n", encoding="utf-8")
     by_cve: dict[str, list[dict[str, Any]]] = {}
     for rec in records:
         by_cve.setdefault(rec["cve_id"], []).append(rec)
     (out_root / "batch_results.json").write_text(
-        jdump({"results": records, "by_cve": by_cve}) + "\n", encoding="utf-8"
+        jdump({"results": records, "by_cve": by_cve, "patchspec": patchspec_manifest}) + "\n",
+        encoding="utf-8",
     )
 
     # Keep the legacy accuracy/confusion summary for the stderr log only; it is

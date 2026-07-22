@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 import sys
+import time
 
-from claudeagent.finalize import submit_detection_result
-from claudeagent.runtime import initialize_agent_context, record_evidence
+from claudeagent.finalize import build_final_artifact, submit_detection_result
+from claudeagent.runtime import AGENT_CONTEXT, initialize_agent_context, record_evidence
 
 
 def _run() -> int:
@@ -60,12 +61,35 @@ def _run() -> int:
     r = submit_detection_result("inconclusive", "low", [], [], "insufficient anchors", [], "no_binary_anchor")
     check("valid-inconclusive accepted", r["ok"] is True and r["status"] == "inconclusive")
 
+    # 9. PatchSpec provenance is recorded separately and never becomes evidence.
+    initialize_agent_context(
+        {"cve_id": "CVE-2013-1944", "project": "curl"},
+        "/tmp/curl_stripped",
+        patch_spec_info={
+            "digest": "abc123",
+            "generation_mode": "model",
+            "resolution_mode": "generated",
+            "cache_key": "cache123",
+            "cache_hit": False,
+            "usage": {"input_tokens": 10, "output_tokens": 4},
+        },
+    )
+    accepted = submit_detection_result("inconclusive", "low", [], [], "not enough binary evidence", [], "no_binary_anchor")
+    artifact, errors = build_final_artifact(accepted, [], time.time())
+    check("patchspec artifact valid", not errors and artifact.get("patch_spec", {}).get("digest") == "abc123")
+    check(
+        "patchspec usage separate",
+        artifact.get("usage_metrics", {}).get("patch_spec_generation", {}).get("input_tokens") == 10
+        and artifact.get("usage_metrics", {}).get("totals") == {},
+    )
+    check("patchspec not evidence", AGENT_CONTEXT.get("evidence_ledger") == [])
+
     if failures:
         print("FINALIZE TESTS FAILED:")
         for line in failures:
             print("  -", line)
         return 1
-    print("FINALIZE TESTS PASSED (8 cases)")
+    print("FINALIZE TESTS PASSED (9 cases)")
     return 0
 
 

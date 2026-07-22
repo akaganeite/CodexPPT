@@ -188,12 +188,24 @@ def build_final_artifact(result: dict[str, Any], transcript: list[dict[str, Any]
     timing = {"wall_seconds": round(time.time() - start_epoch, 3)}
     usage = aggregate_usage(transcript)
     usage["timing"] = timing
+    patch_spec_info = AGENT_CONTEXT.get("patch_spec_info", {})
+    if not isinstance(patch_spec_info, dict):
+        patch_spec_info = {}
+    patch_spec_usage = patch_spec_info.get("usage")
+    usage["patch_spec_generation"] = patch_spec_usage if isinstance(patch_spec_usage, dict) else {}
     out = dict(result)
     out["timing"] = timing
     out["usage_metrics"] = usage
     out["observations"] = AGENT_CONTEXT.get("observations", [])
     out["evidence_ledger"] = AGENT_CONTEXT.get("evidence_ledger", [])
     out["harness_metrics"] = harness_metrics()
+    out["patch_spec"] = {
+        "digest": str(patch_spec_info.get("digest", "")),
+        "generation_mode": str(patch_spec_info.get("generation_mode", "not_generated")),
+        "resolution_mode": str(patch_spec_info.get("resolution_mode", "not_resolved")),
+        "cache_key": str(patch_spec_info.get("cache_key", "")),
+        "cache_hit": bool(patch_spec_info.get("cache_hit", False)),
+    }
     return out, validate_final_result_artifact(out)
 
 

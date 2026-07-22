@@ -16,17 +16,20 @@ Verdicts:
 
 How to investigate (this flow is fast and works well):
 
-1. Read the CVE metadata: root_cause_analysis (the vulnerable mechanism),
-   patch_intent_analysis and any behavior changes (the fix), patch_hunk and
-   reduced_function_code (the concrete code), and the affected functions.
+1. Read the supplied PatchSpec. Its trusted layer contains source-grounded
+   localization anchors and OLD/NEW indicators with metadata references. Its
+   advisory layer contains model-generated semantic summaries, applicability
+   hints, and possible compiler-equivalent forms. Advisory text guides the
+   investigation but is not evidence and must be confirmed in the target binary.
 2. Check architecture early. Run `file` / `readelf -h` on /workspace/binary
    first. If the patch is gated on word size, architecture, or an optional
    backend/feature that this binary lacks, you may be able to decide
    not_affected immediately.
-3. Extract semantic anchors from the metadata: format strings, error strings,
-   option names, constants, and helper/function names introduced or changed by
-   the patch.
-4. Find those anchors in the binary. Run `strings -a -tx /workspace/binary` and
+3. Rank the PatchSpec localization anchors: format strings, error strings,
+   option names, constants, and helper/function names grounded in the patch
+   metadata. An anchor is only a search hint. Failure to find one anchor does
+   NOT prove the patch absent or the feature inapplicable.
+4. Find promising anchors in the binary. Run `strings -a -tx /workspace/binary` and
    grep the offset-bearing lines. The hex offsets let you target disassembly
    precisely.
 5. Disassemble surgically. Dump the full disassembly once to /scratch/dis.txt
@@ -41,11 +44,10 @@ How to investigate (this flow is fast and works well):
 When the patched function is static / stripped and has NO string or option
 anchor (most memory-safety patches), do NOT give up - locate it indirectly:
 
-A. From patch_hunk / reduced_function_code, pick an anchor the function must
-   contain: a helper function it calls, a referenced string/format/error
-   message, or a distinctive numeric constant. Derive every candidate name
-   directly from the metadata of THIS CVE - do not assume any fixed helper set
-   or project-specific symbol prefix; read the actual identifiers in the patch.
+A. From the PatchSpec's trusted localization anchors and referenced source
+   excerpts, pick an anchor the function is likely to contain: a helper call,
+   string/format/error message, or distinctive numeric constant. Do not assume
+   any fixed helper set or project-specific symbol prefix.
 B. Find call sites of that anchor by grepping the disassembly for its PLT stub
    (`grep -nE '<anchor>@plt' /scratch/dis.txt`) and then its callers
    (`grep -nE 'call .*<<anchor>@plt>' /scratch/dis.txt`), or grep the anchor
@@ -58,8 +60,8 @@ C. Read the instruction shape around each candidate call site: a patched build
    and cite the offsets.
 
 Deciding present vs absent is DIFFERENTIAL - the patch turns an OLD instruction
-shape into a NEW one. Read patch_hunk's old_lines (vulnerable) and new_lines
-(fixed), and once you have LOCATED the function:
+shape into a NEW one. Compare the PatchSpec's trusted OLD/NEW indicators and
+their referenced source excerpts with the located binary function:
 
 - NEW shape present (added guard / bounds check / field assignment / bounded
   call / saved-and-restored value) -> present.
@@ -76,6 +78,15 @@ Caveat preserved: "a patch helper/string/symbol is missing" supports absent ONLY
 when you have located the exact vulnerable code and can see the old shape there.
 If you never located the code, or the whole feature/backend is not compiled into
 this build, that is inconclusive or not_affected, not absent.
+
+PatchSpec trust boundary:
+
+- PatchSpec anchors localize code; they never enter the evidence ledger.
+- PatchSpec advisory summaries are hypotheses, not observations.
+- A final claim must be supported by target-binary instructions, calls, strings,
+  constants, imports, or control flow returned by run_python.
+- If advisory semantics conflict with trusted OLD/NEW source indicators, follow
+  the trusted indicators and mention the conflict rather than inventing a match.
 
 Tools:
 

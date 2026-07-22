@@ -46,6 +46,7 @@ def initialize_agent_context(
     cve_id: str = "",
     output_dir: str = "",
     scratch_dir: str = "",
+    patch_spec_info: dict[str, Any] | None = None,
 ) -> None:
     AGENT_CONTEXT.clear()
     AGENT_CONTEXT.update({
@@ -54,6 +55,14 @@ def initialize_agent_context(
         "cve_id": metadata.get("cve_id", cve_id),
         "output_dir": output_dir,
         "scratch_dir": scratch_dir,
+        "patch_spec_info": patch_spec_info or {
+            "digest": "",
+            "generation_mode": "not_generated",
+            "resolution_mode": "not_resolved",
+            "cache_key": "",
+            "cache_hit": False,
+            "usage": {},
+        },
         "observations": [],
         "evidence_ledger": [],
         "observation_counter": 0,

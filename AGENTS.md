@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a flat Python package. Run module commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `claudeagent` imports resolve. The main entry points are `agent_loop.py` for one binary/CVE case and `batch.py` for curl test-set runs. Model configuration lives in `model_config.py` and `model_config.json`; API, sandbox, and tool execution live in `responses_client.py`, `sandbox.py`, `run_python_tool.py`, and `binary_workspace.py`. Keep evidence and result handling in `runtime.py`, `observations.py`, and `finalize.py`. Supporting contracts are in `prompts/`, `tools.json`, and `schemas/`. Put regression tests in `tests/`; `runs/` is ignored generated output and must not be committed.
+This is a flat Python package. Run module commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `claudeagent` imports resolve. The main entry points are `agent_loop.py` for one binary/CVE case and `batch.py` for curl test-set runs. Model configuration lives in `model_config.py` and `model_config.json`; API, sandbox, and tool execution live in `responses_client.py`, `sandbox.py`, `run_python_tool.py`, and `binary_workspace.py`. Patch metadata compilation, grounding validation, and caching live in `patchspec/`. Keep evidence and result handling in `runtime.py`, `observations.py`, and `finalize.py`. Supporting contracts are in `prompts/`, `tools.json`, and `schemas/`. Put regression tests in `tests/`; `runs/` is ignored generated output and must not be committed.
 
 ## Build, Test, and Development Commands
 
@@ -13,12 +13,15 @@ python3 -m claudeagent.agent_loop --cve-id CVE-2013-0249 \
   --metadata-json <metadata.json> --binary <binary> \
   --output-dir /tmp/claudeagent_case --dry-run
 python3 -m claudeagent.batch --out-root /tmp/claudeagent_batch --dry-run
+python3 -m claudeagent.patchspec --metadata-json <metadata.json> \
+  --cve-id CVE-2013-1944 --output /tmp/patch_spec.json --dry-run
 ```
 
-`--dry-run` validates inputs and the harness path without making a model request. Run all offline checks with:
+`--dry-run` validates inputs and the harness path without making a model request. The PatchSpec command produces an in-memory deterministic preview in dry-run mode. Run all offline checks with:
 
 ```sh
-for test in test_finalize test_model_config test_responses_loop test_sandbox test_waf; do
+for test in test_finalize test_model_config test_responses_loop test_sandbox test_waf \
+  test_patchspec test_prompting test_batch_patchspec; do
   python3 -m claudeagent.tests.$test || exit 1
 done
 ```

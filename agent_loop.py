@@ -59,6 +59,14 @@ from claudeagent.model_config import (
     resolve_profile,
 )
 from claudeagent.observations import compact_tool_result_for_model
+from claudeagent.patchspec import (
+    PatchSpecModelConfig,
+    PatchSpecResult,
+    ensure_patch_spec,
+    load_patch_spec,
+    prompt_view,
+    resolve_source_excerpts,
+)
 from claudeagent.prompting import append_finalization_budget_prompt, append_finalization_prompt, build_task
 from claudeagent.responses_client import responses_create
 from claudeagent.runtime import bump_metric, initialize_agent_context
@@ -217,6 +225,97 @@ def provider_config(args: argparse.Namespace) -> tuple[str, str, str, ModelProfi
     return api_key, args.base_url, args.model, profile
 
 
+def _patch_spec_output_path(args: argparse.Namespace) -> str | None:
+    if not args.output_dir:
+        return None
+    return str(expand(args.output_dir) / "patch_spec.json")
+
+
+def _patch_spec_model_config(
+    args: argparse.Namespace,
+    *,
+    api_key: str,
+    base_url: str,
+    model: str,
+    profile: ModelProfile,
+) -> PatchSpecModelConfig:
+    return PatchSpecModelConfig(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        reasoning_effort=profile.reasoning_effort,
+        reasoning=reasoning_param(profile),
+        timeout=args.api_timeout,
+        max_retries=args.api_max_retries,
+    )
+
+
+def _resolve_case_patch_spec(
+    args: argparse.Namespace,
+    metadata: dict[str, Any],
+    *,
+    model_config: PatchSpecModelConfig,
+    dry_run: bool,
+) -> tuple[PatchSpecResult, str]:
+    """Strictly load an explicit spec, or lazily resolve the case-local spec."""
+    if args.patchspec_json:
+        try:
+            result = load_patch_spec(args.patchspec_json, metadata=metadata)
+        except Exception as exc:
+            raise SystemExit(f"PatchSpec load/validation failed: {exc}") from exc
+        return result, "provided"
+
+    try:
+        result = ensure_patch_spec(
+            metadata,
+            cve_id=str(metadata.get("cve_id") or args.cve_id),
+            output_path=_patch_spec_output_path(args),
+            config=model_config,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        raise SystemExit(f"PatchSpec generation/validation failed: {exc}") from exc
+
+    if result.cache_hit:
+        resolution_mode = "cache_hit"
+    elif dry_run:
+        resolution_mode = "deterministic_skeleton"
+    else:
+        resolution_mode = "generated"
+    return result, resolution_mode
+
+
+def _patch_spec_runtime_info(result: PatchSpecResult, resolution_mode: str) -> dict[str, Any]:
+    usage = result.usage if isinstance(result.usage, dict) else {}
+    generation = result.spec.get("generation") if isinstance(result.spec, dict) else {}
+    generation_mode = (
+        generation.get("mode", result.generation_mode)
+        if isinstance(generation, dict)
+        else result.generation_mode
+    )
+    return {
+        "digest": str(result.digest),
+        "generation_mode": str(generation_mode),
+        "resolution_mode": resolution_mode,
+        "cache_key": str(result.cache_key),
+        "cache_hit": resolution_mode == "cache_hit",
+        # PatchSpecResult.usage is intentionally the usage incurred by this
+        # resolution only. Cache/provided/dry-run loads therefore remain empty.
+        "usage": usage,
+    }
+
+
+def _patch_spec_transcript_entry(info: dict[str, Any]) -> dict[str, Any]:
+    """Record provenance without mixing PatchSpec usage into turn aggregation."""
+    return {
+        "stage": "patch_spec",
+        "digest": info.get("digest", ""),
+        "generation_mode": info.get("generation_mode", ""),
+        "resolution_mode": info.get("resolution_mode", ""),
+        "cache_hit": bool(info.get("cache_hit", False)),
+    }
+
+
 def _sample(args: argparse.Namespace, instructions, input_items, tools, api_key, base_url, model,
             profile: ModelProfile) -> dict[str, Any]:
     # reasoning_mode is a profile property (is this a thinking model?), not a
@@ -291,10 +390,10 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
     else:
         scratch = tempfile.mkdtemp(prefix="claudeagent-scratch-")
     os.makedirs(scratch, exist_ok=True)
-    initialize_agent_context(metadata, binary, args.cve_id, args.output_dir, scratch)
 
     preflight = preflight_detection_inputs(binary, metadata)
     if not preflight.get("ok"):
+        initialize_agent_context(metadata, binary, args.cve_id, args.output_dir, scratch)
         result = preflight_missing_result(metadata, binary, preflight)
         transcript = [{"stage": "host_preflight", "result": preflight}]
         print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
@@ -318,10 +417,39 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             "Use --dry-run for local validation only."
         )
 
+    patch_spec_result, resolution_mode = _resolve_case_patch_spec(
+        args,
+        metadata,
+        model_config=_patch_spec_model_config(
+            args,
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            profile=profile,
+        ),
+        dry_run=False,
+    )
+    patch_spec_info = _patch_spec_runtime_info(patch_spec_result, resolution_mode)
+    initialize_agent_context(
+        metadata,
+        binary,
+        args.cve_id,
+        args.output_dir,
+        scratch,
+        patch_spec_info,
+    )
+    transcript.append(_patch_spec_transcript_entry(patch_spec_info))
+    task_patch_spec = prompt_view(patch_spec_result.spec)
+    source_excerpts = resolve_source_excerpts(metadata, patch_spec_result.spec)
+
     tools = load_tools(strict=not args.no_strict)
     instructions = SYSTEM_PROMPT.read_text()
     input_items: list[dict[str, Any]] = [
-        {"type": "message", "role": "user", "content": build_task(metadata, binary, preflight)},
+        {
+            "type": "message",
+            "role": "user",
+            "content": build_task(task_patch_spec, source_excerpts, binary, preflight),
+        },
     ]
 
     # Phase 1: bounded exploration.
@@ -415,12 +543,26 @@ def dry_run(args: argparse.Namespace) -> int:
     workspace = prepare_anonymous_binary(args.binary)
     try:
         binary = str(workspace.binary_path)
-        initialize_agent_context(metadata, binary, args.cve_id)
         tools = load_tools(strict=not args.no_strict)
         load_final_result_schema()
         preflight = preflight_detection_inputs(binary, metadata)
-        profile = resolve_profile(args)
-        _, base_url, model, _ = provider_config(args)
+        api_key, base_url, model, profile = provider_config(args)
+        patch_spec_result, resolution_mode = _resolve_case_patch_spec(
+            args,
+            metadata,
+            model_config=_patch_spec_model_config(
+                args,
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                profile=profile,
+            ),
+            dry_run=True,
+        )
+        patch_spec_info = _patch_spec_runtime_info(patch_spec_result, resolution_mode)
+        initialize_agent_context(metadata, binary, args.cve_id, patch_spec_info=patch_spec_info)
+        task_patch_spec = prompt_view(patch_spec_result.spec)
+        source_excerpts = resolve_source_excerpts(metadata, patch_spec_result.spec)
         print("TOOLS_OK", len(tools), [t["name"] for t in tools])
         print("FINAL_RESULT_SCHEMA_OK", FINAL_RESULT_SCHEMA)
         print("MODEL_PROFILE", profile.name)
@@ -428,8 +570,12 @@ def dry_run(args: argparse.Namespace) -> int:
         print("BASE_URL", base_url)
         print("REASONING_EFFORT", profile.reasoning_effort)
         print("REASONING_MODE", profile.reasoning_mode)
+        print("PATCH_SPEC_DIGEST", patch_spec_result.digest)
+        print("PATCH_SPEC_GENERATION_MODE", patch_spec_info["generation_mode"])
+        print("PATCH_SPEC_RESOLUTION_MODE", resolution_mode)
+        print("PATCH_SPEC_CACHE_HIT", patch_spec_info["cache_hit"])
         print("SYSTEM_PROMPT_CHARS", len(SYSTEM_PROMPT.read_text()))
-        print("TASK_CHARS", len(build_task(metadata, binary, preflight)))
+        print("TASK_CHARS", len(build_task(task_patch_spec, source_excerpts, binary, preflight)))
         print("SANDBOX_PREFLIGHT")
         print(jdump(preflight_sandbox()))
         print("HOST_PREFLIGHT")
@@ -445,6 +591,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cve-json", default="", help="path to a single CVE metadata JSON object")
     parser.add_argument("--cve-inline-json", default="", help="inline CVE metadata JSON object")
     parser.add_argument("--metadata-json", default="", help="path to a {cve_id: metadata} or [metadata] JSON; needs --cve-id")
+    parser.add_argument(
+        "--patchspec-json",
+        default="",
+        help="strictly load and validate a prebuilt PatchSpec; otherwise lazily use <output-dir>/patch_spec.json",
+    )
     parser.add_argument("--binary", required=True, help="path to the target binary")
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--model", default="", help="override the config profile's model")
