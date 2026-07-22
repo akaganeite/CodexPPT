@@ -32,7 +32,7 @@
     "type": "function",
     "name": "submit_detection_result",
     "strict": false,
-    "description": "Submit the final patch-presence verdict. Call exactly once when ready. Determinate verdicts (present/absent/not_affected) must cite at least one evidence_id from a prior run_python call.",
+    "description": "Submit the final patch-presence verdict. Call exactly once when ready. Determinate verdicts must cite prior run_python evidence and group every cited evidence_id into behavior-scoped supports; top-level evidence_ids must exactly equal the support evidence union.",
     "parameters": { "$ref": "schemas/final_result.schema.json#/$defs/submit_detection_result" }
   }
 ]

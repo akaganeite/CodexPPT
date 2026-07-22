@@ -21,6 +21,15 @@ def build_task(
     preflight: dict[str, Any],
 ) -> str:
     final_schema = load_final_result_schema()
+    behaviors = patch_spec.get("behaviors") if isinstance(patch_spec.get("behaviors"), list) else []
+    behavior_support_contract = [
+        {
+            "behavior_id": item.get("behavior_id"),
+            "required": bool(item.get("required", False)),
+        }
+        for item in behaviors
+        if isinstance(item, dict) and isinstance(item.get("behavior_id"), str)
+    ]
     binary_facts = dict(preflight.get("binary", {}))
     binary_facts["path"] = "/workspace/binary"
     if isinstance(binary_facts.get("file"), str) and binary:
@@ -29,6 +38,7 @@ def build_task(
         "cve": (patch_spec.get("source") or {}).get("cve_id", ""),
         "patch_spec": patch_spec,
         "patch_spec_source_excerpts": source_excerpts,
+        "behavior_support_contract": behavior_support_contract,
         "target_binary": "/workspace/binary",
         "scratch_dir": "/scratch",
         "binary_facts": binary_facts,
@@ -38,11 +48,14 @@ def build_task(
             "PatchSpec advisory semantics guide investigation but are not target-binary evidence",
             "an anchor miss alone cannot prove absent or not_affected",
             "determinate verdicts require target-binary evidence_ids returned by run_python calls",
+            "group cited evidence into behavior-scoped supports with observed_side old/new/ambiguous/not_applicable",
+            "top-level evidence_ids must exactly equal the union of supports[*].evidence_ids",
             "use inconclusive with a concrete reason when evidence or applicability is unresolved",
         ],
         "observation_contract": {
             "tool_outputs_include": "observation_id, tool, command, exit_code, stdout_head/tail, stderr_tail, truncation, parsed_facts, evidence",
             "final_verdict_must_cite": "evidence_ids returned in tool output evidence items",
+            "support_must_bind": "one PatchSpec behavior_id, one observed_side, and one or more cited evidence_ids",
             "if_truncated": "use stdout_head/stdout_tail and run a narrower command/window before relying on omitted content",
         },
         "constraints": {
@@ -52,6 +65,8 @@ def build_task(
             "do_not_invent_observations": True,
             "patch_spec_is_not_evidence": True,
             "trusted_indicators_require_binary_confirmation": True,
+            "supports_are_not_new_evidence": True,
+            "negative_anchor_miss_only_supports_ambiguous": True,
             "finish_tool": "submit_detection_result",
             "determinate_status_requires_evidence_ids": True,
         },
@@ -72,7 +87,8 @@ def append_finalization_prompt(input_items: list[dict[str, Any]], max_turns: int
             "deciding run_python call (a targeted strings/objdump window), then submit. Do not "
             "start a broad new search. Determinate evidence/reasoning must be target-binary "
             "semantics only: no versions, filenames, paths, or release chronology. If evidence "
-            "remains insufficient, submit inconclusive with a concrete reason."
+            "remains insufficient, submit inconclusive with a concrete reason. For every cited "
+            "evidence id, create a behavior-scoped support; evidence_ids must equal the support union."
         ),
     })
 
@@ -83,12 +99,14 @@ def append_finalization_budget_prompt(input_items: list[dict[str, Any]], remaini
             "Last-mile budget exhausted. Your next response must call submit_detection_result with "
             "valid JSON using existing evidence_ids. Do not inspect further. If the evidence is not "
             "decisive, submit inconclusive with a concrete reason. Determinate wording must omit "
-            "versions, paths, filenames, and release chronology."
+            "versions, paths, filenames, and release chronology. Include behavior-scoped supports "
+            "whose evidence-id union exactly matches the top-level evidence_ids."
         )
     else:
         content = (
             f"Last-mile budget remaining: {remaining_turns}. Submit if the last evidence_ids are "
             "decisive; otherwise run one narrow evidence-deciding run_python call. No broad "
-            "search. Final determinate wording must be binary-local only."
+            "search. Final determinate wording must be binary-local only. Bind cited evidence into "
+            "behavior-scoped supports before submitting."
         )
     input_items.append({"type": "message", "role": "user", "content": content})

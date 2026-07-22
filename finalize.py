@@ -1,9 +1,10 @@
 """Final verdict validation, repair payloads, and artifact writing.
 
-Validation is intentionally lean: JSON-schema, an evidence-id citation gate, the
-determinate/inconclusive consistency rules, and a version/path-string rejection.
-Schema/gate failures are returned to the model as a repair payload (never raised),
-so the loop can fix the verdict instead of crashing.
+Validation combines JSON schema, ledger citations, behavior-scoped support
+references, evidence polarity, determinate/inconclusive consistency, and a
+version/path-string rejection. Schema/gate failures are returned to the model as
+a repair payload (never raised), so the loop can fix the verdict instead of
+crashing.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import time
 from typing import Any
 
 from claudeagent.common import jdump, write_artifact
+from claudeagent.decision import validate_support_records
 from claudeagent.runtime import AGENT_CONTEXT, bump_metric, evidence_ids_in_ledger, harness_metrics
 from claudeagent.schema_validate import (
     DETERMINATE_STATUSES,
@@ -48,6 +50,13 @@ def validate_final_tool_args(candidate: dict[str, Any]) -> list[str]:
         errors.append(f"$.evidence_ids: unknown evidence id(s) not in the ledger: {unknown_ids}")
     if status in DETERMINATE_STATUSES and not evidence_ids:
         errors.append(f"$.evidence_ids: {status} verdicts must cite at least one evidence id from the ledger")
+    errors.extend(validate_support_records(
+        candidate.get("supports"),
+        status=status,
+        evidence_ids=evidence_ids,
+        behavior_contract=AGENT_CONTEXT.get("patch_spec_behavior_contract", []),
+        evidence_ledger=AGENT_CONTEXT.get("evidence_ledger", []),
+    ))
 
     reason = candidate.get("inconclusive_reason")
     if reason not in INCONCLUSIVE_REASONS:
@@ -59,10 +68,18 @@ def validate_final_tool_args(candidate: dict[str, Any]) -> list[str]:
 
     if status in DETERMINATE_STATUSES:
         evidence = candidate.get("evidence") if isinstance(candidate.get("evidence"), list) else []
-        verdict_text = "\n".join([*(str(item) for item in evidence), str(candidate.get("reasoning", ""))])
+        supports = candidate.get("supports") if isinstance(candidate.get("supports"), list) else []
+        support_summaries = [
+            str(item.get("summary", "")) for item in supports if isinstance(item, dict)
+        ]
+        verdict_text = "\n".join([
+            *(str(item) for item in evidence),
+            *support_summaries,
+            str(candidate.get("reasoning", "")),
+        ])
         if VERSION_EVIDENCE_RE.search(verdict_text):
             errors.append(
-                "$.reasoning/evidence: determinate verdict appears to rely on version strings, "
+                "$.supports/evidence/reasoning: determinate verdict appears to rely on version strings, "
                 "filenames, paths, or release labels instead of semantic binary evidence"
             )
     return errors
@@ -77,6 +94,7 @@ def compact_rejected_tool_args(candidate: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": candidate.get("status"),
         "confidence": candidate.get("confidence"),
+        "supports": candidate.get("supports", []),
         "evidence_ids": candidate.get("evidence_ids", []),
         "decisive_addresses": candidate.get("decisive_addresses", []),
         "inconclusive_reason": candidate.get("inconclusive_reason", ""),
@@ -86,6 +104,7 @@ def compact_rejected_tool_args(candidate: dict[str, Any]) -> dict[str, Any]:
 def submit_detection_result(
     status: str,
     confidence: str,
+    supports: list[dict[str, Any]],
     evidence: list[str],
     evidence_ids: list[str],
     reasoning: str,
@@ -95,6 +114,7 @@ def submit_detection_result(
     candidate = {
         "status": status,
         "confidence": confidence,
+        "supports": supports,
         "evidence": evidence,
         "evidence_ids": evidence_ids,
         "reasoning": reasoning,
@@ -115,7 +135,10 @@ def submit_detection_result(
             "repair_instruction": (
                 "Repair the rejected tool arguments; do not restart the investigation. Keep the same "
                 "status if the cited evidence_ids still support it. Cite only evidence_ids returned by "
-                "previous tool calls. present/absent/not_affected require at least one evidence id. If "
+                "previous tool calls. Each support must use a real PatchSpec behavior_id and at least "
+                "one real evidence id; top-level evidence_ids must exactly equal the support evidence "
+                "union. Pure no-match evidence can only support observed_side=ambiguous. "
+                "present/absent/not_affected require at least one support. If "
                 "the only problem is wording, remove version numbers, release ranges, filenames, and "
                 "paths from evidence/reasoning and restate the verdict using local binary semantics "
                 "(disassembly, symbols, strings, imports, constants, offsets, control flow). Downgrade "
@@ -131,6 +154,7 @@ def submit_detection_result(
         "binary": AGENT_CONTEXT["binary_path"],
         "status": status,
         "confidence": confidence,
+        "supports": supports,
         "evidence": evidence,
         "evidence_ids": evidence_ids,
         "reasoning": reasoning,
@@ -179,6 +203,13 @@ def validate_final_result_artifact(result: dict[str, Any]) -> list[str]:
         errors.append(f"$.evidence_ids: unknown evidence id(s) in artifact ledger: {unknown_ids}")
     if status in DETERMINATE_STATUSES and not evidence_ids:
         errors.append(f"$.evidence_ids: {status} artifact must cite at least one evidence id")
+    errors.extend(validate_support_records(
+        result.get("supports"),
+        status=status,
+        evidence_ids=evidence_ids,
+        behavior_contract=(result.get("patch_spec") or {}).get("behavior_contract", []),
+        evidence_ledger=result.get("evidence_ledger", []),
+    ))
     if status == "inconclusive" and result.get("inconclusive_reason") in {"", "none", None}:
         errors.append("$.inconclusive_reason: inconclusive artifact must name a concrete reason")
     return errors
@@ -205,6 +236,11 @@ def build_final_artifact(result: dict[str, Any], transcript: list[dict[str, Any]
         "resolution_mode": str(patch_spec_info.get("resolution_mode", "not_resolved")),
         "cache_key": str(patch_spec_info.get("cache_key", "")),
         "cache_hit": bool(patch_spec_info.get("cache_hit", False)),
+        "behavior_contract": [
+            dict(item)
+            for item in AGENT_CONTEXT.get("patch_spec_behavior_contract", [])
+            if isinstance(item, dict)
+        ],
     }
     return out, validate_final_result_artifact(out)
 
@@ -224,6 +260,7 @@ def compact_rejected_preview(preview: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": preview.get("status"),
         "confidence": preview.get("confidence"),
+        "supports": preview.get("supports", []),
         "evidence_ids": preview.get("evidence_ids", []),
         "inconclusive_reason": preview.get("inconclusive_reason", ""),
         "observation_count": len(preview.get("observations", [])) if isinstance(preview.get("observations"), list) else 0,
@@ -244,6 +281,7 @@ def preflight_missing_result(metadata: dict[str, Any], binary: str, preflight: d
         "binary": binary,
         "status": "inconclusive",
         "confidence": "low",
+        "supports": [],
         "evidence": [],
         "evidence_ids": [],
         "reasoning": f"host preflight failed: {jdump(preflight)}",
@@ -262,6 +300,7 @@ def max_turns_fallback_result(metadata: dict[str, Any], binary: str, max_turns: 
         "binary": binary,
         "status": "inconclusive",
         "confidence": "low",
+        "supports": [],
         "evidence": [],
         "evidence_ids": [],
         "reasoning": (
@@ -285,6 +324,7 @@ def api_failure_fallback_result(metadata: dict[str, Any], binary: str, error: st
         "binary": binary,
         "status": "inconclusive",
         "confidence": "low",
+        "supports": [],
         "evidence": [],
         "evidence_ids": [],
         "reasoning": f"Model API failed after all retries; no verdict could be sampled. Error: {error}",

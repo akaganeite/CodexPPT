@@ -8,6 +8,7 @@
       "properties": {
         "status": { "$ref": "#/properties/status" },
         "confidence": { "$ref": "#/properties/confidence" },
+        "supports": { "$ref": "#/properties/supports" },
         "evidence": { "$ref": "#/properties/evidence" },
         "evidence_ids": { "$ref": "#/properties/evidence_ids" },
         "reasoning": { "$ref": "#/properties/reasoning" },
@@ -17,12 +18,45 @@
       "required": [
         "status",
         "confidence",
+        "supports",
         "evidence",
         "evidence_ids",
         "reasoning",
         "decisive_addresses",
         "inconclusive_reason"
       ],
+      "additionalProperties": false
+    },
+    "support": {
+      "type": "object",
+      "required": [
+        "support_id",
+        "behavior_id",
+        "observed_side",
+        "summary",
+        "evidence_ids",
+        "decisive_addresses"
+      ],
+      "properties": {
+        "support_id": { "type": "string", "pattern": "^sup_[0-9]{4}$" },
+        "behavior_id": { "type": "string", "minLength": 1 },
+        "observed_side": {
+          "type": "string",
+          "enum": ["old", "new", "ambiguous", "not_applicable"]
+        },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "maxItems": 30
+        },
+        "decisive_addresses": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 30
+        }
+      },
       "additionalProperties": false
     }
   },
@@ -34,6 +68,7 @@
     "binary",
     "status",
     "confidence",
+    "supports",
     "evidence",
     "evidence_ids",
     "reasoning",
@@ -43,6 +78,7 @@
     "observations",
     "evidence_ledger",
     "harness_metrics",
+    "patch_spec",
     "timing",
     "usage_metrics"
   ],
@@ -60,6 +96,12 @@
       "type": "string",
       "description": "Confidence level.",
       "enum": ["high", "medium", "low"]
+    },
+    "supports": {
+      "type": "array",
+      "description": "Behavior-scoped target-binary support records. Determinate verdicts require at least one.",
+      "items": { "$ref": "#/$defs/support" },
+      "maxItems": 30
     },
     "evidence": {
       "type": "array",
@@ -169,13 +211,25 @@
     },
     "patch_spec": {
       "type": "object",
-      "required": ["digest", "generation_mode", "resolution_mode", "cache_key", "cache_hit"],
+      "required": ["digest", "generation_mode", "resolution_mode", "cache_key", "cache_hit", "behavior_contract"],
       "properties": {
         "digest": { "type": "string" },
         "generation_mode": { "type": "string" },
         "resolution_mode": { "type": "string" },
         "cache_key": { "type": "string" },
-        "cache_hit": { "type": "boolean" }
+        "cache_hit": { "type": "boolean" },
+        "behavior_contract": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["behavior_id", "required"],
+            "properties": {
+              "behavior_id": { "type": "string", "minLength": 1 },
+              "required": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     },

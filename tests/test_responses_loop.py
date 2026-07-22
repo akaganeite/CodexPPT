@@ -18,6 +18,9 @@ from claudeagent import agent_loop
 from claudeagent.runtime import AGENT_CONTEXT, initialize_agent_context, record_evidence
 
 
+PATCH_SPEC = {"behaviors": [{"behavior_id": "B001", "required": True}]}
+
+
 def _stub_run_python(**kwargs):
     """Minimal stand-in for run_python that mints an observation + evidence."""
     from claudeagent.observations import (
@@ -48,7 +51,10 @@ def _run() -> int:
 
     # --- 1. a run_python function_call is echoed + produces a function_call_output ---
     with tempfile.TemporaryDirectory() as tmp:
-        initialize_agent_context({"cve_id": "CVE-2013-0249", "project": "curl"}, "/tmp/curl", "CVE-2013-0249", tmp, tmp)
+        initialize_agent_context(
+            {"cve_id": "CVE-2013-0249", "project": "curl"},
+            "/tmp/curl", "CVE-2013-0249", tmp, tmp, patch_spec=PATCH_SPEC,
+        )
         input_items: list[dict] = []
         transcript: list[dict] = []
         fc = {"type": "function_call", "id": "call_1", "name": "run_python",
@@ -66,7 +72,10 @@ def _run() -> int:
 
     # --- 2. submit success path returns done + final_result ---
     with tempfile.TemporaryDirectory() as tmp:
-        initialize_agent_context({"cve_id": "CVE-2013-0249", "project": "curl"}, "/tmp/curl", "CVE-2013-0249", tmp, tmp)
+        initialize_agent_context(
+            {"cve_id": "CVE-2013-0249", "project": "curl"},
+            "/tmp/curl", "CVE-2013-0249", tmp, tmp, patch_spec=PATCH_SPEC,
+        )
         ev = record_evidence(observation_id="obs_0001", kind="strings_match", claim="anchor", excerpts=["snprintf"])
         eid = ev["evidence_id"]
         input_items = []
@@ -74,6 +83,11 @@ def _run() -> int:
         fc = {"type": "function_call", "id": "call_2", "name": "submit_detection_result",
               "arguments": json.dumps({
                   "status": "present", "confidence": "high", "evidence": ["bounded snprintf call"],
+                  "supports": [{
+                      "support_id": "sup_0001", "behavior_id": "B001", "observed_side": "new",
+                      "summary": "The bounded call implements the patched behavior.",
+                      "evidence_ids": [eid], "decisive_addresses": ["0x6f64d"],
+                  }],
                   "evidence_ids": [eid], "reasoning": "the call passes a bounded size", "decisive_addresses": ["0x6f64d"],
                   "inconclusive_reason": "none",
               })}
@@ -89,13 +103,21 @@ def _run() -> int:
 
     # --- 3. submit with bad args -> repair path (function_call_output carries the repair) ---
     with tempfile.TemporaryDirectory() as tmp:
-        initialize_agent_context({"cve_id": "CVE-2013-0249", "project": "curl"}, "/tmp/curl", "CVE-2013-0249", tmp, tmp)
+        initialize_agent_context(
+            {"cve_id": "CVE-2013-0249", "project": "curl"},
+            "/tmp/curl", "CVE-2013-0249", tmp, tmp, patch_spec=PATCH_SPEC,
+        )
         # No evidence in ledger -> citing ev_9999 is unknown, AND determinate with no valid id.
         input_items = []
         transcript = []
         fc = {"type": "function_call", "id": "call_3", "name": "submit_detection_result",
               "arguments": json.dumps({
                   "status": "present", "confidence": "high", "evidence": ["e"],
+                  "supports": [{
+                      "support_id": "sup_0001", "behavior_id": "B001", "observed_side": "new",
+                      "summary": "Invented evidence must be rejected.",
+                      "evidence_ids": ["ev_9999"], "decisive_addresses": ["0x1"],
+                  }],
                   "evidence_ids": ["ev_9999"], "reasoning": "fixed in 7.29.0", "decisive_addresses": ["0x1"],
                   "inconclusive_reason": "none",
               })}

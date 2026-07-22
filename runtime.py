@@ -34,10 +34,37 @@ def bump_command_failure() -> None:
 def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("observations", [])
     AGENT_CONTEXT.setdefault("evidence_ledger", [])
+    AGENT_CONTEXT.setdefault("patch_spec_behavior_contract", [])
     AGENT_CONTEXT.setdefault("observation_counter", 0)
     AGENT_CONTEXT.setdefault("evidence_counter", 0)
     AGENT_CONTEXT.setdefault("script_counter", 0)
     AGENT_CONTEXT.setdefault("metrics", {})
+
+
+def patch_spec_behavior_contract(patch_spec: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return the host-side behavior ids/required flags used at finalization.
+
+    The full PatchSpec remains prompt input/provenance. Final validation only
+    needs this compact contract to reject invented behavior ids while keeping
+    PatchSpec text out of the target-binary evidence ledger.
+    """
+    if not isinstance(patch_spec, dict):
+        return []
+    behaviors = patch_spec.get("behaviors")
+    if not isinstance(behaviors, list):
+        return []
+    contract: list[dict[str, Any]] = []
+    for behavior in behaviors:
+        if not isinstance(behavior, dict):
+            continue
+        behavior_id = behavior.get("behavior_id")
+        if not isinstance(behavior_id, str) or not behavior_id:
+            continue
+        contract.append({
+            "behavior_id": behavior_id,
+            "required": bool(behavior.get("required", False)),
+        })
+    return contract
 
 
 def initialize_agent_context(
@@ -47,6 +74,7 @@ def initialize_agent_context(
     output_dir: str = "",
     scratch_dir: str = "",
     patch_spec_info: dict[str, Any] | None = None,
+    patch_spec: dict[str, Any] | None = None,
 ) -> None:
     AGENT_CONTEXT.clear()
     AGENT_CONTEXT.update({
@@ -63,6 +91,7 @@ def initialize_agent_context(
             "cache_hit": False,
             "usage": {},
         },
+        "patch_spec_behavior_contract": patch_spec_behavior_contract(patch_spec),
         "observations": [],
         "evidence_ledger": [],
         "observation_counter": 0,

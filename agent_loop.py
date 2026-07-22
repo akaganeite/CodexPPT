@@ -437,6 +437,7 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
         args.output_dir,
         scratch,
         patch_spec_info,
+        patch_spec_result.spec,
     )
     transcript.append(_patch_spec_transcript_entry(patch_spec_info))
     task_patch_spec = prompt_view(patch_spec_result.spec)
@@ -560,7 +561,13 @@ def dry_run(args: argparse.Namespace) -> int:
             dry_run=True,
         )
         patch_spec_info = _patch_spec_runtime_info(patch_spec_result, resolution_mode)
-        initialize_agent_context(metadata, binary, args.cve_id, patch_spec_info=patch_spec_info)
+        initialize_agent_context(
+            metadata,
+            binary,
+            args.cve_id,
+            patch_spec_info=patch_spec_info,
+            patch_spec=patch_spec_result.spec,
+        )
         task_patch_spec = prompt_view(patch_spec_result.spec)
         source_excerpts = resolve_source_excerpts(metadata, patch_spec_result.spec)
         print("TOOLS_OK", len(tools), [t["name"] for t in tools])

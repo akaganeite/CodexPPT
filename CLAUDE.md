@@ -59,7 +59,7 @@ Run all commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `c
 - **PatchSpec** (`patchspec/`): normalize source metadata into stable hunks, anchors, trusted OLD/NEW indicators, and model-generated advisory semantics. Generation is metadata-only, validated against exact JSON references, cached per metadata/model fingerprint, and never enters the binary evidence ledger.
 - **Tools** (`tools.py`, `tools.json`): general `run_command` + `strings_grep` + `objdump_window` + `submit_detection_result`. Every successful command mints a typed observation (`obs_XXXX`) and one or more evidence-ledger items (`ev_XXXX`); the model cites those ids. "The observation is the citable evidence."
 - **Policy** (`command_policy.py`): default-deny allowlist (binutils + safe filters), debug/source denylist, and **path confinement** — every path argument must resolve to the one target binary, so sibling `.debug`/source artifacts are blocked at the policy layer.
-- **Finalize** (`finalize.py`, `schemas/final_result.schema.json`): JSON-schema + evidence-id gate (determinate verdicts need ≥1 real ledger id) + version/path-string rejection. Failures return a repair payload, never crash.
+- **Finalize** (`decision.py`, `finalize.py`, `schemas/final_result.schema.json`): JSON-schema + evidence-id gate + behavior-scoped supports. Determinate verdicts need at least one support whose evidence ids exactly cover the cited ledger ids; support behavior refs and evidence polarity are validated before write. Failures return a repair payload, never crash.
 - **Verdicts**: `present` / `absent` / `not_affected` / `inconclusive`. Default model mode is flash/non-thinking (`thinking:{type:disabled}`).
 
 ### Run a single case
@@ -99,4 +99,4 @@ Single-case: CVE-2013-0249 → `present` on patched (7.29.0) and `absent` on vul
 
 ### Known limitation
 
-Because every successful command mints at least a `command_output` evidence id, the determinate-verdict evidence gate is cheap to satisfy by citing any observation. Evidence richness is tuned (offsets, format strings, call/cmp lines in `parsed_facts`) so cited ids carry decisive excerpts, but the gate is structural, not semantic — `decisive_addresses` + `reasoning` remain the human-review anchors. This is an intentional trade for codex-exec-style leanness (the heavy pptagent citation-coherence/polarity auditors were deliberately not ported).
+Because every successful command mints at least a `command_output` evidence id, behavior supports are still structurally rather than semantically checked at this stage. They prevent invented behavior/evidence references and reject pure no-match evidence for decisive sides, but `decisive_addresses` + `reasoning` remain the human-review anchors until the independent semantic verifier is enabled.

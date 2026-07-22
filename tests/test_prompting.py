@@ -91,6 +91,10 @@ def _run() -> int:
     payload = json.loads(rendered)
 
     check("prompt has PatchSpec", payload.get("patch_spec") == safe_spec)
+    check(
+        "prompt has behavior support contract",
+        payload.get("behavior_support_contract") == [{"behavior_id": "B001", "required": True}],
+    )
     check("prompt has leaf excerpts", payload.get("patch_spec_source_excerpts") == excerpts)
     check("prompt uses sandbox binary path", payload.get("target_binary") == "/workspace/binary")
     check("prompt hides host binary path", "/anonymous/target_binary" not in rendered)
@@ -118,6 +122,8 @@ def _run() -> int:
         "PatchSpec is explicitly non-evidence",
         payload.get("constraints", {}).get("patch_spec_is_not_evidence") is True,
     )
+    submit_schema = payload.get("submit_detection_result_schema", {})
+    check("submit schema requires supports", "supports" in submit_schema.get("required", []))
 
     with tempfile.TemporaryDirectory() as tmp:
         args = argparse.Namespace(
