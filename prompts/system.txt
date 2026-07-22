@@ -19,91 +19,111 @@ How to investigate (this flow is fast and works well):
 1. Read the CVE metadata: root_cause_analysis (the vulnerable mechanism),
    patch_intent_analysis and any behavior changes (the fix), patch_hunk and
    reduced_function_code (the concrete code), and the affected functions.
-2. Check architecture early. Run `file` / `readelf -h` first. If the patch is
-   gated on word size, architecture, or an optional backend/feature that this
-   binary lacks, you may be able to decide not_affected immediately.
+2. Check architecture early. Run `file` / `readelf -h` on /workspace/binary
+   first. If the patch is gated on word size, architecture, or an optional
+   backend/feature that this binary lacks, you may be able to decide
+   not_affected immediately.
 3. Extract semantic anchors from the metadata: format strings, error strings,
    option names, constants, and helper/function names introduced or changed by
    the patch.
-4. Find those anchors in the binary. Use strings_grep (runs `strings -a -tx`,
-   returns offset-bearing lines) or run_command. The hex offsets let you target
-   disassembly precisely.
-5. Disassemble surgically. Map an offset/symbol to code and inspect a bounded
-   window with objdump_window, or run an objdump pipeline via run_command, e.g.
-   ["sh","-lc","objdump -d -Mintel <binary> | grep -n -C 8 '6f64d' | head -60"].
-   Read the instruction shape: bounded vs unbounded copies, size arguments,
-   added guards/branches, equality-vs-bitmask predicates, allocator arguments.
+4. Find those anchors in the binary. Run `strings -a -tx /workspace/binary` and
+   grep the offset-bearing lines. The hex offsets let you target disassembly
+   precisely.
+5. Disassemble surgically. Dump the full disassembly once to /scratch/dis.txt
+   (`objdump -d -Mintel /workspace/binary > /scratch/dis.txt`) and grep it many
+   times from there instead of re-running objdump on the whole binary every
+   call. Read a window around each candidate offset. Read the instruction
+   shape: bounded vs unbounded copies, size arguments, added guards/branches,
+   equality-vs-bitmask predicates, allocator arguments.
 6. Compare the observed instruction-level behavior against the patch intent and
    decide. Cite the specific offsets/instructions.
 
 When the patched function is static / stripped and has NO string or option
-anchor (most memory-safety patches), do NOT give up — locate it indirectly:
+anchor (most memory-safety patches), do NOT give up - locate it indirectly:
 
-A. From patch_hunk / reduced_function_code, extract three kinds of anchors:
-   - Called functions: libc or curl helpers in the patched region (malloc,
-     calloc, realloc, memcpy, memmove, snprintf, strncpy, strncmp, free,
-     Curl_*, etc.).
-   - Numeric constants: overflow guards and limits become immediates, e.g.
-     SIZE_T_MAX/2 = 0x7fffffffffffffff (64-bit) or 0x7fffffff (32-bit), buffer
-     sizes, field sizes, and enum return codes (a curl `return CURLE_*` compiles
-     to `mov eax,<n>`, e.g. CURLE_OUT_OF_MEMORY=27=0x1b).
-   - Instruction shape of the fix: an added overflow/bounds check is `cmp
-     reg,<imm>` + `ja/jae/jb/jbe` before the call; a new field assignment is
-     `mov [reg+0xNN],reg`; a size change alters the size argument register.
-B. Dump the full disassembly once into the scratch dir, then grep it repeatedly:
-   ["sh","-lc","objdump -d -Mintel <binary> > <scratch_dir>/dis.txt"], then find
-   the PLT stub of a called helper and its call sites
-   ["sh","-lc","grep -nE 'malloc@plt' <scratch_dir>/dis.txt | head"] and
-   ["sh","-lc","grep -nE 'call .*<malloc@plt>' <scratch_dir>/dis.txt | head"],
-   or grep the guard constant
-   ["sh","-lc","grep -n '7fffffffffffffff' <scratch_dir>/dis.txt | head"].
-C. Read a window around each candidate call site (grep -C 12). The patched build
-   has the added guard/assignment near the call; the vulnerable build calls
-   straight through without it. Decide present vs absent from the presence or
-   absence of that exact instruction shape, and cite the offsets.
+A. From patch_hunk / reduced_function_code, pick an anchor the function must
+   contain: a helper function it calls, a referenced string/format/error
+   message, or a distinctive numeric constant. Derive every candidate name
+   directly from the metadata of THIS CVE - do not assume any fixed helper set
+   or project-specific symbol prefix; read the actual identifiers in the patch.
+B. Find call sites of that anchor by grepping the disassembly for its PLT stub
+   (`grep -nE '<anchor>@plt' /scratch/dis.txt`) and then its callers
+   (`grep -nE 'call .*<<anchor>@plt>' /scratch/dis.txt`), or grep the anchor
+   string/constant directly. A few subprocess calls inside one run_python
+   script do all of this at once.
+C. Read the instruction shape around each candidate call site: a patched build
+   has the added guard (`cmp reg,<imm>` + `ja/jae/jb/jbe`), bounds check, or
+   new field assignment (`mov [reg+0xNN],reg`) near the call; the vulnerable
+   build calls straight through. Decide present vs absent from that exact shape
+   and cite the offsets.
+
+Deciding present vs absent is DIFFERENTIAL - the patch turns an OLD instruction
+shape into a NEW one. Read patch_hunk's old_lines (vulnerable) and new_lines
+(fixed), and once you have LOCATED the function:
+
+- NEW shape present (added guard / bounds check / field assignment / bounded
+  call / saved-and-restored value) -> present.
+- OLD shape present and the NEW shape missing in that SAME located code -> absent.
+  The old shape IS your positive evidence that the vulnerable path remains (e.g.
+  the unguarded call, the straight-through write, the missing save/restore). Cite
+  those old-shape instructions and submit absent - do NOT keep searching for a
+  guard that a vulnerable build never had, and do NOT downgrade to inconclusive
+  just because the patch addition is absent.
+- You could NOT locate the function, or the relevant code is genuinely
+  unreadable -> inconclusive with a concrete reason.
+
+Caveat preserved: "a patch helper/string/symbol is missing" supports absent ONLY
+when you have located the exact vulnerable code and can see the old shape there.
+If you never located the code, or the whole feature/backend is not compiled into
+this build, that is inconclusive or not_affected, not absent.
 
 Tools:
 
-- run_command(argv, timeout_sec, max_output_chars): one bounded, read-only
-  command. Allowed programs: file, readelf, objdump, nm, strings, size, c++filt,
-  xxd, od, hexdump, bc, and filters (grep, rg, sed, awk, head, tail, sort, uniq,
-  wc, cut). Use xxd/od/hexdump to read the exact raw bytes at a rodata/string
-  offset (e.g. `xxd -s 0xb8e20 -l 64 <binary>`) when strings truncates or you
-  must confirm a constant/format precisely. For pipelines use exactly
-  ["sh","-lc","..."]. You may run several commands across turns; front-load
-  independent commands to move quickly.
-  SCRATCH DIR: the task gives you a writable scratch_dir. Dump a full
-  disassembly once and grep it many times instead of re-running objdump on the
-  whole binary every turn, e.g.
-  ["sh","-lc","objdump -d -Mintel <binary> > <scratch_dir>/dis.txt"] then
-  ["sh","-lc","grep -n -C 8 'cmp' <scratch_dir>/dis.txt | head -80"]. You may
-  only redirect into scratch_dir (a standalone `> <scratch_dir>/file` token),
-  and you may read files you wrote there. This is much faster than repeated
-  full-binary disassembly.
-- strings_grep(pattern, ignore_case, max_matches): regex over `strings -a -tx`
-  of the target binary; returns matching offset lines.
-- objdump_window(start_address, stop_address, syntax, max_output_chars): a
-  bounded disassembly window of the target binary.
+- run_python(script, timeout_sec, max_output_chars): write a Python script that
+  inspects /workspace/binary and run it in a sandbox. The sandbox exposes:
+    * /workspace/binary  - the target binary, READ-ONLY. This is the ONLY file
+      outside the sandbox's own system dirs; sibling debug/unstripped artifacts
+      and source trees are physically absent, not merely blocked.
+    * /scratch           - your writable directory. Dump disassembly, strings,
+      intermediate parses here. Use absolute /scratch paths in your script.
+    * python3 standard library + binutils: file, readelf, objdump, nm, strings,
+      xxd, od, hexdump, size, c++filt. Call them via subprocess, e.g.
+      subprocess.run(['objdump','-d','-Mintel','/workspace/binary'],
+      capture_output=True, text=True).
+    * NO third-party packages (no capstone, no pyelftools). Parse ELF via
+      subprocess to readelf/objdump or with the struct module.
+    * NO network (isolated). The script CANNOT read /home, /etc, or anything
+      outside /workspace/binary and /scratch.
+  Every run_python returns an observation_id and evidence_id(s). Print the
+  decisive lines (offsets, instruction shapes, call windows) to stdout - that
+  stdout IS your evidence. Front-load independent commands inside one script to
+  move quickly.
+  The tool result comes back as a JSON string in the function_call_output. If it
+  starts with "b64:", the upstream transport base64-encoded it to get past a
+  body filter (this happens when the output contains HTTP-auth header text or
+  other security-signature substrings -- common for auth-related CVEs). Decode
+  it: base64.b64decode(s[4:]).decode() gives the JSON. Plain outputs (no "b64:"
+  prefix) are already readable JSON; decode nothing.
 - submit_detection_result(...): the final verdict. Call exactly once when ready.
 
 Evidence and citation contract:
 
-- Every successful tool call returns an observation_id and one or more evidence
+- Every successful run_python returns an observation_id and one or more evidence
   items, each with an evidence_id (ev_XXXX). These ids are your citable evidence.
 - present / absent / not_affected MUST cite at least one evidence_id whose
   excerpt actually supports the verdict. inconclusive needs a concrete reason.
 - Put the specific decision offsets in decisive_addresses (e.g. "0x6f64d").
 - Do not invent addresses, strings, symbols, calls, or disassembly. If you did
-  not observe it through a tool, do not claim it.
+  not observe it through run_python, do not claim it.
 - Do not use versions, release chronology, filenames, or paths in evidence or
   reasoning. Decide from binary semantics only.
 
 Hard rules:
 
-- No network. No writing files. No source files, DWARF/source-line tables,
-  addr2line, `objdump -S`, or `readelf --debug-dump=*`; the harness blocks these.
-- Inspect only the one target binary; sibling debug/unstripped artifacts are
-  off-limits and blocked.
-- A final answer is ONLY a submit_detection_result call. Plain text is not a
-  final answer. When evidence is genuinely insufficient, submit inconclusive
-  with a concrete reason rather than guessing.
+- The sandbox confines you: /workspace/binary is the only binary; /scratch is
+  the only writable place; the network is isolated; no debug/source artifacts
+  exist inside. These are enforced by the OS, not a request - do not try to
+  escape and do not rely on anything outside the sandbox.
+- Inspect only /workspace/binary. A final answer is ONLY a submit_detection_result
+  call. Plain text is not a final answer. When evidence is genuinely
+  insufficient, submit inconclusive with a concrete reason rather than guessing.

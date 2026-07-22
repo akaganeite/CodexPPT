@@ -1,92 +1,38 @@
 [
   {
     "type": "function",
-    "function": {
-      "name": "run_command",
-      "strict": true,
-      "description": "Run one bounded, read-only command against the target binary. Allowed: file, readelf, objdump, nm, strings, size, c++filt, xxd, od, hexdump, bc and text filters (grep, rg, sed, awk, head, tail, sort, uniq, wc, cut). Use xxd/od/hexdump to read exact raw bytes at an offset (e.g. xxd -s 0xb8e20 -l 64 <binary>). For pipelines use exactly [\"sh\",\"-lc\",\"objdump -d -Mintel <binary> | grep -n -C 8 '6f64d' | head -60\"]. Only the one target binary may be inspected; debug/source options and other files are rejected.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "argv": {
-            "type": "array",
-            "description": "Command argv. Do not put pipe tokens directly in argv; use [\"sh\",\"-lc\",\"...\"] for pipelines.",
-            "items": { "type": "string" },
-            "minItems": 1,
-            "maxItems": 80
-          },
-          "timeout_sec": {
-            "type": "integer",
-            "description": "Timeout in seconds. Use 0 for default (240).",
-            "minimum": 0,
-            "maximum": 600
-          },
-          "max_output_chars": {
-            "type": "integer",
-            "description": "Maximum stdout head/tail characters retained. Use 0 for default (60000).",
-            "minimum": 0,
-            "maximum": 120000
-          }
+    "name": "run_python",
+    "strict": false,
+    "description": "Run a Python script inside a bubblewrap sandbox to inspect the target binary. The sandbox exposes the target ONLY at /workspace/binary (read-only); /scratch is writable for intermediate dumps (e.g. objdump output); the network is isolated; python3 standard library and binutils (file, readelf, objdump, nm, strings, xxd, od, hexdump, size, c++filt) are available, but NO third-party packages (no capstone/pyelftools -- parse ELF via subprocess to readelf/objdump or struct). Each call returns an observation_id and evidence_id(s) you must cite in the final verdict.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string",
+          "description": "Full Python source. Call binutils via subprocess, e.g. subprocess.run(['objdump','-d','-Mintel','/workspace/binary'],capture_output=True,text=True). Return findings on stdout (that becomes your evidence)."
         },
-        "required": ["argv", "timeout_sec", "max_output_chars"],
-        "additionalProperties": false
-      }
+        "timeout_sec": {
+          "type": "integer",
+          "description": "Execution timeout in seconds. 0 means default 240.",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "max_output_chars": {
+          "type": "integer",
+          "description": "Cap captured stdout/stderr characters (head+tail). 0 means default 60000.",
+          "minimum": 0,
+          "maximum": 120000
+        }
+      },
+      "required": ["script", "timeout_sec", "max_output_chars"],
+      "additionalProperties": false
     }
   },
   {
     "type": "function",
-    "function": {
-      "name": "strings_grep",
-      "strict": true,
-      "description": "Run `strings -a -tx` on the target binary and return matching offset-bearing lines. Use to find format strings, error strings, option names, and constants from the patch metadata, with their hex offsets.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "pattern": { "type": "string", "description": "Regex over strings output." },
-          "ignore_case": { "type": "boolean", "description": "Case-insensitive matching." },
-          "max_matches": {
-            "type": "integer",
-            "description": "Maximum matching lines. Use 0 for default (80).",
-            "minimum": 0,
-            "maximum": 500
-          }
-        },
-        "required": ["pattern", "ignore_case", "max_matches"],
-        "additionalProperties": false
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "objdump_window",
-      "strict": true,
-      "description": "Return a bounded objdump disassembly window of the target binary between two addresses.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "start_address": { "type": "string", "description": "Hex or decimal start address." },
-          "stop_address": { "type": "string", "description": "Hex or decimal stop address." },
-          "syntax": { "type": "string", "description": "Disassembly syntax.", "enum": ["intel", "att"] },
-          "max_output_chars": {
-            "type": "integer",
-            "description": "Maximum output characters. Use 0 for default (30000).",
-            "minimum": 0,
-            "maximum": 120000
-          }
-        },
-        "required": ["start_address", "stop_address", "syntax", "max_output_chars"],
-        "additionalProperties": false
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "submit_detection_result",
-      "strict": true,
-      "description": "Submit the final patch-presence verdict. Call exactly once when ready. Determinate verdicts (present/absent/not_affected) must cite at least one evidence_id from a prior tool call.",
-      "parameters": { "$ref": "schemas/final_result.schema.json#/$defs/submit_detection_result" }
-    }
+    "name": "submit_detection_result",
+    "strict": false,
+    "description": "Submit the final patch-presence verdict. Call exactly once when ready. Determinate verdicts (present/absent/not_affected) must cite at least one evidence_id from a prior run_python call.",
+    "parameters": { "$ref": "schemas/final_result.schema.json#/$defs/submit_detection_result" }
   }
 ]

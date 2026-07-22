@@ -26,7 +26,7 @@ def build_task(metadata: dict[str, Any], binary: str, preflight: dict[str, Any])
         "symbol_hint": preflight.get("symbol_hint", {}),
         "harness_protocol": [
             "read metadata -> check arch early -> extract anchors -> find offsets -> disassemble -> decide",
-            "determinate verdicts require target-binary evidence_ids returned by tool calls",
+            "determinate verdicts require target-binary evidence_ids returned by run_python calls",
             "use inconclusive with a concrete reason when evidence or applicability is unresolved",
         ],
         "observation_contract": {
@@ -49,21 +49,22 @@ def build_task(metadata: dict[str, Any], binary: str, preflight: dict[str, Any])
     return jdump(payload)
 
 
-def append_finalization_prompt(messages: list[dict[str, Any]], max_turns: int) -> None:
-    messages.append({
+def append_finalization_prompt(input_items: list[dict[str, Any]], max_turns: int) -> None:
+    input_items.append({
+        "type": "message",
         "role": "user",
         "content": (
             f"Evidence budget reached after {max_turns} turns. Finalize now: if the ledger "
             "evidence is decisive, call submit_detection_result. Otherwise run at most one narrow "
-            "deciding tool call (a targeted strings_grep, objdump_window, or objdump pipeline), then "
-            "submit. Do not start a broad new search. Determinate evidence/reasoning must be "
-            "target-binary semantics only: no versions, filenames, paths, or release chronology. If "
-            "evidence remains insufficient, submit inconclusive with a concrete reason."
+            "deciding run_python call (a targeted strings/objdump window), then submit. Do not "
+            "start a broad new search. Determinate evidence/reasoning must be target-binary "
+            "semantics only: no versions, filenames, paths, or release chronology. If evidence "
+            "remains insufficient, submit inconclusive with a concrete reason."
         ),
     })
 
 
-def append_finalization_budget_prompt(messages: list[dict[str, Any]], remaining_turns: int) -> None:
+def append_finalization_budget_prompt(input_items: list[dict[str, Any]], remaining_turns: int) -> None:
     if remaining_turns <= 1:
         content = (
             "Last-mile budget exhausted. Your next response must call submit_detection_result with "
@@ -74,7 +75,7 @@ def append_finalization_budget_prompt(messages: list[dict[str, Any]], remaining_
     else:
         content = (
             f"Last-mile budget remaining: {remaining_turns}. Submit if the last evidence_ids are "
-            "decisive; otherwise run one narrow evidence-deciding tool call. No broad search. Final "
-            "determinate wording must be binary-local only."
+            "decisive; otherwise run one narrow evidence-deciding run_python call. No broad "
+            "search. Final determinate wording must be binary-local only."
         )
-    messages.append({"role": "user", "content": content})
+    input_items.append({"type": "message", "role": "user", "content": content})

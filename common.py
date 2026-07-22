@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +11,13 @@ ROOT = Path(__file__).resolve().parent
 TOOLS_JSON = ROOT / "tools.json"
 SYSTEM_PROMPT = ROOT / "prompts" / "system.txt"
 FINAL_RESULT_SCHEMA = ROOT / "schemas" / "final_result.schema.json"
+MODEL_CONFIG = ROOT / "model_config.json"
 
-DEFAULT_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEFAULT_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
+# The backend (base_url, model, reasoning effort, api-key env var) is configured
+# entirely in model_config.json - see model_config.py. There are no ambient
+# OPENAI_BASE_URL / OPENAI_MODEL / OPENAI_API_KEY env defaults here: the config
+# file is the single source of truth for which provider a run talks to. The API
+# key is read from the env var named by the chosen profile (or its key file).
 
 # Verdict vocabulary. Determinate verdicts must cite tool-emitted evidence ids.
 VERDICTS = ("present", "absent", "not_affected", "inconclusive")

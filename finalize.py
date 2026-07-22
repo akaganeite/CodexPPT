@@ -162,7 +162,7 @@ def aggregate_usage(transcript: list[dict[str, Any]]) -> dict[str, Any]:
         for key, value in flat.items():
             totals[key] = totals.get(key, 0) + value
         by_turn.append({"turn": entry.get("turn"), "usage": usage})
-    return {"provider": "deepseek", "model_turns": len(by_turn), "totals": totals, "by_turn": by_turn}
+    return {"provider": "openai-responses", "model_turns": len(by_turn), "totals": totals, "by_turn": by_turn}
 
 
 def validate_final_result_artifact(result: dict[str, Any]) -> list[str]:
@@ -258,5 +258,25 @@ def max_turns_fallback_result(metadata: dict[str, Any], binary: str, max_turns: 
         ),
         "decisive_addresses": [],
         "inconclusive_reason": "insufficient_tool_budget",
+        "completed_at_epoch": time.time(),
+    }
+
+
+def api_failure_fallback_result(metadata: dict[str, Any], binary: str, error: str) -> dict[str, Any]:
+    """Inconclusive result written when the model API is unreachable after all
+    retries. The run still produces a valid artifact (so a batch can score it)
+    rather than dying empty-handed."""
+    return {
+        "ok": False,
+        "project": metadata.get("project", "curl"),
+        "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
+        "binary": binary,
+        "status": "inconclusive",
+        "confidence": "low",
+        "evidence": [],
+        "evidence_ids": [],
+        "reasoning": f"Model API failed after all retries; no verdict could be sampled. Error: {error}",
+        "decisive_addresses": [],
+        "inconclusive_reason": "tool_failure",
         "completed_at_epoch": time.time(),
     }

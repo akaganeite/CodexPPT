@@ -1,10 +1,15 @@
-"""Single-case model/tool loop.
+"""Single-case model/tool loop over the OpenAI Responses API.
 
-Distilled from the codex agent loop: build a prompt (system + task), sample the
-model, dispatch each tool call to a handler, feed the bounded result back as a
-tool message, and repeat until the model calls submit_detection_result with a
-schema-valid, evidence-cited verdict. Tool and schema failures repair in-band;
-only model-API failures (after retries) abort.
+Build a prompt (instructions + task), sample the model, dispatch each function
+call to a handler, feed the bounded result back as a function_call_output item,
+and repeat until the model calls submit_detection_result with a schema-valid,
+evidence-cited verdict. Tool and schema failures repair in-band; only model-API
+failures (after retries) abort.
+
+The Responses API is stateless here: every turn resends the full conversation
+as the ``input`` items array. Reasoning items are dropped (we keep only message
++ function_call + function_call_output); this keeps runs reproducible and avoids
+reasoning-content round-tripping through the proxy.
 
 Run:
     python3 -m claudeagent.agent_loop --cve-id CVE-2013-0249 \
@@ -22,9 +27,8 @@ import tempfile
 import time
 from typing import Any
 
+from claudeagent.binary_workspace import prepare_anonymous_binary
 from claudeagent.common import (
-    DEFAULT_BASE_URL,
-    DEFAULT_MODEL,
     FINAL_RESULT_SCHEMA,
     SYSTEM_PROMPT,
     compact_json,
@@ -32,6 +36,7 @@ from claudeagent.common import (
     jdump,
 )
 from claudeagent.finalize import (
+    api_failure_fallback_result,
     build_final_artifact,
     compact_known_evidence_ids,
     compact_rejected_preview,
@@ -45,41 +50,75 @@ from claudeagent.host import (
     load_env_files,
     preflight_detection_inputs,
 )
-from claudeagent.model_client import deepseek_chat
+from claudeagent.model_config import (
+    ModelProfile,
+    apply_profile_to_args,
+    interactive_env_keys,
+    reasoning_param,
+    resolve_api_key,
+    resolve_profile,
+)
 from claudeagent.observations import compact_tool_result_for_model
 from claudeagent.prompting import append_finalization_budget_prompt, append_finalization_prompt, build_task
+from claudeagent.responses_client import responses_create
 from claudeagent.runtime import bump_metric, initialize_agent_context
+from claudeagent.sandbox import preflight_sandbox
 from claudeagent.schema_validate import DETERMINATE_STATUSES, load_final_result_schema
 from claudeagent.tools_registry import TOOL_FUNCS, load_tools, submit_tool_only
 
 
+def _function_call_output(call_id: str, result: dict[str, Any], *, raw: bool = False) -> dict[str, Any]:
+    """Build the Responses item that feeds a tool result back to the model.
+
+    By default the result is compacted (stdout budget, evidence trimming) for the
+    model's context window. ``raw=True`` passes the full result dict unchanged --
+    used for a failed submit_detection_result, whose ``schema_errors`` /
+    ``known_evidence_ids`` / ``repair_instruction`` would otherwise be stripped by
+    the compactor and leave the model unable to see why its verdict was rejected.
+    """
+    payload = result if raw else compact_tool_result_for_model(result)
+    return {
+        "type": "function_call_output",
+        "call_id": call_id,
+        "output": compact_json(payload) if isinstance(payload, (dict, list)) else str(payload),
+    }
+
+
 def handle_tool_calls(
     *,
-    msg: dict[str, Any],
-    messages: list[dict[str, Any]],
+    output_items: list[dict[str, Any]],
+    input_items: list[dict[str, Any]],
     transcript: list[dict[str, Any]],
     turn_label: int | str,
     allowed_tools: dict[str, Any],
     output_dir: str,
     start_epoch: float,
 ) -> tuple[bool, dict[str, Any] | None]:
-    tool_calls = msg.get("tool_calls") or []
-    if not tool_calls:
-        messages.append({
+    """Dispatch function_call items from a Responses output array.
+
+    Echoes each function_call item back into input_items (the model must see its
+    own calls), runs it, appends a function_call_output item, and records the
+    transcript. Returns (done, final_result).
+    """
+    function_calls = [item for item in output_items if item.get("type") == "function_call"]
+    if not function_calls:
+        input_items.append({
+            "type": "message",
             "role": "user",
             "content": "You must call submit_detection_result. Plain text is not a valid final answer.",
         })
         return False, None
 
-    messages.append({
-        key: value
-        for key, value in msg.items()
-        if key in ("role", "content", "reasoning_content", "tool_calls") and value is not None
-    })
-    for call_index, call in enumerate(tool_calls, 1):
+    for call_index, call in enumerate(function_calls, 1):
         bump_metric("tool_calls")
-        fn = call.get("function", {}).get("name")
-        raw_args = call.get("function", {}).get("arguments") or "{}"
+        fn = call.get("name")
+        raw_args = call.get("arguments") or "{}"
+        # A Responses function_call carries the tool-call identifier in ``call_id``;
+        # ``id`` is the item id (a different, longer token). function_call_output
+        # must echo ``call_id``, or the API rejects the next turn with
+        # "No tool output found for function call <call_id>". Prefer ``call_id``
+        # and fall back to ``id`` only for synthetic test fixtures that set ``id``.
+        call_id = call.get("call_id") or call.get("id") or ""
         try:
             call_args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
             if not isinstance(call_args, dict):
@@ -117,15 +156,20 @@ def handle_tool_calls(
                     "rejected_preview": compact_rejected_preview(preview),
                 }
                 transcript[-1]["result"] = repair_result
-                messages.append({"role": "tool", "tool_call_id": call.get("id"), "content": compact_json(repair_result)})
+                # Echo the submit call and its repair output so the model can fix it.
+                # raw=True: the repair carries schema_errors/known_evidence_ids the compactor would drop.
+                input_items.append(call)
+                input_items.append(_function_call_output(call_id, repair_result, raw=True))
                 continue
             return True, write_run_outputs(output_dir, result, transcript, start_epoch)
 
-        messages.append({
-            "role": "tool",
-            "tool_call_id": call.get("id"),
-            "content": compact_json(compact_tool_result_for_model(result)),
-        })
+        # Echo the function_call then feed its output back. A failed submit carries
+        # schema_errors/known_evidence_ids/repair_instruction that the compactor would
+        # strip; pass it raw so the model can actually repair. Everything else (a
+        # run_python observation, or a phase-rejection stub) is compacted normally.
+        submit_repair = fn == "submit_detection_result" and not result.get("ok")
+        input_items.append(call)
+        input_items.append(_function_call_output(call_id, result, raw=submit_repair))
     return False, None
 
 
@@ -155,38 +199,93 @@ def last_tool_call_needs_forced_submit(transcript: list[dict[str, Any]]) -> bool
     return "tool not available in this phase" in str(result.get("error", ""))
 
 
-def provider_config(args: argparse.Namespace) -> tuple[str, str, str]:
-    api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
-    deepseek_base = os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
-    env_base_url = os.environ.get("OPENAI_BASE_URL") or deepseek_base
-    env_model = os.environ.get("DEEPSEEK_MODEL") or os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
-    strict = not args.no_strict
-    base_url = args.base_url or (
-        env_base_url.rstrip("/") + "/beta"
-        if strict and env_base_url.rstrip("/").endswith("api.deepseek.com")
-        else env_base_url
-    )
-    return api_key, base_url, args.model or env_model
+def provider_config(args: argparse.Namespace) -> tuple[str, str, str, ModelProfile]:
+    """Resolve (api_key, base_url, model, profile) with config as source of truth.
+
+    Priority is CLI flag > config profile field. The model_config.json profile
+    names the backend (base_url, model, reasoning effort/mode) and the env var
+    that carries the API key; --model / --base-url / --reasoning-effort override
+    the profile when set. The old OPENAI_BASE_URL / OPENAI_MODEL ambient-env
+    fallbacks are gone - the config file is the single source of truth for which
+    backend to talk to. The API key is read from the profile's env var (or its
+    key file) and is never logged. The profile is returned so callers can derive
+    request-only fields (e.g. reasoning on/off) without re-resolving.
+    """
+    profile = resolve_profile(args)
+    apply_profile_to_args(args, profile)
+    api_key = resolve_api_key(profile)
+    return api_key, args.base_url, args.model, profile
 
 
-def _sample(args: argparse.Namespace, messages, tools, api_key, base_url, model) -> dict[str, Any]:
-    return deepseek_chat(
-        messages,
-        tools,
+def _sample(args: argparse.Namespace, instructions, input_items, tools, api_key, base_url, model,
+            profile: ModelProfile) -> dict[str, Any]:
+    # reasoning_mode is a profile property (is this a thinking model?), not a
+    # CLI knob: "off" omits the reasoning field entirely (non-thinking models
+    # like deepseek-v4-flash-nothinking reject/ignore it); "on" sends the effort.
+    # --reasoning-effort overrides the effort value but not the on/off mode.
+    reasoning = reasoning_param(profile)
+    return responses_create(
+        instructions=instructions,
+        input_items=input_items,
+        tools=tools,
         api_key=api_key,
         base_url=base_url,
         model=model,
-        thinking=args.thinking,
-        reasoning_effort=args.reasoning_effort,
         timeout=args.api_timeout,
         max_retries=args.api_max_retries,
+        reasoning=reasoning,
     )
+
+
+def _extract_output_items(resp: dict[str, Any]) -> list[dict[str, Any]]:
+    output = resp.get("output")
+    return output if isinstance(output, list) else []
+
+
+def _sample_turn(args: argparse.Namespace, instructions, input_items, tools, api_key, base_url, model,
+                 profile: ModelProfile) -> dict[str, Any]:
+    """Sample one turn, recovering across long upstream outage windows.
+
+    ``_sample`` already retries individual HTTP requests (``api_max_retries``)
+    with short backoff, but the proxy upstream has outages lasting minutes:
+    every request in that window reset-resolves, so the per-request retries all
+    exhaust within ~30s and the run would fall back to inconclusive. To ride a
+    multi-minute outage through to the next healthy window, we retry the whole
+    turn ``api_turn_retries`` times with a longer (minute-scale) backoff. Only
+    when all turn-level attempts fail do we propagate, so the caller can write
+    the inconclusive fallback.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, max(1, args.api_turn_retries) + 1):
+        try:
+            return _sample(args, instructions, input_items, tools, api_key, base_url, model, profile)
+        except Exception as exc:
+            last_exc = exc
+            if attempt == args.api_turn_retries:
+                break
+            # Minute-scale backoff to span an outage window; capped at 60s.
+            time.sleep(min(20.0 * attempt, 60.0))
+    assert last_exc is not None
+    raise last_exc
 
 
 def run_agent(args: argparse.Namespace) -> int:
     start_epoch = time.time()
     metadata = load_cve_metadata(args)
-    binary = str(expand(args.binary))
+    # Copy the binary into a fresh temp dir under a neutral name (target_binary)
+    # so the original filename - which encodes the package version - never reaches
+    # the prompt, transcript, evidence, or final artifact. The model must judge
+    # patch presence from binary semantics, not a version-string lookup. Cleaned up
+    # in finally regardless of exit path (early return / exception / normal exit).
+    workspace = prepare_anonymous_binary(args.binary)
+    try:
+        return _run_agent_body(args, metadata, workspace, start_epoch)
+    finally:
+        workspace.cleanup()
+
+
+def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspace: Any, start_epoch: float) -> int:
+    binary = str(workspace.binary_path)
     if args.output_dir:
         scratch = str(expand(args.output_dir) / "scratch")
     else:
@@ -204,28 +303,46 @@ def run_agent(args: argparse.Namespace) -> int:
     transcript: list[dict[str, Any]] = [{"stage": "host_preflight", "result": preflight}]
 
     load_env_files(args.env_file)
-    if args.import_interactive_env and not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")):
-        import_env_from_interactive_shell(["DEEPSEEK_API_KEY", "OPENAI_API_KEY"])
-    api_key, base_url, model = provider_config(args)
+    # The API key lives in a profile-named env var (e.g. PPTAGENT_API_KEY for
+    # the cliproxy profile, OPENAI_API_KEY for aiflexr), so import that var from
+    # the interactive shell before resolving the key. resolve_profile reads only
+    # args (not the env), so this is safe to call before provider_config.
+    if args.import_interactive_env:
+        profile = resolve_profile(args)
+        import_env_from_interactive_shell(interactive_env_keys(profile))
+    api_key, base_url, model, profile = provider_config(args)
     if not api_key:
-        raise SystemExit("DEEPSEEK_API_KEY or OPENAI_API_KEY is not set. Use --dry-run for local validation only.")
+        raise SystemExit(
+            f"API key for profile {getattr(profile, 'name', '?')!r} is not set "
+            f"(env var {getattr(profile, 'api_key_env', '?')}). "
+            "Use --dry-run for local validation only."
+        )
 
     tools = load_tools(strict=not args.no_strict)
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT.read_text()},
-        {"role": "user", "content": build_task(metadata, binary, preflight)},
+    instructions = SYSTEM_PROMPT.read_text()
+    input_items: list[dict[str, Any]] = [
+        {"type": "message", "role": "user", "content": build_task(metadata, binary, preflight)},
     ]
 
     # Phase 1: bounded exploration.
     for turn in range(1, args.max_turns + 1):
-        resp = _sample(args, messages, tools, api_key, base_url, model)
-        msg = resp["choices"][0]["message"]
-        transcript.append({"turn": turn, "assistant": msg, "usage": resp.get("usage", {})})
+        try:
+            resp = _sample_turn(args, instructions, input_items, tools, api_key, base_url, model, profile)
+        except Exception as exc:
+            # The proxy upstream is intermittently flaky (connection resets). After all
+            # retries are exhausted, write an inconclusive artifact so a batch can still
+            # score the case instead of dying empty-handed.
+            result = api_failure_fallback_result(metadata, binary, repr(exc))
+            transcript.append({"turn": turn, "stage": "api_failure", "error": repr(exc)})
+            print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
+            return 1
+        output_items = _extract_output_items(resp)
+        transcript.append({"turn": turn, "output": output_items, "usage": resp.get("usage", {})})
         if args.verbose:
             print(f"\n--- model turn {turn} ---", file=sys.stderr)
-            print(jdump(msg), file=sys.stderr)
+            print(jdump(output_items), file=sys.stderr)
         done, final_result = handle_tool_calls(
-            msg=msg, messages=messages, transcript=transcript, turn_label=turn,
+            output_items=output_items, input_items=input_items, transcript=transcript, turn_label=turn,
             allowed_tools=TOOL_FUNCS, output_dir=args.output_dir, start_epoch=start_epoch,
         )
         if done and final_result is not None:
@@ -234,22 +351,22 @@ def run_agent(args: argparse.Namespace) -> int:
 
     if args.finalize_on_max_turns:
         # Phase 2: finalize nudge (last turn restricts to submit-only).
-        append_finalization_prompt(messages, args.max_turns)
+        append_finalization_prompt(input_items, args.max_turns)
         for finalize_turn in range(1, args.finalization_turns + 1):
             remaining = args.finalization_turns - finalize_turn
             if finalize_turn > 1:
-                append_finalization_budget_prompt(messages, remaining + 1)
+                append_finalization_budget_prompt(input_items, remaining + 1)
             turn_tools = submit_tool_only(tools) if remaining == 0 else tools
             allowed = {"submit_detection_result": TOOL_FUNCS["submit_detection_result"]} if remaining == 0 else TOOL_FUNCS
-            resp = _sample(args, messages, turn_tools, api_key, base_url, model)
-            msg = resp["choices"][0]["message"]
+            resp = _sample_turn(args, instructions, input_items, turn_tools, api_key, base_url, model, profile)
+            output_items = _extract_output_items(resp)
             turn_label = f"finalize-{finalize_turn}"
-            transcript.append({"turn": turn_label, "assistant": msg, "usage": resp.get("usage", {})})
+            transcript.append({"turn": turn_label, "output": output_items, "usage": resp.get("usage", {})})
             if args.verbose:
                 print(f"\n--- model {turn_label} ---", file=sys.stderr)
-                print(jdump(msg), file=sys.stderr)
+                print(jdump(output_items), file=sys.stderr)
             done, final_result = handle_tool_calls(
-                msg=msg, messages=messages, transcript=transcript, turn_label=turn_label,
+                output_items=output_items, input_items=input_items, transcript=transcript, turn_label=turn_label,
                 allowed_tools=allowed, output_dir=args.output_dir, start_epoch=start_epoch,
             )
             if done and final_result is not None:
@@ -260,24 +377,25 @@ def run_agent(args: argparse.Namespace) -> int:
         for repair_turn in range(1, 3):
             if not last_tool_call_needs_forced_submit(transcript):
                 break
-            messages.append({
+            input_items.append({
+                "type": "message",
                 "role": "user",
                 "content": (
                     "Repair/finalization only: the previous response did not produce an accepted "
-                    "submit_detection_result. Do not call inspection tools. Call submit_detection_result "
+                    "submit_detection_result. Do not call run_python. Call submit_detection_result "
                     "now using existing evidence_ids from the ledger; if the evidence is not decisive, "
                     "submit inconclusive with a concrete reason."
                 ),
             })
-            resp = _sample(args, messages, submit_tool_only(tools), api_key, base_url, model)
-            msg = resp["choices"][0]["message"]
+            resp = _sample_turn(args, instructions, input_items, submit_tool_only(tools), api_key, base_url, model, profile)
+            output_items = _extract_output_items(resp)
             turn_label = f"repair-{repair_turn}"
-            transcript.append({"turn": turn_label, "assistant": msg, "usage": resp.get("usage", {})})
+            transcript.append({"turn": turn_label, "output": output_items, "usage": resp.get("usage", {})})
             if args.verbose:
                 print(f"\n--- model {turn_label} ---", file=sys.stderr)
-                print(jdump(msg), file=sys.stderr)
+                print(jdump(output_items), file=sys.stderr)
             done, final_result = handle_tool_calls(
-                msg=msg, messages=messages, transcript=transcript, turn_label=turn_label,
+                output_items=output_items, input_items=input_items, transcript=transcript, turn_label=turn_label,
                 allowed_tools={"submit_detection_result": TOOL_FUNCS["submit_detection_result"]},
                 output_dir=args.output_dir, start_epoch=start_epoch,
             )
@@ -292,21 +410,33 @@ def run_agent(args: argparse.Namespace) -> int:
 
 def dry_run(args: argparse.Namespace) -> int:
     metadata = load_cve_metadata(args)
-    binary = str(expand(args.binary))
-    initialize_agent_context(metadata, binary, args.cve_id)
-    tools = load_tools(strict=not args.no_strict)
-    load_final_result_schema()
-    preflight = preflight_detection_inputs(binary, metadata)
-    _, base_url, model = provider_config(args)
-    print("TOOLS_OK", len(tools), [t["function"]["name"] for t in tools])
-    print("FINAL_RESULT_SCHEMA_OK", FINAL_RESULT_SCHEMA)
-    print("MODEL", model)
-    print("BASE_URL", base_url)
-    print("SYSTEM_PROMPT_CHARS", len(SYSTEM_PROMPT.read_text()))
-    print("TASK_CHARS", len(build_task(metadata, binary, preflight)))
-    print("HOST_PREFLIGHT")
-    print(jdump(preflight))
-    return 0
+    # Anonymize the binary in dry-run too, so the rendered TASK_CHARS prompt and
+    # HOST_PREFLIGHT reflect exactly what a real run sends (neutral name, no version).
+    workspace = prepare_anonymous_binary(args.binary)
+    try:
+        binary = str(workspace.binary_path)
+        initialize_agent_context(metadata, binary, args.cve_id)
+        tools = load_tools(strict=not args.no_strict)
+        load_final_result_schema()
+        preflight = preflight_detection_inputs(binary, metadata)
+        profile = resolve_profile(args)
+        _, base_url, model, _ = provider_config(args)
+        print("TOOLS_OK", len(tools), [t["name"] for t in tools])
+        print("FINAL_RESULT_SCHEMA_OK", FINAL_RESULT_SCHEMA)
+        print("MODEL_PROFILE", profile.name)
+        print("MODEL", model)
+        print("BASE_URL", base_url)
+        print("REASONING_EFFORT", profile.reasoning_effort)
+        print("REASONING_MODE", profile.reasoning_mode)
+        print("SYSTEM_PROMPT_CHARS", len(SYSTEM_PROMPT.read_text()))
+        print("TASK_CHARS", len(build_task(metadata, binary, preflight)))
+        print("SANDBOX_PREFLIGHT")
+        print(jdump(preflight_sandbox()))
+        print("HOST_PREFLIGHT")
+        print(jdump(preflight))
+        return 0
+    finally:
+        workspace.cleanup()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -317,19 +447,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metadata-json", default="", help="path to a {cve_id: metadata} or [metadata] JSON; needs --cve-id")
     parser.add_argument("--binary", required=True, help="path to the target binary")
     parser.add_argument("--output-dir", default="")
-    parser.add_argument("--model", default="")
-    parser.add_argument("--base-url", default="")
+    parser.add_argument("--model", default="", help="override the config profile's model")
+    parser.add_argument("--base-url", default="", help="override the config profile's base_url")
+    parser.add_argument(
+        "--model-profile", default="",
+        help="config profile name or alias (see model_config.json); default is the config's active_profile",
+    )
     parser.add_argument("--env-file", default="")
     parser.add_argument("--import-interactive-env", action="store_true")
     parser.add_argument("--no-strict", action="store_true", help="drop tool 'strict' flags (non-strict tool schemas)")
-    parser.add_argument("--thinking", action="store_true", help="enable DeepSeek thinking mode")
-    parser.add_argument("--reasoning-effort", default="medium")
+    parser.add_argument("--reasoning-effort", default="low", help="GPT-5.5 reasoning effort: low|medium|high (default low; high can exceed the API timeout)")
     parser.add_argument("--max-turns", type=int, default=20)
     parser.add_argument("--finalize-on-max-turns", action="store_true", default=True)
     parser.add_argument("--no-finalize-on-max-turns", dest="finalize_on_max_turns", action="store_false")
     parser.add_argument("--finalization-turns", type=int, default=3)
     parser.add_argument("--api-timeout", type=int, default=240)
     parser.add_argument("--api-max-retries", type=int, default=3)
+    parser.add_argument("--api-turn-retries", type=int, default=1,
+                        help="how many times to retry a whole turn across long upstream outage windows (minute-scale backoff); 1 = no cross-window retry")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     return parser
@@ -337,6 +472,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # Validate the config/profile up front so a typo in --model-profile or a
+    # malformed model_config.json surfaces as a one-line message, not a stack
+    # trace deep inside the loop. resolve_profile reads only args (not the env),
+    # so it is safe to call before any env/key work.
+    try:
+        resolve_profile(args)
+    except ValueError as exc:
+        raise SystemExit(f"model config error: {exc}")
     if args.dry_run:
         return dry_run(args)
     return run_agent(args)

@@ -1,0 +1,35 @@
+{
+  "active_profile": "aiflexr_gpt56",
+  "aliases": {
+    "cliproxy": "cliproxy_gpt55",
+    "aiflexr": "aiflexr_gpt56",
+    "deepseek": "cliproxy_deepseek_v4_flash"
+  },
+  "profiles": {
+    "cliproxy_gpt55": {
+      "base_url": "http://127.0.0.1:8317/v1",
+      "model": "gpt-5.5",
+      "reasoning_effort": "low",
+      "api_key_env": "PPTAGENT_API_KEY",
+      "api_timeout": 120,
+      "api_max_retries": 3,
+      "api_turn_retries": 6
+    },
+    "cliproxy_deepseek_v4_flash": {
+      "base_url": "http://127.0.0.1:8317/v1",
+      "model": "deepseek-v4-flash-nothinking",
+      "reasoning_effort": "high",
+      "reasoning_mode": "off",
+      "api_key_env": "PPTAGENT_API_KEY",
+      "api_timeout": 240,
+      "api_max_retries": 3,
+      "api_turn_retries": 6
+    },
+    "aiflexr_gpt56": {
+      "base_url": "https://api.aiflexr.com/v1",
+      "model": "gpt-5.5",
+      "reasoning_effort": "medium",
+      "api_key_env": "AIFLEXR_API_KEY"
+    }
+  }
+}
