@@ -19,7 +19,7 @@ These come from `../AGENTS.md` and define what "correct" means here. Read that f
 
 - **Model input is bounded.** The investigation model may see only: (1) the host-compiled PatchSpec and its exact metadata source excerpts, (2) the target binary itself, and (3) controlled `binutils` observations derived directly from that binary. Full CVE metadata and PatchSpec generation provenance remain host-side.
 - **Never leak debug/source signals** into the model, transcript, evidence ledger, or default verdict validation. Forbidden as default inputs/evidence: sibling debug/unstripped artifacts (`curl_debug`, `.debug` files), local source repos (e.g. `~/extrepo/...`), source files, DWARF / source-line tables, `addr2line` source mapping, `objdump -S`, `readelf --debug-dump=*`. Humans may diagnose with these *outside* the harness, but such facts cannot become model input or final evidence.
-- **Determinate verdicts must cite evidence.** `present` / `absent` / `not_affected` must reference concrete `evidence_id`s emitted by tools. Free-text-only evidence is rejected and returned to the model for repair rather than silently accepted.
+- **Determinate verdicts must cite evidence.** `present` / `absent` / `not_affected` must reference concrete `evidence_id`s emitted by inspection tools and updated to `claim_status=summarized` with `summarize_evidence` after the real output was returned. Free-text-only or still-pending evidence is rejected and returned to the model for repair rather than silently accepted.
 - **Schema failures repair, not crash.** When the finalization payload fails schema validation, send the error back as tool output so the model can fix it, instead of ending the run.
 - **Keep changes small and modular.** Prefer focused Python modules over one growing script; prefer stage-local edits over cross-cutting rewrites.
 
@@ -57,7 +57,7 @@ Run all commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `c
 
 - **Loop** (`agent_loop.py`): build prompt → sample model → dispatch tool calls → feed bounded results back → repeat until `submit_detection_result` is accepted. Three bounded phases: explore (`--max-turns`, default 12) → finalize-nudge (`--finalization-turns`, default 3) → forced repair (≤2). Tool/schema failures repair in-band; only model-API failures (after retries) abort.
 - **PatchSpec** (`patchspec/`): normalize source metadata into stable hunks, anchors, trusted OLD/NEW indicators, and model-generated advisory semantics. Generation is metadata-only, validated against exact JSON references, cached per metadata/model fingerprint, and never enters the binary evidence ledger.
-- **Tools** (`run_python_tool.py`, `tools.json`): `run_python` is the single sandboxed binary-inspection surface and `submit_detection_result` finalizes. Every successful inspection mints a typed observation (`obs_XXXX`) and evidence-ledger item (`ev_XXXX`).
+- **Tools** (`run_python_tool.py`, `evidence_summary.py`, `tools.json`): `run_python` is the single sandboxed binary-inspection surface, `summarize_evidence` adds or revises the main investigator's natural-language claim for evidence returned by an earlier observation, and `submit_detection_result` finalizes. Every successful inspection mints a typed observation (`obs_XXXX`) and pending evidence-ledger item (`ev_XXXX`). Summarization never creates evidence or changes the Host claim, raw excerpts, kind, polarity, or provenance.
 - **Sandbox** (`sandbox.py`): bubblewrap exposes only `/workspace/binary` read-only plus writable `/scratch`, system Python/binutils, and no network. Model-authored Python remains confined to that environment.
 - **Finalize** (`decision.py`, `finalize.py`, `evidence_verifier.py`, `schemas/final_result.schema.json`): the model submits behavior-scoped supports plus a structured claim. The Host resolves every PatchSpec behavior and derives the canonical verdict. Determinate claims then receive an independent, fresh LLM review over only cited evidence; one rejection can repair supports/claim, while a second rejection or verifier failure fails closed to inconclusive. Verifier output is audit data, never ledger evidence. Artifacts use `final_result.v4`.
 - **Verdicts**: `present` / `absent` / `not_affected` / `inconclusive`. Default model mode is flash/non-thinking (`thinking:{type:disabled}`).
@@ -78,7 +78,7 @@ Independent evidence verification defaults to `--evidence-verifier llm`; use `--
 
 Generate or inspect a PatchSpec independently with `python3 -m claudeagent.patchspec --metadata-json <metadata.json> --cve-id <CVE> --output <patch_spec.json>`. Pass a prebuilt artifact to a case with `--patchspec-json`; otherwise the case lazily resolves `<output-dir>/patch_spec.json`.
 
-Per-case artifacts in `--output-dir`: `final_result.json` (verdict + observations + evidence_ledger + harness_metrics + usage), `transcript.json`, `usage_metrics.json`.
+Per-case artifacts in `--output-dir`: `final_result.json` (verdict + observations + evidence_ledger, including Host/main-Agent claims and revisions + harness_metrics + usage), `transcript.json`, `usage_metrics.json`.
 
 ### Run the curl batch
 
@@ -86,13 +86,14 @@ Per-case artifacts in `--output-dir`: `final_result.json` (verdict + observation
 python3 -m claudeagent.batch --out-root /tmp/claudeagent_batch/run1 [--cve CVE-...] [--limit N] [--max-workers 4] [--dry-run]
 ```
 
-Defaults: groundtruth `…/exports/groundtruth_with_not_affected.json` (364 cases), binaries `~/extdisk/dataset4ppt/curl/binaries` under variant `target/curl_stripped`, metadata behavior.json. Groundtruth maps vuln→absent, patch→present, not_affected→not_affected. Each case runs as an isolated subprocess. Writes per-case subdirs + `batch_metrics.json` (accuracy, 4-way confusion matrix, repair totals). `--dry-run` lists resolved cases and missing binaries without any API call.
+Defaults: groundtruth `…/exports/groundtruth_with_not_affected.json` (364 cases), binaries `~/extdisk/dataset4ppt/curl/binaries` under variant `target/curl_stripped`, metadata behavior.json. Groundtruth maps vuln→absent, patch→present, not_affected→not_affected. Each case runs as an isolated subprocess. Writes per-case subdirs + pptagent-shaped `batch_metrics.json`; the stderr aggregate includes the 4-way confusion matrix, repair totals, and evidence-summary call/update/revision/failure totals. `--dry-run` lists resolved cases and missing binaries without any API call.
 
 ### Tests
 
 ```
-python3 -m claudeagent.tests.test_command_policy   # adversarial allow/deny + path confinement
-python3 -m claudeagent.tests.test_finalize         # evidence-id gate, version reject, schema/repair
+python3 -m claudeagent.tests.test_sandbox          # confinement + pending run_python evidence
+python3 -m claudeagent.tests.test_finalize         # evidence/status/schema gates and repair
+python3 -m claudeagent.tests.test_evidence_summary # visibility, summaries, revisions, atomic failures
 ```
 
 ### Validated

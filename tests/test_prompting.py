@@ -129,6 +129,12 @@ def _run() -> int:
     check("submit schema omits legacy evidence", "evidence_ids" not in submit_schema.get("properties", {}))
     tool_names = {item.get("name") for item in load_tools(strict=True)}
     check("tool schema and handlers agree", tool_names == set(TOOL_FUNCS))
+    check("summary tool is exposed", "summarize_evidence" in tool_names)
+    check(
+        "prompt requires summarized citations",
+        payload.get("constraints", {}).get("cited_evidence_must_be_summarized") is True
+        and "earlier model response" in payload.get("observation_contract", {}).get("summary_timing", ""),
+    )
 
     with tempfile.TemporaryDirectory() as tmp:
         args = argparse.Namespace(

@@ -59,6 +59,16 @@ SOURCE_EXCERPTS = [
 ]
 
 
+def _mark_summarized(evidence: dict, claim: str | None = None) -> dict:
+    evidence["returned_response_index"] = int(evidence.get("created_response_index", 0))
+    evidence["claim"] = claim or evidence["claim"]
+    evidence["claim_source"] = "main_agent"
+    evidence["claim_status"] = "summarized"
+    evidence["claim_revision"] = max(1, int(evidence.get("claim_revision", 0)))
+    evidence["claim_updated_response_index"] = int(evidence["returned_response_index"]) + 1
+    return evidence
+
+
 def _support(evidence_id: str, *, side: str = "new") -> dict:
     return {
         "support_id": "sup_0001",
@@ -165,7 +175,14 @@ def _run() -> int:
         "evidence_id": "ev_0001",
         "observation_id": "obs_0001",
         "kind": "command_output",
+        "host_claim": "Host observed bounded disassembly output.",
         "claim": "The bounded disassembly contains the target guard and branch.",
+        "claim_source": "main_agent",
+        "claim_status": "summarized",
+        "claim_revision": 1,
+        "created_response_index": 1,
+        "returned_response_index": 1,
+        "claim_updated_response_index": 2,
         "supporting_excerpt": ["Authorization: Digest", "0x1010: cmp eax,1"],
         "location": {},
         "confidence": "supporting",
@@ -175,7 +192,14 @@ def _run() -> int:
         "evidence_id": "ev_9999",
         "observation_id": "obs_9999",
         "kind": "command_output",
+        "host_claim": "UNCITED_LEDGER_SECRET",
         "claim": "UNCITED_LEDGER_SECRET",
+        "claim_source": "main_agent",
+        "claim_status": "summarized",
+        "claim_revision": 1,
+        "created_response_index": 1,
+        "returned_response_index": 1,
+        "claim_updated_response_index": 2,
         "supporting_excerpt": ["UNCITED_LEDGER_SECRET"],
         "location": {},
         "confidence": "supporting",
@@ -207,6 +231,11 @@ def _run() -> int:
     check("WAF-sensitive evidence encoded", "Authorization: Digest" not in rendered and "b64:" in rendered)
     check("parsed observation retained", "line_count" in rendered and "python3" in rendered)
     check("PatchSpec source identity omitted", "CVE-TEST" not in rendered and "metadata_sha256" not in rendered)
+    check(
+        "verifier receives claim provenance",
+        "Host observed bounded disassembly output." in rendered
+        and '"claim_source": "main_agent"' in rendered,
+    )
 
     oversized = dict(evidence)
     oversized["supporting_excerpt"] = ["X" * 120_000]
@@ -326,6 +355,7 @@ def _run() -> int:
         claim="guard",
         excerpts=["0x1010: cmp eax,1"],
     )
+    _mark_summarized(ev, "The comparison implements the target guard.")
     integration_responses = [
         _response(_verification(ev["evidence_id"], action="repair")),
         _response(_verification(ev["evidence_id"], action="repair")),
@@ -379,6 +409,7 @@ def _run() -> int:
         claim="guard",
         excerpts=["0x1010: cmp eax,1"],
     )
+    _mark_summarized(ev, "The comparison implements the target guard.")
     api_failure_session = EvidenceVerifierSession(
         mode="llm",
         config=_config(),
@@ -443,6 +474,7 @@ def _run() -> int:
         claim="guard",
         excerpts=["0x1010: cmp eax,1"],
     )
+    _mark_summarized(ev, "The comparison implements the target guard.")
     accept_session = EvidenceVerifierSession(
         mode="llm",
         config=_config(),

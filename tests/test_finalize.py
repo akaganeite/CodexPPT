@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import sys
 import time
 
@@ -58,6 +59,20 @@ def _claim(
     }
 
 
+def _mark_summarized(evidence: dict, claim: str | None = None) -> dict:
+    """Prepare ledger evidence for finalization-specific tests."""
+    evidence["returned_response_index"] = int(evidence.get("created_response_index", 0))
+    evidence["claim"] = claim or evidence["claim"]
+    evidence["claim_source"] = "main_agent"
+    evidence["claim_status"] = "summarized"
+    evidence["claim_revision"] = max(1, int(evidence.get("claim_revision", 0)))
+    evidence["claim_updated_response_index"] = max(
+        1,
+        int(evidence["returned_response_index"]) + 1,
+    )
+    return evidence
+
+
 def _run() -> int:
     failures = []
 
@@ -85,7 +100,18 @@ def _run() -> int:
     )
     present_supports = [new1, new2]
 
-    # 1. Host aggregation rejects a status assertion with unresolved behaviors.
+    # 1. Pending evidence cannot be cited before main-agent summarization.
+    r = submit_detection_result(
+        "present", "high", present_supports, _claim(present_supports), "none"
+    )
+    check(
+        "pending evidence rejected",
+        r["ok"] is False and any("must be summarized" in e for e in r["schema_errors"]),
+    )
+    _mark_summarized(ev1, "The comparison guards the required operation.")
+    _mark_summarized(ev2, "The bounded call implements the required operation.")
+
+    # 2. Host aggregation rejects a status assertion with unresolved behaviors.
     empty_claim = _claim([], summary="No required behavior was resolved.", unresolved=["B001", "B002"])
     r = submit_detection_result("present", "low", [], empty_claim, "none")
     check(
@@ -93,7 +119,7 @@ def _run() -> int:
         r["ok"] is False and any("Host derived 'inconclusive'" in e for e in r["schema_errors"]),
     )
 
-    # 2. unknown evidence ids are rejected through their support records.
+    # 3. unknown evidence ids are rejected through their support records.
     bad_supports = [
         _support("ev_9999", behavior_id="B001"),
         new2,
@@ -101,26 +127,26 @@ def _run() -> int:
     r = submit_detection_result("present", "high", bad_supports, _claim(bad_supports), "none")
     check("unknown-id rejected", r["ok"] is False and any("unknown evidence id" in e for e in r["schema_errors"]))
 
-    # 3. version strings in claim text are rejected.
+    # 4. version strings in claim text are rejected.
     r = submit_detection_result(
         "present", "high", present_supports,
         _claim(present_supports, summary="fixed in 7.29.0 per release"), "none",
     )
     check("version-string rejected", r["ok"] is False and any("version strings" in e for e in r["schema_errors"]))
 
-    # 4. inconclusive with reason none -> rejected
+    # 5. inconclusive with reason none -> rejected
     r = submit_detection_result("inconclusive", "low", [], empty_claim, "none")
     check("inconclusive-none rejected", r["ok"] is False)
 
-    # 5. determinate with reason != none -> rejected
+    # 6. determinate with reason != none -> rejected
     r = submit_detection_result("present", "high", present_supports, _claim(present_supports), "other")
     check("determinate-with-reason rejected", r["ok"] is False)
 
-    # 6. bad enum status -> rejected by schema
+    # 7. bad enum status -> rejected by schema
     r = submit_detection_result("patched", "high", present_supports, _claim(present_supports), "none")
     check("bad-status rejected", r["ok"] is False)
 
-    # 7. valid present verdict is Host-derived and legacy fields are projected.
+    # 8. valid present verdict is Host-derived and legacy fields are projected.
     r = submit_detection_result("present", "high", present_supports, _claim(present_supports), "none")
     check(
         "valid-present accepted",
@@ -137,11 +163,11 @@ def _run() -> int:
         r.get("verdict", {}).get("rule") == "all_applicable_required_new",
     )
 
-    # 8. valid inconclusive with concrete reason -> accepted
+    # 9. valid inconclusive with concrete reason -> accepted
     r = submit_detection_result("inconclusive", "low", [], empty_claim, "no_binary_anchor")
     check("valid-inconclusive accepted", r["ok"] is True and r["status"] == "inconclusive")
 
-    # 9. PatchSpec provenance is recorded separately and never becomes evidence.
+    # 10. PatchSpec provenance is recorded separately and never becomes evidence.
     initialize_agent_context(
         {"cve_id": "CVE-2013-1944", "project": "curl"},
         "/tmp/curl_stripped",
@@ -172,11 +198,13 @@ def _run() -> int:
     )
     check("patchspec not evidence", AGENT_CONTEXT.get("evidence_ledger") == [])
 
-    # 10. invented behavior ids are rejected.
+    # 11. invented behavior ids are rejected.
     ev = record_evidence(observation_id="obs_0003", kind="disassembly", claim="x", excerpts=["cmp eax, 1"])
     ev_b2 = record_evidence(
         observation_id="obs_0004", kind="disassembly", claim="y", excerpts=["call bounded_copy"]
     )
+    _mark_summarized(ev, "The target comparison is present.")
+    _mark_summarized(ev_b2, "The target bounded call is present.")
     current_new2 = _support(
         ev_b2["evidence_id"], support_id="sup_0002", behavior_id="B002", side="new"
     )
@@ -191,24 +219,25 @@ def _run() -> int:
     )
     check("unknown behavior rejected", r["ok"] is False and any("unknown behavior id" in e for e in r["schema_errors"]))
 
-    # 11. every support must be referenced by the structured claim.
+    # 12. every support must be referenced by the structured claim.
     r = submit_detection_result(
         "present", "high", present_supports,
         {**_claim(present_supports), "support_ids": ["sup_0001"]}, "none",
     )
     check("orphan support rejected", r["ok"] is False and any("orphan" in e for e in r["schema_errors"]))
 
-    # 12. a pure negative/no-match observation cannot establish OLD/NEW/not-applicable.
+    # 13. a pure negative/no-match observation cannot establish OLD/NEW/not-applicable.
     negative = record_evidence(
         observation_id="obs_0005", kind="no_pipeline_match", claim="no match",
         excerpts=["stdout_lines=0"], polarity="negative",
     )
+    _mark_summarized(negative, "The bounded search produced no matching discriminator.")
     old_negative = _support(negative["evidence_id"], side="old")
     old_negative_supports = [old_negative, current_new2]
     r = submit_detection_result("absent", "medium", old_negative_supports, _claim(old_negative_supports), "none")
     check("negative-only old rejected", r["ok"] is False and any("positive target-binary evidence" in e for e in r["schema_errors"]))
 
-    # 13. the same negative observation may be represented honestly as ambiguous.
+    # 14. the same negative observation may be represented honestly as ambiguous.
     ambiguous_support = _support(
         negative["evidence_id"], side="ambiguous", summary="The bounded search found no discriminator."
     )
@@ -222,7 +251,7 @@ def _run() -> int:
     )
     check("negative ambiguous accepted", r["ok"] is True)
 
-    # 14. support summaries are subject to the same version/path leakage gate.
+    # 15. support summaries are subject to the same version/path leakage gate.
     version_supports = [
         _support(ev["evidence_id"], summary="This is fixed in 7.29.0"),
         _support(
@@ -232,7 +261,7 @@ def _run() -> int:
     r = submit_detection_result("present", "high", version_supports, _claim(version_supports), "none")
     check("support version rejected", r["ok"] is False and any("version strings" in e for e in r["schema_errors"]))
 
-    # 15. one positively observed OLD required behavior is enough for absent.
+    # 16. one positively observed OLD required behavior is enough for absent.
     old1 = _support(ev["evidence_id"], side="old")
     absent_claim = _claim(
         [old1], summary="One required behavior retains the vulnerable side.", unresolved=["B002"]
@@ -240,7 +269,7 @@ def _run() -> int:
     r = submit_detection_result("absent", "high", [old1], absent_claim, "none")
     check("required old derives absent", r["ok"] is True and r["verdict"]["rule"] == "required_old_behavior")
 
-    # 16. all required behaviors positively not-applicable derive not_affected.
+    # 17. all required behaviors positively not-applicable derive not_affected.
     na1 = _support(ev["evidence_id"], side="not_applicable")
     na2 = _support(
         ev["evidence_id"], support_id="sup_0002", behavior_id="B002",
@@ -250,7 +279,7 @@ def _run() -> int:
     r = submit_detection_result("not_affected", "high", na_supports, _claim(na_supports), "none")
     check("all not-applicable derives not_affected", r["ok"] is True)
 
-    # 17. tampering with a projected legacy field invalidates the artifact.
+    # 18. tampering with a projected legacy field invalidates the artifact.
     current_present = [_support(ev["evidence_id"]), current_new2]
     valid_present = submit_detection_result(
         "present", "high", current_present, _claim(current_present), "none"
@@ -260,7 +289,31 @@ def _run() -> int:
     tamper_errors = validate_final_result_artifact(artifact)
     check("legacy tamper rejected", not errors and any("diverges" in item for item in tamper_errors))
 
-    # 18-20. Every host fallback emits the canonical v4 claim/verdict shape.
+    # 19. Claim provenance state must remain internally consistent in artifacts.
+    provenance_artifact, provenance_errors = build_final_artifact(valid_present, [], time.time())
+    provenance_artifact = copy.deepcopy(provenance_artifact)
+    provenance_artifact["evidence_ledger"][0]["claim_status"] = "pending"
+    provenance_tamper_errors = validate_final_result_artifact(provenance_artifact)
+    check(
+        "claim provenance tamper rejected",
+        not provenance_errors
+        and any("pending evidence must retain" in item for item in provenance_tamper_errors),
+    )
+
+    # 20. Evidence cannot be returned before its creation response.
+    timeline_artifact, timeline_errors = build_final_artifact(valid_present, [], time.time())
+    timeline_artifact = copy.deepcopy(timeline_artifact)
+    timeline_artifact["evidence_ledger"][0]["created_response_index"] = 10
+    timeline_artifact["evidence_ledger"][0]["returned_response_index"] = 1
+    timeline_artifact["evidence_ledger"][0]["claim_updated_response_index"] = 2
+    timeline_tamper_errors = validate_final_result_artifact(timeline_artifact)
+    check(
+        "impossible evidence timeline rejected",
+        not timeline_errors
+        and any("before it was created" in item for item in timeline_tamper_errors),
+    )
+
+    # 21-23. Every host fallback emits the canonical v4 claim/verdict shape.
     fallback_results = [
         preflight_missing_result(
             {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", {"ok": False}
@@ -272,7 +325,7 @@ def _run() -> int:
             {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", "offline"
         ),
     ]
-    for index, fallback in enumerate(fallback_results, 18):
+    for index, fallback in enumerate(fallback_results, 21):
         fallback_artifact, fallback_errors = build_final_artifact(fallback, [], time.time())
         check(
             f"fallback {index} schema-valid",
@@ -282,7 +335,7 @@ def _run() -> int:
             and fallback_artifact.get("verdict", {}).get("status") == "inconclusive",
         )
 
-    # 21. Long transport errors remain a valid bounded fallback claim.
+    # 24. Long transport errors remain a valid bounded fallback claim.
     long_fallback = api_failure_fallback_result(
         {"cve_id": "CVE-X", "project": "curl"},
         "/tmp/binary",
@@ -299,7 +352,7 @@ def _run() -> int:
         for line in failures:
             print("  -", line)
         return 1
-    print("FINALIZE TESTS PASSED (21 cases)")
+    print("FINALIZE TESTS PASSED (24 cases)")
     return 0
 
 

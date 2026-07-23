@@ -20,6 +20,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -73,14 +74,23 @@ from claudeagent.patchspec import (
 from claudeagent.prompting import append_finalization_budget_prompt, append_finalization_prompt, build_task
 from claudeagent.responses_client import responses_create
 from claudeagent.runtime import (
+    begin_model_response,
     bump_metric,
     configure_evidence_verifier,
     evidence_verifier_repair_pending,
+    harness_metrics,
     initialize_agent_context,
+    mark_evidence_returned,
 )
 from claudeagent.sandbox import preflight_sandbox
 from claudeagent.schema_validate import DETERMINATE_STATUSES, load_final_result_schema
-from claudeagent.tools_registry import TOOL_FUNCS, load_tools, submit_tool_only
+from claudeagent.tools_registry import (
+    FINALIZATION_TOOL_FUNCS,
+    FINALIZATION_TOOL_NAMES,
+    TOOL_FUNCS,
+    finalization_tools,
+    load_tools,
+)
 
 
 def _function_call_output(call_id: str, result: dict[str, Any], *, raw: bool = False) -> dict[str, Any]:
@@ -116,12 +126,16 @@ def handle_tool_calls(
     own calls), runs it, appends a function_call_output item, and records the
     transcript. Returns (done, final_result).
     """
+    begin_model_response()
     function_calls = [item for item in output_items if item.get("type") == "function_call"]
     if not function_calls:
         input_items.append({
             "type": "message",
             "role": "user",
-            "content": "You must call submit_detection_result. Plain text is not a valid final answer.",
+            "content": (
+                "You must use tools. Summarize any evidence you intend to cite, then call "
+                "submit_detection_result; plain text is not a valid final answer."
+            ),
         })
         return False, None
 
@@ -157,6 +171,13 @@ def handle_tool_calls(
         bump_metric("tool_calls")
         fn = call.get("name")
         raw_args = call.get("arguments") or "{}"
+        summary_metrics_before: tuple[int, int] | None = None
+        if fn == "summarize_evidence":
+            metrics = harness_metrics()
+            summary_metrics_before = (
+                metrics["evidence_summary_calls"],
+                metrics["evidence_summary_failures"],
+            )
         # A Responses function_call carries the tool-call identifier in ``call_id``;
         # ``id`` is the item id (a different, longer token). function_call_output
         # must echo ``call_id``, or the API rejects the next turn with
@@ -167,10 +188,13 @@ def handle_tool_calls(
             call_args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
             if not isinstance(call_args, dict):
                 raise ValueError("tool arguments must be a JSON object")
-            if evidence_verifier_repair_pending() and fn != "submit_detection_result":
+            if evidence_verifier_repair_pending() and fn not in FINALIZATION_TOOL_NAMES:
                 result = {
                     "ok": False,
-                    "error": "tool not available during evidence-verifier repair: submit only",
+                    "error": (
+                        "tool not available during evidence-verifier repair: only "
+                        "summarize_evidence and submit_detection_result are allowed"
+                    ),
                 }
                 bump_metric("tool_failures")
             elif fn not in allowed_tools:
@@ -181,6 +205,12 @@ def handle_tool_calls(
         except Exception as exc:
             result = {"ok": False, "error": repr(exc), "tool": fn, "arguments": raw_args}
             bump_metric("tool_failures")
+            if summary_metrics_before is not None:
+                current_metrics = harness_metrics()
+                if current_metrics["evidence_summary_calls"] == summary_metrics_before[0]:
+                    bump_metric("evidence_summary_calls")
+                if current_metrics["evidence_summary_failures"] == summary_metrics_before[1]:
+                    bump_metric("evidence_summary_failures")
             if fn == "submit_detection_result":
                 bump_metric("schema_repair_attempts")
 
@@ -189,7 +219,7 @@ def handle_tool_calls(
             "tool": fn,
             "call_index": call_index,
             "arguments": raw_args,
-            "result": result,
+            "result": copy.deepcopy(result),
         })
 
         if fn == "submit_detection_result" and result.get("ok"):
@@ -258,7 +288,7 @@ def handle_tool_calls(
                 block_remaining(
                     call_index,
                     "tool not executed: wait for the evidence-verifier feedback and repair "
-                    "in the next submit-only response",
+                    "in the next finalization response",
                 )
                 return False, None
             if repair_pending_at_start:
@@ -276,7 +306,11 @@ def handle_tool_calls(
         submit_repair = fn == "submit_detection_result" and not result.get("ok")
         input_items.append(call)
         input_items.append(_function_call_output(call_id, result, raw=submit_repair))
+        if fn == "run_python" and isinstance(result.get("evidence"), list):
+            mark_evidence_returned(result["evidence"])
         if repair_pending_at_start:
+            if fn == "summarize_evidence" and result.get("ok"):
+                continue
             block_remaining(
                 call_index,
                 "tool not executed: the single evidence-verifier repair response was invalid",
@@ -307,6 +341,8 @@ def last_tool_call_needs_forced_submit(transcript: list[dict[str, Any]]) -> bool
     last = transcript[-1]
     if last.get("tool") == "submit_detection_result":
         return last_submit_needs_repair(transcript)
+    if last.get("tool") == "summarize_evidence":
+        return True
     result = last.get("result")
     if not isinstance(result, dict) or result.get("ok"):
         return False
@@ -584,9 +620,9 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
     # Phase 1: bounded exploration.
     for turn in range(1, args.max_turns + 1):
         verifier_repair_only = evidence_verifier_repair_pending()
-        turn_tools = submit_tool_only(tools) if verifier_repair_only else tools
+        turn_tools = finalization_tools(tools) if verifier_repair_only else tools
         allowed = (
-            {"submit_detection_result": TOOL_FUNCS["submit_detection_result"]}
+            FINALIZATION_TOOL_FUNCS
             if verifier_repair_only
             else TOOL_FUNCS
         )
@@ -636,16 +672,16 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             return 0
 
     if args.finalize_on_max_turns:
-        # Phase 2: finalize nudge (last turn restricts to submit-only).
+        # Phase 2: finalize nudge (last turn restricts to summarize + submit).
         append_finalization_prompt(input_items, args.max_turns)
         for finalize_turn in range(1, args.finalization_turns + 1):
             remaining = args.finalization_turns - finalize_turn
             if finalize_turn > 1:
                 append_finalization_budget_prompt(input_items, remaining + 1)
             verifier_repair_only = evidence_verifier_repair_pending()
-            turn_tools = submit_tool_only(tools) if remaining == 0 or verifier_repair_only else tools
+            turn_tools = finalization_tools(tools) if remaining == 0 or verifier_repair_only else tools
             allowed = (
-                {"submit_detection_result": TOOL_FUNCS["submit_detection_result"]}
+                FINALIZATION_TOOL_FUNCS
                 if remaining == 0 or verifier_repair_only
                 else TOOL_FUNCS
             )
@@ -696,7 +732,7 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                 print(jdump(write_run_outputs(args.output_dir, result, transcript, start_epoch)))
                 return 0
 
-        # Phase 3: forced repair (submit-only).
+        # Phase 3: forced repair (summarize + submit only).
         for repair_turn in range(1, 3):
             if not last_tool_call_needs_forced_submit(transcript):
                 break
@@ -706,8 +742,9 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                 "role": "user",
                 "content": (
                     "Repair/finalization only: the previous response did not produce an accepted "
-                    "submit_detection_result. Do not call run_python. Call submit_detection_result "
-                    "now using supports that cite existing evidence_ids from the ledger and a claim "
+                    "submit_detection_result. Do not call run_python. Summarize every pending evidence "
+                    "item you intend to cite, then call submit_detection_result using supports that cite "
+                    "existing evidence_ids from the ledger and a claim "
                     "covering every required behavior; if the evidence is not decisive, submit "
                     "inconclusive with a concrete reason."
                 ),
@@ -717,7 +754,7 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                     args,
                     instructions,
                     input_items,
-                    submit_tool_only(tools),
+                    finalization_tools(tools),
                     api_key,
                     base_url,
                     model,
@@ -749,7 +786,7 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                 print(jdump(output_items), file=sys.stderr)
             done, final_result = handle_tool_calls(
                 output_items=output_items, input_items=input_items, transcript=transcript, turn_label=turn_label,
-                allowed_tools={"submit_detection_result": TOOL_FUNCS["submit_detection_result"]},
+                allowed_tools=FINALIZATION_TOOL_FUNCS,
                 output_dir=args.output_dir, start_epoch=start_epoch,
             )
             if done and final_result is not None:
@@ -766,7 +803,8 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
             "role": "user",
             "content": (
                 "Evidence-verifier repair only: revise supports/claim using existing evidence_ids "
-                "and call submit_detection_result now. Do not inspect further. This is the single "
+                "and revise their evidence claims with summarize_evidence when necessary, then call "
+                "submit_detection_result now. Do not inspect further. This is the single "
                 "semantic repair opportunity; downgrade to inconclusive if the cited evidence "
                 "cannot support a determinate claim."
             ),
@@ -776,7 +814,7 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                 args,
                 instructions,
                 input_items,
-                submit_tool_only(tools),
+                finalization_tools(tools),
                 api_key,
                 base_url,
                 model,
@@ -794,7 +832,7 @@ def _run_agent_body(args: argparse.Namespace, metadata: dict[str, Any], workspac
                 input_items=input_items,
                 transcript=transcript,
                 turn_label=turn_label,
-                allowed_tools={"submit_detection_result": TOOL_FUNCS["submit_detection_result"]},
+                allowed_tools=FINALIZATION_TOOL_FUNCS,
                 output_dir=args.output_dir,
                 start_epoch=start_epoch,
             )

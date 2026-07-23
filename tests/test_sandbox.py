@@ -5,8 +5,9 @@
 These verify the confinement contract (the OS-enforced counterpart to the old
 argv-level command policy): the script cannot reach /etc, /home, or the network,
 but CAN read /workspace/binary and call binutils, and CAN write /scratch. Also
-exercises run_python end-to-end: it mints an observation + one command_output
-evidence id that the finalize gate can cite.
+exercises run_python end-to-end: it mints an observation + one pending
+command_output evidence id that must later be returned to and summarized by the
+main Agent before finalization can cite it.
 """
 
 from __future__ import annotations
@@ -105,6 +106,14 @@ def _run() -> int:
         from claudeagent.runtime import evidence_ids_in_ledger
         eid = evs[0]["evidence_id"] if evs else None
         check("run_python evidence id in ledger", eid in evidence_ids_in_ledger())
+        check(
+            "run_python evidence starts pending and unseen",
+            bool(evs)
+            and evs[0].get("claim_status") == "pending"
+            and evs[0].get("claim_source") == "host"
+            and evs[0].get("host_claim") == evs[0].get("claim")
+            and evs[0].get("returned_response_index") is None,
+        )
 
     if failures:
         print("FAIL:", failures)

@@ -40,6 +40,8 @@ def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("observation_counter", 0)
     AGENT_CONTEXT.setdefault("evidence_counter", 0)
     AGENT_CONTEXT.setdefault("script_counter", 0)
+    AGENT_CONTEXT.setdefault("model_response_counter", 0)
+    AGENT_CONTEXT.setdefault("current_model_response", 0)
     AGENT_CONTEXT.setdefault("metrics", {})
 
 
@@ -102,6 +104,8 @@ def initialize_agent_context(
         "observation_counter": 0,
         "evidence_counter": 0,
         "script_counter": 0,
+        "model_response_counter": 0,
+        "current_model_response": 0,
         "metrics": {},
     })
 
@@ -119,6 +123,15 @@ def evidence_verifier_repair_pending() -> bool:
     return bool(getattr(session, "repair_pending", False))
 
 
+def begin_model_response() -> int:
+    """Advance the monotonic response index used for evidence visibility checks."""
+    ensure_runtime_state()
+    response_index = int(AGENT_CONTEXT.get("model_response_counter", 0)) + 1
+    AGENT_CONTEXT["model_response_counter"] = response_index
+    AGENT_CONTEXT["current_model_response"] = response_index
+    return response_index
+
+
 def record_evidence(
     *,
     observation_id: str,
@@ -132,11 +145,18 @@ def record_evidence(
 ) -> dict[str, Any]:
     ensure_runtime_state()
     evidence_id = next_id("ev", "evidence_counter")
+    host_claim = str(claim)
     item = {
         "evidence_id": evidence_id,
         "observation_id": observation_id,
         "kind": kind,
-        "claim": claim,
+        "host_claim": host_claim,
+        "claim": host_claim,
+        "claim_source": "host",
+        "claim_status": "pending",
+        "claim_revision": 0,
+        "created_response_index": int(AGENT_CONTEXT.get("current_model_response", 0)),
+        "returned_response_index": None,
         "supporting_excerpt": compact_lines(excerpts, limit=excerpt_limit),
         "location": location or {},
         "confidence": confidence,
@@ -144,6 +164,32 @@ def record_evidence(
     }
     AGENT_CONTEXT["evidence_ledger"].append(item)
     return item
+
+
+def mark_evidence_returned(
+    evidence: list[dict[str, Any]],
+    *,
+    response_index: int | None = None,
+) -> None:
+    """Mark ledger items whose tool output was appended to the model context."""
+    ensure_runtime_state()
+    returned_at = (
+        int(AGENT_CONTEXT.get("current_model_response", 0))
+        if response_index is None
+        else int(response_index)
+    )
+    evidence_ids = {
+        str(item.get("evidence_id"))
+        for item in evidence
+        if isinstance(item, dict) and item.get("evidence_id")
+    }
+    if not evidence_ids:
+        return
+    for item in AGENT_CONTEXT.get("evidence_ledger", []):
+        if not isinstance(item, dict) or str(item.get("evidence_id", "")) not in evidence_ids:
+            continue
+        if item.get("returned_response_index") is None:
+            item["returned_response_index"] = returned_at
 
 
 def evidence_ids_in_ledger() -> set[str]:
@@ -171,4 +217,8 @@ def harness_metrics() -> dict[str, int]:
     metrics.setdefault("evidence_verifier_rejections", 0)
     metrics.setdefault("evidence_verifier_repairs", 0)
     metrics.setdefault("evidence_verifier_failures", 0)
+    metrics.setdefault("evidence_summary_calls", 0)
+    metrics.setdefault("evidence_summary_updates", 0)
+    metrics.setdefault("evidence_summary_revisions", 0)
+    metrics.setdefault("evidence_summary_failures", 0)
     return metrics

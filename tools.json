@@ -3,7 +3,7 @@
     "type": "function",
     "name": "run_python",
     "strict": false,
-    "description": "Run a Python script inside a bubblewrap sandbox to inspect the target binary. The sandbox exposes the target ONLY at /workspace/binary (read-only); /scratch is writable for intermediate dumps (e.g. objdump output); the network is isolated; python3 standard library and binutils (file, readelf, objdump, nm, strings, xxd, od, hexdump, size, c++filt) are available, but NO third-party packages (no capstone/pyelftools -- parse ELF via subprocess to readelf/objdump or struct). Each call returns an observation_id and evidence_id(s) you must cite in the final verdict.",
+    "description": "Run a Python script inside a bubblewrap sandbox to inspect the target binary. The sandbox exposes the target ONLY at /workspace/binary (read-only); /scratch is writable for intermediate dumps (e.g. objdump output); the network is isolated; python3 standard library and binutils (file, readelf, objdump, nm, strings, xxd, od, hexdump, size, c++filt) are available, but NO third-party packages (no capstone/pyelftools -- parse ELF via subprocess to readelf/objdump or struct). Each call returns an observation_id and pending evidence_id(s); after the output has been returned in an earlier response, summarize any evidence you intend to cite.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -25,6 +25,47 @@
         }
       },
       "required": ["script", "timeout_sec", "max_output_chars"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "summarize_evidence",
+    "strict": false,
+    "description": "Write or revise natural-language claims for evidence returned by one earlier inspection-tool observation. This tool never creates evidence or changes excerpts, kind, polarity, or provenance. Every evidence item cited by a final support must be summarized first.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The obs_XXXX identifier from the earlier inspection-tool result."
+        },
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "properties": {
+              "evidence_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "An ev_XXXX identifier returned by the specified observation."
+              },
+              "claim": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "A concise natural-language statement of what the raw target-binary output establishes."
+              }
+            },
+            "required": ["evidence_id", "claim"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["observation_id", "claims"],
       "additionalProperties": false
     }
   },

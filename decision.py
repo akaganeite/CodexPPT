@@ -131,6 +131,16 @@ def validate_support_records(
                 f"{item_path}.evidence_ids: unknown evidence id(s) not in the ledger: {unknown_ids}"
             )
         known_items = [ledger_by_id[evidence_id] for evidence_id in item_ids if evidence_id in ledger_by_id]
+        pending_ids = [
+            str(item.get("evidence_id", ""))
+            for item in known_items
+            if str(item.get("claim_status", "pending")) != "summarized"
+        ]
+        if pending_ids:
+            errors.append(
+                f"{item_path}.evidence_ids: cited evidence must be summarized with "
+                f"summarize_evidence before finalization; pending id(s): {pending_ids}"
+            )
         if side in POSITIVE_REQUIRED_SIDES and known_items and all(
             str(item.get("polarity", "positive")) == "negative" for item in known_items
         ):

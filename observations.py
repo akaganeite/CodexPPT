@@ -1,10 +1,9 @@
 """Typed observations and generic evidence extraction.
 
 Every command an inspection tool runs becomes an ``obs_XXXX`` observation, and the
-salient parts of that observation are minted into ``ev_XXXX`` ledger items. The
-parsed facts deliberately capture decisive content (string offsets, call/compare
-instruction lines) so that a cited evidence id carries the excerpt that supports
-the verdict, not just a bare reference.
+salient parts of that observation are minted into pending ``ev_XXXX`` ledger items.
+The Host preserves a neutral claim and the raw excerpts; the main investigator
+must later attach a natural-language claim before an evidence id can be cited.
 """
 
 from __future__ import annotations
@@ -186,7 +185,11 @@ def compact_evidence_for_model(evidence: list[dict[str, Any]]) -> list[dict[str,
             "evidence_id": item.get("evidence_id"),
             "observation_id": item.get("observation_id"),
             "kind": item.get("kind"),
+            "host_claim": compact_value_for_model(item.get("host_claim", "")),
             "claim": item.get("claim"),
+            "claim_source": item.get("claim_source", "host"),
+            "claim_status": item.get("claim_status", "pending"),
+            "claim_revision": item.get("claim_revision", 0),
             "supporting_excerpt": compact_value_for_model(excerpts[:8]),
             "location": compact_value_for_model(item.get("location", {})),
             "polarity": item.get("polarity", "positive"),
@@ -199,6 +202,20 @@ def compact_evidence_for_model(evidence: list[dict[str, Any]]) -> list[dict[str,
 def compact_tool_result_for_model(result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(result, dict):
         return result
+    if result.get("tool") == "summarize_evidence":
+        return {
+            "_compacted_for_model": True,
+            "ok": result.get("ok", False),
+            "tool": "summarize_evidence",
+            "observation_id": result.get("observation_id", ""),
+            "evidence": compact_evidence_for_model(
+                result.get("evidence", []) if isinstance(result.get("evidence"), list) else []
+            ),
+            "updated_count": result.get("updated_count", 0),
+            "revision_count": result.get("revision_count", 0),
+            "idempotent_evidence_ids": result.get("idempotent_evidence_ids", []),
+            "error": result.get("error", ""),
+        }
     stdout_text = f"{result.get('stdout_head', '')}\n{result.get('stdout_tail', '')}"
     stderr_text = str(result.get("stderr_tail", ""))
     stdout_parts = text_head_tail(stdout_text.strip(), MODEL_STDOUT_BUDGET)

@@ -30,7 +30,7 @@ from claudeagent.evidence_verifier import (
     verifier_audit,
     verifier_usage,
 )
-from claudeagent.runtime import AGENT_CONTEXT, bump_metric, evidence_ids_in_ledger, harness_metrics
+from claudeagent.runtime import AGENT_CONTEXT, bump_metric, harness_metrics
 from claudeagent.schema_validate import (
     DETERMINATE_STATUSES,
     INCONCLUSIVE_REASONS,
@@ -136,8 +136,25 @@ def resolve_final_tool_args(
 
 
 def compact_known_evidence_ids() -> dict[str, Any]:
-    ids = sorted(evidence_ids_in_ledger())
-    return {"count": len(ids), "head": ids[:12], "tail": ids[-12:] if len(ids) > 12 else []}
+    ledger = [
+        item
+        for item in AGENT_CONTEXT.get("evidence_ledger", [])
+        if isinstance(item, dict) and item.get("evidence_id")
+    ]
+    ids = sorted(str(item["evidence_id"]) for item in ledger)
+    summarized = sorted(
+        str(item["evidence_id"])
+        for item in ledger
+        if item.get("claim_status") == "summarized"
+    )
+    pending = sorted(set(ids) - set(summarized))
+    return {
+        "count": len(ids),
+        "head": ids[:12],
+        "tail": ids[-12:] if len(ids) > 12 else [],
+        "summarized": summarized[:24],
+        "pending": pending[:24],
+    }
 
 
 def compact_rejected_tool_args(candidate: dict[str, Any]) -> dict[str, Any]:
@@ -181,7 +198,8 @@ def submit_detection_result(
             "rejected_candidate": compact_rejected_tool_args(candidate),
             "repair_instruction": (
                 "Repair the rejected supports/claim; do not restart the investigation. Cite only real "
-                "ledger evidence and PatchSpec behavior ids. Claim every submitted support exactly "
+                "ledger evidence and PatchSpec behavior ids. Summarize every cited pending evidence "
+                "item with summarize_evidence. Claim every submitted support exactly "
                 "once. List each required behavior with no single decisive side in "
                 "claim.unresolved_behavior_ids. Pure no-match evidence can only support ambiguous. "
                 "The submitted status must equal the Host-derived behavior aggregation reported in "
@@ -286,6 +304,56 @@ def validate_final_result_artifact(
     check_verifier: bool = True,
 ) -> list[str]:
     errors = validate_json_schema(result, load_final_result_schema())
+    evidence_ledger = result.get("evidence_ledger")
+    if isinstance(evidence_ledger, list):
+        for index, evidence in enumerate(evidence_ledger):
+            if not isinstance(evidence, dict):
+                continue
+            prefix = f"$.evidence_ledger[{index}]"
+            status = evidence.get("claim_status")
+            source = evidence.get("claim_source")
+            revision = evidence.get("claim_revision")
+            created_at = evidence.get("created_response_index")
+            updated_at = evidence.get("claim_updated_response_index")
+            returned_at = evidence.get("returned_response_index")
+            if (
+                isinstance(created_at, int)
+                and not isinstance(created_at, bool)
+                and isinstance(returned_at, int)
+                and not isinstance(returned_at, bool)
+                and returned_at < created_at
+            ):
+                errors.append(
+                    f"{prefix}.returned_response_index: evidence cannot be returned before it was created"
+                )
+            if status == "pending":
+                if (
+                    source != "host"
+                    or revision != 0
+                    or evidence.get("claim") != evidence.get("host_claim")
+                ):
+                    errors.append(
+                        f"{prefix}: pending evidence must retain the Host claim/source at revision 0"
+                    )
+                if updated_at is not None:
+                    errors.append(
+                        f"{prefix}.claim_updated_response_index: pending evidence cannot record a claim update"
+                    )
+            elif status == "summarized":
+                if source != "main_agent" or not isinstance(revision, int) or revision < 1:
+                    errors.append(
+                        f"{prefix}: summarized evidence requires main_agent source and revision >= 1"
+                    )
+                if (
+                    not isinstance(returned_at, int)
+                    or isinstance(returned_at, bool)
+                    or not isinstance(updated_at, int)
+                    or isinstance(updated_at, bool)
+                    or updated_at <= returned_at
+                ):
+                    errors.append(
+                        f"{prefix}: summarized evidence must be updated after it was returned"
+                    )
     patch_spec = result.get("patch_spec") if isinstance(result.get("patch_spec"), dict) else {}
     artifact_candidate = {
         "status": result.get("status"),

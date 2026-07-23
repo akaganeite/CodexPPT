@@ -998,6 +998,10 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         "evidence_verifier_rejections": 0,
         "evidence_verifier_repairs": 0,
         "evidence_verifier_failures": 0,
+        "evidence_summary_calls": 0,
+        "evidence_summary_updates": 0,
+        "evidence_summary_revisions": 0,
+        "evidence_summary_failures": 0,
     }
     for rec in records:
         exp = rec.get("expected")

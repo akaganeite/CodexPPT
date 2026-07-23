@@ -175,7 +175,14 @@ def _valid_final(
             "evidence_id": "ev_0001",
             "observation_id": "obs_0001",
             "kind": "disassembly_predicates",
+            "host_claim": "The inspection returned a target disassembly predicate.",
             "claim": "The guarded target predicate is present.",
+            "claim_source": "main_agent",
+            "claim_status": "summarized",
+            "claim_revision": 1,
+            "created_response_index": 1,
+            "returned_response_index": 1,
+            "claim_updated_response_index": 2,
             "supporting_excerpt": ["0x1010: test eax,eax"],
             "location": {},
             "confidence": "supporting",
@@ -486,8 +493,61 @@ def _run() -> int:
     check("verifier usage separate aggregate", verifier_metrics["usage_totals"].get("prompt_tokens") == 22)
     check("verifier model turns aggregate", verifier_metrics["model_turns"] == 3)
 
+    aggregate_metrics = batch.aggregate([
+        {
+            "expected": "present",
+            "predicted": "present",
+            "correct": True,
+            "harness_metrics": {
+                "evidence_summary_calls": 2,
+                "evidence_summary_updates": 3,
+                "evidence_summary_revisions": 1,
+            },
+        },
+        {
+            "expected": "absent",
+            "predicted": "error",
+            "correct": False,
+            "harness_metrics": {
+                "evidence_summary_calls": 1,
+                "evidence_summary_revisions": 2,
+                "evidence_summary_failures": 1,
+            },
+        },
+    ])
+    evidence_summary_totals = {
+        key: aggregate_metrics["repair_totals"][key]
+        for key in (
+            "evidence_summary_calls",
+            "evidence_summary_updates",
+            "evidence_summary_revisions",
+            "evidence_summary_failures",
+        )
+    }
+    check("evidence summary metrics aggregated", evidence_summary_totals == {
+        "evidence_summary_calls": 3,
+        "evidence_summary_updates": 3,
+        "evidence_summary_revisions": 3,
+        "evidence_summary_failures": 1,
+    })
+
     valid_artifact = _valid_final(cache_key="a" * 64)
     check("valid determinate artifact accepted", not batch._artifact_validation_errors(valid_artifact))
+    legacy_v4_artifact = _valid_final(cache_key="a" * 64)
+    for key in (
+        "host_claim",
+        "claim_source",
+        "claim_status",
+        "claim_revision",
+        "created_response_index",
+        "returned_response_index",
+        "claim_updated_response_index",
+    ):
+        legacy_v4_artifact["evidence_ledger"][0].pop(key)
+    check(
+        "legacy v4 ledger shape rejected",
+        bool(batch._artifact_validation_errors(legacy_v4_artifact)),
+    )
     invalid_artifact = _valid_final(cache_key="a" * 64)
     invalid_artifact["ok"] = False
     invalid_artifact["evidence_verification"]["outcome"] = "not_run"

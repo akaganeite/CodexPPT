@@ -15,8 +15,9 @@ CONTRACT = [
     {"behavior_id": "B002", "required": False},
 ]
 LEDGER = [
-    {"evidence_id": "ev_0001", "polarity": "positive"},
-    {"evidence_id": "ev_0002", "polarity": "negative"},
+    {"evidence_id": "ev_0001", "polarity": "positive", "claim_status": "summarized"},
+    {"evidence_id": "ev_0002", "polarity": "negative", "claim_status": "summarized"},
+    {"evidence_id": "ev_0003", "polarity": "positive", "claim_status": "pending"},
 ]
 
 
@@ -93,6 +94,14 @@ def _run() -> int:
             "inconclusive",
             ["ev_0002"],
         ),
+    )
+    check(
+        "pending evidence rejected",
+        any("must be summarized" in item for item in _errors(
+            [_support("sup_0001", "B001", "new", ["ev_0003"])],
+            "present",
+            ["ev_0003"],
+        )),
     )
     check(
         "determinate empty rejected",

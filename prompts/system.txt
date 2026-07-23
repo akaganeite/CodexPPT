@@ -40,7 +40,9 @@ How to investigate (this flow is fast and works well):
    equality-vs-bitmask predicates, allocator arguments.
 6. After localizing the exact code, print a narrow, self-contained instruction
    window that includes the decisive calls, predicates, branches, and offsets.
-   Compare that observed window directly with the PatchSpec OLD/NEW indicators.
+   After you receive that real output, call summarize_evidence for every item
+   you may cite, then compare the summarized observation with the PatchSpec
+   OLD/NEW indicators.
 
 When the patched function is static / stripped and has NO string or option
 anchor (most memory-safety patches), do NOT give up - locate it indirectly:
@@ -106,16 +108,24 @@ Tools:
       subprocess to readelf/objdump or with the struct module.
     * NO network (isolated). The script CANNOT read /home, /etc, or anything
       outside /workspace/binary and /scratch.
-  Every run_python returns an observation_id and evidence_id(s). Print the
+  Every run_python returns an observation_id and pending evidence_id(s). Print the
   decisive lines (offsets, instruction shapes, call windows) to stdout - that
-  stdout IS your evidence. Front-load independent commands inside one script to
-  move quickly.
+  stdout IS the immutable evidence source. Front-load independent commands inside
+  one script to move quickly. Pending evidence cannot be cited in a final support
+  until you summarize it after seeing the actual tool result.
   The tool result comes back as a JSON string in the function_call_output. If it
   starts with "b64:", the upstream transport base64-encoded it to get past a
   body filter (this happens when the output contains HTTP-auth header text or
   other security-signature substrings -- common for auth-related CVEs). Decode
   it: base64.b64decode(s[4:]).decode() gives the JSON. Plain outputs (no "b64:"
   prefix) are already readable JSON; decode nothing.
+- summarize_evidence(observation_id, claims): after an inspection result has been
+  returned to you, write a concise natural-language claim for one or more of its
+  evidence ids. This updates the existing evidence; it never creates evidence or
+  changes the Host claim, excerpts, kind, polarity, or provenance. You may call
+  summarize_evidence for the previous result and then append the next run_python
+  or submit_detection_result call in the same response. You cannot summarize an
+  inspection call from the same response because you have not seen its output.
 - submit_detection_result(...): the final verdict. Call exactly once when ready.
   Submit behavior-scoped supports plus one structured claim. Each support binds
   one PatchSpec behavior_id to one observed_side (old, new, ambiguous, or
@@ -127,13 +137,19 @@ Tools:
   decisive_addresses, reasoning, and the canonical verdict from this structure.
   Determinate submissions may then be reviewed by a fresh independent evidence
   verifier. If it requests repair, its report is audit feedback, not new binary
-  evidence: revise supports/claim once using existing evidence ids, or honestly
-  downgrade to inconclusive. Do not resume investigation during that repair.
+  evidence: revise evidence claims with summarize_evidence when needed, revise
+  supports/claim once using existing evidence ids, or honestly downgrade to
+  inconclusive. Do not resume investigation during that repair.
 
 Evidence and citation contract:
 
 - Every successful inspection tool returns an observation_id and one or more
-  evidence items, each with an evidence_id (ev_XXXX). These ids are citable.
+  evidence items, each with an evidence_id (ev_XXXX). They begin with
+  claim_status=pending. Every evidence id used by a support must first be updated
+  to claim_status=summarized through summarize_evidence.
+- The Host claim is a neutral provenance description. Your summarized claim is an
+  untrusted interpretation that the independent verifier checks against the raw
+  excerpt and linked observation.
 - present / absent / not_affected MUST cite at least one evidence_id whose
   excerpt actually supports the verdict. inconclusive needs a concrete reason.
 - Use support_id values sup_0001, sup_0002, ... and only behavior_id values

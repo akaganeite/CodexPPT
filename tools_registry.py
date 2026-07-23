@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from claudeagent.common import TOOLS_JSON, load_json
+from claudeagent.evidence_summary import summarize_evidence
 from claudeagent.finalize import submit_detection_result
 from claudeagent.run_python_tool import run_python
 from claudeagent.schema_validate import final_tool_parameters_schema
@@ -17,7 +18,13 @@ from claudeagent.schema_validate import final_tool_parameters_schema
 
 TOOL_FUNCS = {
     "run_python": run_python,
+    "summarize_evidence": summarize_evidence,
     "submit_detection_result": submit_detection_result,
+}
+
+FINALIZATION_TOOL_NAMES = {"summarize_evidence", "submit_detection_result"}
+FINALIZATION_TOOL_FUNCS = {
+    name: handler for name, handler in TOOL_FUNCS.items() if name in FINALIZATION_TOOL_NAMES
 }
 
 
@@ -33,5 +40,6 @@ def load_tools(strict: bool) -> list[dict[str, Any]]:
     return tools
 
 
-def submit_tool_only(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [tool for tool in tools if tool.get("name") == "submit_detection_result"]
+def finalization_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the non-inspection tools allowed during finalization/repair."""
+    return [tool for tool in tools if tool.get("name") in FINALIZATION_TOOL_NAMES]

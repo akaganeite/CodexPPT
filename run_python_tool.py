@@ -6,13 +6,13 @@ offering narrow operations, the model writes arbitrary Python and we execute it
 confined (see sandbox.py). The script can call file/readelf/objdump/strings via
 subprocess and do its own parsing/arith -- full freedom within the sandbox.
 
-Evidence policy (per CLAUDE.md: the gate is structural, not semantic): every
-run_python mints one ``obs_XXXX`` observation and, via the generic fallback in
-observations.evidence_from_command_observation, one ``command_output``
-``ev_XXXX`` ledger item. The model cites that id; finalize's evidence-id gate
-checks the id is real, not that the excerpt semantically supports the verdict.
-No rich parsed_facts extraction and no script-content auditing -- maximum
-freedom, minimal structural accountability.
+Evidence policy: every run_python mints one ``obs_XXXX`` observation and, via
+the generic fallback in observations.evidence_from_command_observation, one
+pending ``command_output`` ``ev_XXXX`` ledger item. After seeing the real tool
+output, the investigator must use ``summarize_evidence`` before that id can be
+cited by a final support. No rich parsed_facts extraction and no script-content
+auditing -- maximum freedom within the sandbox, with semantic review deferred
+to the investigator summary and independent verifier.
 """
 
 from __future__ import annotations
