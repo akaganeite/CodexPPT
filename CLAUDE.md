@@ -57,9 +57,9 @@ Run all commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `c
 
 - **Loop** (`agent_loop.py`): build prompt → sample model → dispatch tool calls → feed bounded results back → repeat until `submit_detection_result` is accepted. Three bounded phases: explore (`--max-turns`, default 12) → finalize-nudge (`--finalization-turns`, default 3) → forced repair (≤2). Tool/schema failures repair in-band; only model-API failures (after retries) abort.
 - **PatchSpec** (`patchspec/`): normalize source metadata into stable hunks, anchors, trusted OLD/NEW indicators, and model-generated advisory semantics. Generation is metadata-only, validated against exact JSON references, cached per metadata/model fingerprint, and never enters the binary evidence ledger.
-- **Tools** (`run_python_tool.py`, `semantic_probe.py`, `tools.json`): `run_python` provides general sandboxed localization; `run_semantic_probe` applies Host-controlled OLD/NEW discriminators to one bounded executable window; `submit_detection_result` finalizes. Every successful inspection mints a typed observation (`obs_XXXX`) and evidence-ledger item (`ev_XXXX`).
-- **Sandbox** (`sandbox.py`): bubblewrap exposes only `/workspace/binary` read-only plus writable `/scratch`, system Python/binutils, and no network. Model-authored Python remains confined; semantic probes use a fixed script rather than model code.
-- **Finalize** (`decision.py`, `finalize.py`, `evidence_verifier.py`, `schemas/final_result.schema.json`): the model submits behavior-scoped supports plus a structured claim. The Host resolves every PatchSpec behavior and derives the canonical verdict. Determinate claims then receive an independent, fresh LLM review over only cited evidence; one rejection can repair supports/claim, while a second rejection or verifier failure fails closed to inconclusive. Verifier output is audit data, never ledger evidence. Artifacts use `final_result.v3`.
+- **Tools** (`run_python_tool.py`, `tools.json`): `run_python` is the single sandboxed binary-inspection surface and `submit_detection_result` finalizes. Every successful inspection mints a typed observation (`obs_XXXX`) and evidence-ledger item (`ev_XXXX`).
+- **Sandbox** (`sandbox.py`): bubblewrap exposes only `/workspace/binary` read-only plus writable `/scratch`, system Python/binutils, and no network. Model-authored Python remains confined to that environment.
+- **Finalize** (`decision.py`, `finalize.py`, `evidence_verifier.py`, `schemas/final_result.schema.json`): the model submits behavior-scoped supports plus a structured claim. The Host resolves every PatchSpec behavior and derives the canonical verdict. Determinate claims then receive an independent, fresh LLM review over only cited evidence; one rejection can repair supports/claim, while a second rejection or verifier failure fails closed to inconclusive. Verifier output is audit data, never ledger evidence. Artifacts use `final_result.v4`.
 - **Verdicts**: `present` / `absent` / `not_affected` / `inconclusive`. Default model mode is flash/non-thinking (`thinking:{type:disabled}`).
 
 ### Run a single case
@@ -101,4 +101,4 @@ Single-case: CVE-2013-0249 → `present` on patched (7.29.0) and `absent` on vul
 
 ### Known limitation
 
-Generic `run_python` output cannot prove its own provenance because the model authors the script, so the independent verifier can assess relevance and direction but cannot make it as strong as a fixed semantic probe. Prefer `run_semantic_probe` once code is localized.
+Generic `run_python` output cannot prove its own provenance because the model authors the script. The independent verifier can assess relevance and direction from cited output, but it cannot independently rerun the inspection.

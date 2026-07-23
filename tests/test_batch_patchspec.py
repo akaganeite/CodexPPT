@@ -154,7 +154,7 @@ def _valid_final(
             "attempts": [],
         }
     return {
-        "schema_version": "final_result.v3",
+        "schema_version": "final_result.v4",
         "ok": True,
         "project": "curl",
         "cve_id": "CVE-A",
@@ -377,6 +377,7 @@ def _run() -> int:
             {"cve_id": "CVE-A", "binary_name": "stale-verifier", "expected": "present"},
             {"cve_id": "CVE-A", "binary_name": "stale-digest", "expected": "present"},
             {"cve_id": "CVE-A", "binary_name": "invalid-verifier", "expected": "present"},
+            {"cve_id": "CVE-A", "binary_name": "old-v3", "expected": "present"},
             {"cve_id": "CVE-A", "binary_name": "preflight-inconclusive", "expected": "present"},
         ]
         expected_verifier_digest = "d" * 64
@@ -402,6 +403,18 @@ def _run() -> int:
                 json.dumps(artifact),
                 encoding="utf-8",
             )
+        old_v3_dir = batch.safe_case_dir(out_root, "CVE-A", "old-v3")
+        old_v3_dir.mkdir(parents=True)
+        old_v3_artifact = _valid_final(
+            cache_key="a" * 64,
+            verifier_mode="llm",
+            verifier_digest=expected_verifier_digest,
+        )
+        old_v3_artifact["schema_version"] = "final_result.v3"
+        (old_v3_dir / "final_result.json").write_text(
+            json.dumps(old_v3_artifact),
+            encoding="utf-8",
+        )
         initialize_agent_context(
             {"cve_id": "CVE-A", "project": "curl"},
             "/anonymous/target_binary",
@@ -447,7 +460,7 @@ def _run() -> int:
         check(
             "stale result rerun",
             [item["binary_name"] for item in to_run]
-            == ["stale", "stale-verifier", "stale-digest", "invalid-verifier"],
+            == ["stale", "stale-verifier", "stale-digest", "invalid-verifier", "old-v3"],
         )
         check("stale counted", counts["stale_patchspec"] == 1)
         check("stale verifier counted", counts["stale_evidence_verifier"] == 2)

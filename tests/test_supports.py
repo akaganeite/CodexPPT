@@ -17,22 +17,6 @@ CONTRACT = [
 LEDGER = [
     {"evidence_id": "ev_0001", "polarity": "positive"},
     {"evidence_id": "ev_0002", "polarity": "negative"},
-    {
-        "evidence_id": "ev_0003", "kind": "semantic_probe", "polarity": "positive",
-        "location": {"behavior_id": "B001", "matched_side": "old_only"},
-    },
-    {
-        "evidence_id": "ev_0004", "kind": "semantic_probe", "polarity": "positive",
-        "location": {"behavior_id": "B001", "matched_side": "new_only"},
-    },
-    {
-        "evidence_id": "ev_0005", "kind": "semantic_probe", "polarity": "positive",
-        "location": {"behavior_id": "B001", "matched_side": "both"},
-    },
-    {
-        "evidence_id": "ev_0006", "kind": "semantic_probe", "polarity": "positive",
-        "location": {"behavior_id": "B002", "matched_side": "new_only"},
-    },
 ]
 
 
@@ -115,55 +99,6 @@ def _run() -> int:
         any("require at least one" in item for item in _errors([], "absent", [])),
     )
     check("inconclusive empty accepted", not _errors([], "inconclusive", []))
-    check(
-        "old-only probe supports old",
-        not _errors(
-            [_support("sup_0001", "B001", "old", ["ev_0003"])],
-            "absent",
-            ["ev_0003"],
-        ),
-    )
-    check(
-        "old-only probe rejects new",
-        any("incompatible" in item for item in _errors(
-            [_support("sup_0001", "B001", "new", ["ev_0003"])],
-            "present",
-            ["ev_0003"],
-        )),
-    )
-    check(
-        "both probe rejects decisive side",
-        any("incompatible" in item for item in _errors(
-            [_support("sup_0001", "B001", "new", ["ev_0005"])],
-            "present",
-            ["ev_0005"],
-        )),
-    )
-    check(
-        "ambiguous may cite conflicting probe",
-        not _errors(
-            [_support("sup_0001", "B001", "ambiguous", ["ev_0003", "ev_0004"])],
-            "inconclusive",
-            ["ev_0003", "ev_0004"],
-        ),
-    )
-    check(
-        "cross-behavior probe rejected",
-        any("belongs to behavior" in item for item in _errors(
-            [_support("sup_0001", "B001", "new", ["ev_0006"])],
-            "present",
-            ["ev_0006"],
-        )),
-    )
-    check(
-        "probe cannot establish not-applicable",
-        any("cannot establish" in item for item in _errors(
-            [_support("sup_0001", "B001", "not_applicable", ["ev_0004"])],
-            "not_affected",
-            ["ev_0004"],
-        )),
-    )
-
     if failures:
         print("SUPPORT TESTS FAILED:")
         for failure in failures:

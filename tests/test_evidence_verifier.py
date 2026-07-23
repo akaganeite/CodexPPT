@@ -73,7 +73,7 @@ def _support(evidence_id: str, *, side: str = "new") -> dict:
 def _candidate(evidence_id: str, *, side: str = "new") -> dict:
     support = _support(evidence_id, side=side)
     return {
-        "schema_version": "final_result.v3",
+        "schema_version": "final_result.v4",
         "status": "present" if side == "new" else "absent",
         "confidence": "high",
         "supports": [support],
@@ -164,10 +164,10 @@ def _run() -> int:
     evidence = {
         "evidence_id": "ev_0001",
         "observation_id": "obs_0001",
-        "kind": "semantic_probe",
-        "claim": "NEW-side discriminator matched.",
+        "kind": "command_output",
+        "claim": "The bounded disassembly contains the target guard and branch.",
         "supporting_excerpt": ["Authorization: Digest", "0x1010: cmp eax,1"],
-        "location": {"behavior_id": "B001", "matched_side": "new_only"},
+        "location": {},
         "confidence": "supporting",
         "polarity": "positive",
     }
@@ -183,19 +183,16 @@ def _run() -> int:
     }
     observation = {
         "observation_id": "obs_0001",
-        "tool": "run_semantic_probe",
-        "command": ["objdump", "/host/SECRET_BINARY_PATH"],
-        "command_text": "objdump /host/SECRET_BINARY_PATH",
+        "tool": "run_python",
+        "command": ["python3", "/host/SECRET_SCRIPT_PATH"],
+        "command_text": "python3 /host/SECRET_SCRIPT_PATH",
         "ok": True,
         "exit_code": 0,
         "stdout_head": "0x1010: cmp eax,1",
         "stdout_tail": "0x1014: jne 0x1020",
         "stderr_tail": "",
         "truncated": False,
-        "parsed_facts": {
-            "probe_definition": {"new_expectation": ["cmp", "jne"]},
-            "matched_side": "new_only",
-        },
+        "parsed_facts": {"command": "python3", "line_count": 2},
     }
     payload = build_verifier_payload(
         patch_spec=PATCH_SPEC,
@@ -206,9 +203,9 @@ def _run() -> int:
     )
     rendered = json.dumps(payload, ensure_ascii=False)
     check("uncited ledger omitted", "UNCITED_LEDGER_SECRET" not in rendered and "ev_9999" not in rendered)
-    check("host command/path omitted", "command_text" not in rendered and "SECRET_BINARY_PATH" not in rendered)
+    check("host command/path omitted", "command_text" not in rendered and "SECRET_SCRIPT_PATH" not in rendered)
     check("WAF-sensitive evidence encoded", "Authorization: Digest" not in rendered and "b64:" in rendered)
-    check("probe definition retained", "probe_definition" in rendered and "new_expectation" in rendered)
+    check("parsed observation retained", "line_count" in rendered and "python3" in rendered)
     check("PatchSpec source identity omitted", "CVE-TEST" not in rendered and "metadata_sha256" not in rendered)
 
     oversized = dict(evidence)

@@ -16,7 +16,7 @@ SUPPORT_ID_RE = re.compile(r"^sup_[0-9]{4}$")
 OBSERVED_SIDES = {"old", "new", "ambiguous", "not_applicable"}
 POSITIVE_REQUIRED_SIDES = {"old", "new", "not_applicable"}
 DECISIVE_SIDES = {"old", "new", "not_applicable"}
-FINAL_SCHEMA_VERSION = "final_result.v3"
+FINAL_SCHEMA_VERSION = "final_result.v4"
 
 
 def support_evidence_ids(supports: Any) -> list[str]:
@@ -138,43 +138,6 @@ def validate_support_records(
                 f"{item_path}: observed_side={side!r} requires positive target-binary evidence; "
                 "pure no-match/anchor-miss evidence can only support ambiguous"
             )
-        for evidence_item in known_items:
-            if str(evidence_item.get("kind", "")) != "semantic_probe":
-                continue
-            location = (
-                evidence_item.get("location")
-                if isinstance(evidence_item.get("location"), dict)
-                else {}
-            )
-            probe_behavior = str(location.get("behavior_id", ""))
-            matched_side = str(location.get("matched_side", ""))
-            evidence_id = str(evidence_item.get("evidence_id", ""))
-            if probe_behavior != behavior_id:
-                errors.append(
-                    f"{item_path}.evidence_ids: semantic probe {evidence_id!r} belongs to "
-                    f"behavior {probe_behavior!r}, not {behavior_id!r}"
-                )
-            if matched_side not in {"old_only", "new_only", "both", "neither"}:
-                errors.append(
-                    f"{item_path}.evidence_ids: semantic probe {evidence_id!r} has invalid "
-                    f"matched_side {matched_side!r}"
-                )
-            elif side == "old" and matched_side != "old_only":
-                errors.append(
-                    f"{item_path}: observed_side='old' is incompatible with semantic probe "
-                    f"{evidence_id!r} matched_side={matched_side!r}"
-                )
-            elif side == "new" and matched_side != "new_only":
-                errors.append(
-                    f"{item_path}: observed_side='new' is incompatible with semantic probe "
-                    f"{evidence_id!r} matched_side={matched_side!r}"
-                )
-            elif side == "not_applicable":
-                errors.append(
-                    f"{item_path}: semantic probe {evidence_id!r} cannot establish "
-                    "not_applicable"
-                )
-
     top_ids = [str(value) for value in evidence_ids] if isinstance(evidence_ids, list) else []
     if len(top_ids) != len(set(top_ids)):
         errors.append("$.evidence_ids: duplicate evidence ids are not allowed")

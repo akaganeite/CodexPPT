@@ -22,6 +22,7 @@ from claudeagent.patchspec import (
 )
 from claudeagent.prompting import build_task
 from claudeagent.runtime import initialize_agent_context
+from claudeagent.tools_registry import TOOL_FUNCS, load_tools
 
 
 def _metadata() -> dict:
@@ -126,6 +127,8 @@ def _run() -> int:
     check("submit schema requires supports", "supports" in submit_schema.get("required", []))
     check("submit schema requires claim", "claim" in submit_schema.get("required", []))
     check("submit schema omits legacy evidence", "evidence_ids" not in submit_schema.get("properties", {}))
+    tool_names = {item.get("name") for item in load_tools(strict=True)}
+    check("tool schema and handlers agree", tool_names == set(TOOL_FUNCS))
 
     with tempfile.TemporaryDirectory() as tmp:
         args = argparse.Namespace(

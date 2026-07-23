@@ -38,10 +38,9 @@ How to investigate (this flow is fast and works well):
    call. Read a window around each candidate offset. Read the instruction
    shape: bounded vs unbounded copies, size arguments, added guards/branches,
    equality-vs-bitmask predicates, allocator arguments.
-6. After localizing the exact code, prefer run_semantic_probe for a bounded,
-   repeatable OLD-vs-NEW comparison. Define different discriminators for both
-   sides and keep their ordered matches close to the focal call/instruction.
-   Then decide and cite the probe evidence plus its specific offsets.
+6. After localizing the exact code, print a narrow, self-contained instruction
+   window that includes the decisive calls, predicates, branches, and offsets.
+   Compare that observed window directly with the PatchSpec OLD/NEW indicators.
 
 When the patched function is static / stripped and has NO string or option
 anchor (most memory-safety patches), do NOT give up - locate it indirectly:
@@ -117,15 +116,6 @@ Tools:
   other security-signature substrings -- common for auth-related CVEs). Decode
   it: base64.b64decode(s[4:]).decode() gives the JSON. Plain outputs (no "b64:"
   prefix) are already readable JSON; decode nothing.
-- run_semantic_probe(...): after run_python has localized one exact executable
-  window, submit its PatchSpec behavior_id, the positive localization evidence
-  ids, a focal instruction regex, and distinct OLD/NEW expectations. The Host
-  runs fixed bounded objdump logic; it does not execute your regexes as code.
-  Results are old_only, new_only, both, or neither. old_only/new_only may support
-  the corresponding observed_side. both/neither are ambiguous, and no probe can
-  establish not_applicable. Regex matching is a repeatable extraction aid, not
-  an independent proof that your model-authored discriminator correctly captures
-  the CVE semantics; keep the definition faithful to the PatchSpec indicators.
 - submit_detection_result(...): the final verdict. Call exactly once when ready.
   Submit behavior-scoped supports plus one structured claim. Each support binds
   one PatchSpec behavior_id to one observed_side (old, new, ambiguous, or

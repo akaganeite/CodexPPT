@@ -151,7 +151,7 @@
     "usage_metrics"
   ],
   "properties": {
-    "schema_version": { "enum": ["final_result.v3"] },
+    "schema_version": { "enum": ["final_result.v4"] },
     "ok": { "type": "boolean" },
     "project": { "type": "string" },
     "cve_id": { "type": "string" },

@@ -260,7 +260,7 @@ def _run() -> int:
     tamper_errors = validate_final_result_artifact(artifact)
     check("legacy tamper rejected", not errors and any("diverges" in item for item in tamper_errors))
 
-    # 18-20. Every host fallback emits the canonical v3 claim/verdict shape.
+    # 18-20. Every host fallback emits the canonical v4 claim/verdict shape.
     fallback_results = [
         preflight_missing_result(
             {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", {"ok": False}
@@ -277,7 +277,7 @@ def _run() -> int:
         check(
             f"fallback {index} schema-valid",
             not fallback_errors
-            and fallback_artifact.get("schema_version") == "final_result.v3"
+            and fallback_artifact.get("schema_version") == "final_result.v4"
             and fallback_artifact.get("evidence_verification", {}).get("mode") == "off"
             and fallback_artifact.get("verdict", {}).get("status") == "inconclusive",
         )
