@@ -1,8 +1,8 @@
 """Host-side filesystem, environment, and preflight helpers.
 
 All host I/O lives here so the rest of the harness stays testable offline. None of
-these functions are exposed to the model; they prepare source metadata for the
-host-side PatchSpec compiler and bounded target-binary facts for investigation.
+these functions are exposed to the model except for answer-scrubbed CVE metadata
+and bounded target-binary facts used for investigation.
 """
 
 from __future__ import annotations

@@ -8,119 +8,19 @@
       "properties": {
         "status": { "$ref": "#/properties/status" },
         "confidence": { "$ref": "#/properties/confidence" },
-        "supports": { "$ref": "#/properties/supports" },
-        "claim": { "$ref": "#/properties/claim" },
+        "evidence_ids": { "$ref": "#/properties/evidence_ids" },
+        "reasoning": { "$ref": "#/properties/reasoning" },
+        "decisive_addresses": { "$ref": "#/properties/decisive_addresses" },
         "inconclusive_reason": { "$ref": "#/properties/inconclusive_reason" }
       },
       "required": [
         "status",
         "confidence",
-        "supports",
-        "claim",
+        "evidence_ids",
+        "reasoning",
+        "decisive_addresses",
         "inconclusive_reason"
       ],
-      "additionalProperties": false
-    },
-    "support": {
-      "type": "object",
-      "required": [
-        "support_id",
-        "behavior_id",
-        "observed_side",
-        "summary",
-        "evidence_ids",
-        "decisive_addresses"
-      ],
-      "properties": {
-        "support_id": { "type": "string", "pattern": "^sup_[0-9]{4}$" },
-        "behavior_id": { "type": "string", "minLength": 1 },
-        "observed_side": {
-          "type": "string",
-          "enum": ["old", "new", "ambiguous", "not_applicable"]
-        },
-        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
-        "evidence_ids": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "type": "string" },
-          "maxItems": 30
-        },
-        "decisive_addresses": {
-          "type": "array",
-          "items": { "type": "string" },
-          "maxItems": 30
-        }
-      },
-      "additionalProperties": false
-    },
-    "claim": {
-      "type": "object",
-      "required": ["summary", "support_ids", "unresolved_behavior_ids"],
-      "properties": {
-        "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
-        "support_ids": {
-          "type": "array",
-          "items": { "type": "string" },
-          "maxItems": 30
-        },
-        "unresolved_behavior_ids": {
-          "type": "array",
-          "items": { "type": "string" },
-          "maxItems": 30
-        }
-      },
-      "additionalProperties": false
-    },
-    "behavior_claim": {
-      "type": "object",
-      "required": ["behavior_id", "required", "resolved_side", "resolution", "support_ids"],
-      "properties": {
-        "behavior_id": { "type": "string", "minLength": 1 },
-        "required": { "type": "boolean" },
-        "resolved_side": {
-          "type": "string",
-          "enum": ["old", "new", "ambiguous", "not_applicable"]
-        },
-        "resolution": {
-          "type": "string",
-          "enum": [
-            "consistent",
-            "consistent_with_ambiguous",
-            "conflicting",
-            "ambiguous_only",
-            "declared_unresolved",
-            "missing_support"
-          ]
-        },
-        "support_ids": {
-          "type": "array",
-          "items": { "type": "string" },
-          "maxItems": 30
-        }
-      },
-      "additionalProperties": false
-    },
-    "verdict": {
-      "type": "object",
-      "required": ["status", "rule", "behavior_claims"],
-      "properties": {
-        "status": { "$ref": "#/properties/status" },
-        "rule": {
-          "type": "string",
-          "enum": [
-            "required_old_behavior",
-            "unresolved_required_behavior",
-            "all_required_not_applicable",
-            "all_applicable_required_new",
-            "no_required_behaviors",
-            "unsupported_behavior_combination"
-          ]
-        },
-        "behavior_claims": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/behavior_claim" }
-        }
-      },
       "additionalProperties": false
     }
   },
@@ -133,72 +33,48 @@
     "binary",
     "status",
     "confidence",
-    "supports",
-    "claim",
-    "verdict",
     "evidence",
     "evidence_ids",
     "reasoning",
     "decisive_addresses",
     "inconclusive_reason",
     "completed_at_epoch",
+    "metadata_sha256",
     "observations",
     "evidence_ledger",
     "harness_metrics",
-    "patch_spec",
-    "evidence_verification",
     "timing",
     "usage_metrics"
   ],
   "properties": {
-    "schema_version": { "enum": ["final_result.v4"] },
+    "schema_version": { "enum": ["final_result.v6"] },
     "ok": { "type": "boolean" },
     "project": { "type": "string" },
     "cve_id": { "type": "string" },
     "binary": { "type": "string" },
     "status": {
       "type": "string",
-      "description": "Patch-presence/applicability status for the target binary.",
       "enum": ["present", "absent", "not_affected", "inconclusive"]
     },
-    "confidence": {
-      "type": "string",
-      "description": "Confidence level.",
-      "enum": ["high", "medium", "low"]
-    },
-    "supports": {
-      "type": "array",
-      "description": "Behavior-scoped target-binary support records. Determinate verdicts require at least one.",
-      "items": { "$ref": "#/$defs/support" },
-      "maxItems": 30
-    },
-    "claim": { "$ref": "#/$defs/claim" },
-    "verdict": { "$ref": "#/$defs/verdict" },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
     "evidence": {
       "type": "array",
-      "description": "Compact human-readable evidence summaries. Determinate verdicts must be backed by evidence_ids.",
       "items": { "type": "string" },
-      "maxItems": 20
+      "maxItems": 30
     },
     "evidence_ids": {
       "type": "array",
-      "description": "Evidence ids from the ledger that support the verdict.",
-      "items": { "type": "string" },
+      "items": { "type": "string", "pattern": "^ev_[0-9]{4,}$" },
       "maxItems": 30
     },
-    "reasoning": {
-      "type": "string",
-      "description": "Concise rationale comparing binary evidence with patch semantics."
-    },
+    "reasoning": { "type": "string", "minLength": 1, "maxLength": 4000 },
     "decisive_addresses": {
       "type": "array",
-      "description": "Addresses/ranges most relevant to the decision, e.g. \"0x6f64d\".",
       "items": { "type": "string" },
       "maxItems": 30
     },
     "inconclusive_reason": {
       "type": "string",
-      "description": "Use none for determinate verdicts; otherwise explain why the harness could not decide.",
       "enum": [
         "none",
         "insufficient_metadata",
@@ -213,6 +89,7 @@
       ]
     },
     "completed_at_epoch": { "type": "number" },
+    "metadata_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "observations": {
       "type": "array",
       "items": {
@@ -232,7 +109,7 @@
           "parsed_facts"
         ],
         "properties": {
-          "observation_id": { "type": "string" },
+          "observation_id": { "type": "string", "pattern": "^obs_[0-9]{4,}$" },
           "tool": { "type": "string" },
           "command": { "type": "array", "items": { "type": "string" } },
           "command_text": { "type": "string" },
@@ -267,11 +144,12 @@
           "returned_response_index",
           "supporting_excerpt",
           "location",
-          "confidence"
+          "confidence",
+          "polarity"
         ],
         "properties": {
-          "evidence_id": { "type": "string" },
-          "observation_id": { "type": "string" },
+          "evidence_id": { "type": "string", "pattern": "^ev_[0-9]{4,}$" },
+          "observation_id": { "type": "string", "pattern": "^obs_[0-9]{4,}$" },
           "kind": { "type": "string" },
           "host_claim": { "type": "string" },
           "claim": { "type": "string" },
@@ -284,7 +162,7 @@
           "supporting_excerpt": { "type": "array", "items": { "type": "string" } },
           "location": { "type": "object", "additionalProperties": true },
           "confidence": { "type": "string" },
-          "polarity": { "type": "string" }
+          "polarity": { "type": "string", "enum": ["positive", "negative"] }
         },
         "additionalProperties": true
       }
@@ -293,87 +171,23 @@
       "type": "object",
       "additionalProperties": { "type": "integer" }
     },
-    "patch_spec": {
+    "timing": {
       "type": "object",
-      "required": ["digest", "generation_mode", "resolution_mode", "cache_key", "cache_hit", "behavior_contract"],
-      "properties": {
-        "digest": { "type": "string" },
-        "generation_mode": { "type": "string" },
-        "resolution_mode": { "type": "string" },
-        "cache_key": { "type": "string" },
-        "cache_hit": { "type": "boolean" },
-        "behavior_contract": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["behavior_id", "required"],
-            "properties": {
-              "behavior_id": { "type": "string", "minLength": 1 },
-              "required": { "type": "boolean" }
-            },
-            "additionalProperties": false
-          }
-        }
-      },
-      "additionalProperties": false
+      "required": ["wall_seconds"],
+      "properties": { "wall_seconds": { "type": "number" } },
+      "additionalProperties": true
     },
-    "evidence_verification": {
+    "usage_metrics": {
       "type": "object",
-      "required": [
-        "mode",
-        "outcome",
-        "prompt_version",
-        "model",
-        "reasoning",
-        "config_digest",
-        "repair_pending",
-        "attempts"
-      ],
+      "required": ["provider", "model_turns", "totals", "by_turn", "timing"],
       "properties": {
-        "mode": { "type": "string", "enum": ["llm", "off"] },
-        "outcome": {
-          "type": "string",
-          "enum": [
-            "off",
-            "not_run",
-            "skipped_inconclusive",
-            "repaired_to_inconclusive",
-            "accepted",
-            "accepted_after_repair",
-            "repair_requested",
-            "rejected_after_repair",
-            "tool_failure",
-            "repair_not_completed"
-          ]
-        },
-        "prompt_version": { "type": "string", "minLength": 1 },
-        "model": { "type": "string" },
-        "reasoning": { "type": ["object", "null"], "additionalProperties": true },
-        "config_digest": { "type": "string" },
-        "repair_pending": { "type": "boolean" },
-        "attempts": {
-          "type": "array",
-          "maxItems": 3,
-          "items": {
-            "type": "object",
-            "required": ["attempt", "outcome"],
-            "properties": {
-              "attempt": { "type": "integer", "minimum": 1 },
-              "outcome": {
-                "type": "string",
-                "enum": ["accept", "repair", "error", "abandoned"]
-              },
-              "verification": { "type": "object", "additionalProperties": true },
-              "error": { "type": "string" }
-            },
-            "additionalProperties": false
-          }
-        }
+        "provider": { "type": "string" },
+        "model_turns": { "type": "integer", "minimum": 0 },
+        "totals": { "type": "object", "additionalProperties": true },
+        "by_turn": { "type": "array" },
+        "timing": { "type": "object" }
       },
-      "additionalProperties": false
-    },
-    "timing": { "type": "object", "additionalProperties": true },
-    "usage_metrics": { "type": "object", "additionalProperties": true }
-  },
-  "additionalProperties": true
+      "additionalProperties": true
+    }
+  }
 }

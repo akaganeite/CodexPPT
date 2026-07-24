@@ -1,360 +1,145 @@
-"""Tests for finalize validation: evidence-id gate, version reject, schema/repair.
+"""Offline checks for direct evidence-cited finalization.
 
     python3 -m claudeagent.tests.test_finalize
 """
 
 from __future__ import annotations
 
-import copy
-import sys
+import tempfile
 import time
 
 from claudeagent.finalize import (
-    api_failure_fallback_result,
     build_final_artifact,
     max_turns_fallback_result,
-    preflight_missing_result,
     submit_detection_result,
-    validate_final_result_artifact,
 )
 from claudeagent.runtime import AGENT_CONTEXT, initialize_agent_context, record_evidence
 
 
-PATCH_SPEC = {
-    "behaviors": [
-        {"behavior_id": "B001", "required": True},
-        {"behavior_id": "B002", "required": True},
-    ]
-}
+def _add_observation(observation_id: str) -> None:
+    AGENT_CONTEXT["observations"].append({
+        "observation_id": observation_id,
+        "tool": "run_python",
+        "command": ["python3", "-I", "/work/script.py"],
+        "command_text": "python3 -I /work/script.py",
+        "exit_code": 0,
+        "ok": True,
+        "stdout_head": "0x1010: cmp eax, 8",
+        "stdout_tail": "",
+        "stderr_tail": "",
+        "truncated": False,
+        "truncation": {},
+        "parsed_facts": {},
+    })
 
 
-def _support(
-    evidence_id: str,
-    *,
-    support_id: str = "sup_0001",
-    behavior_id: str = "B001",
-    side: str = "new",
-    summary: str = "The inspected code contains the patched instruction shape.",
-) -> dict:
-    return {
-        "support_id": support_id,
-        "behavior_id": behavior_id,
-        "observed_side": side,
-        "summary": summary,
-        "evidence_ids": [evidence_id],
-        "decisive_addresses": ["0x6f64d"],
-    }
-
-
-def _claim(
-    supports: list[dict],
-    *,
-    summary: str = "The required security behaviors are resolved by target-binary evidence.",
-    unresolved: list[str] | None = None,
-) -> dict:
-    return {
-        "summary": summary,
-        "support_ids": [str(item["support_id"]) for item in supports],
-        "unresolved_behavior_ids": list(unresolved or []),
-    }
-
-
-def _mark_summarized(evidence: dict, claim: str | None = None) -> dict:
-    """Prepare ledger evidence for finalization-specific tests."""
-    evidence["returned_response_index"] = int(evidence.get("created_response_index", 0))
-    evidence["claim"] = claim or evidence["claim"]
-    evidence["claim_source"] = "main_agent"
-    evidence["claim_status"] = "summarized"
-    evidence["claim_revision"] = max(1, int(evidence.get("claim_revision", 0)))
-    evidence["claim_updated_response_index"] = max(
-        1,
-        int(evidence["returned_response_index"]) + 1,
+def _summarized_evidence(*, polarity: str = "positive") -> dict:
+    _add_observation("obs_0001")
+    evidence = record_evidence(
+        observation_id="obs_0001",
+        kind="disassembly",
+        claim="Host captured a comparison in the target binary.",
+        excerpts=["0x1010: cmp eax, 8"],
+        polarity=polarity,
     )
+    evidence.update({
+        "claim": "The target comparison enforces the relevant bound.",
+        "claim_source": "main_agent",
+        "claim_status": "summarized",
+        "claim_revision": 1,
+        "created_response_index": 1,
+        "returned_response_index": 1,
+        "claim_updated_response_index": 2,
+    })
     return evidence
 
 
 def _run() -> int:
-    failures = []
+    failures: list[str] = []
 
-    def check(label: str, cond: bool) -> None:
-        if not cond:
+    def check(label: str, condition: bool) -> None:
+        if not condition:
             failures.append(label)
 
-    # Fresh context with evidence for two required PatchSpec behaviors.
-    initialize_agent_context(
-        {"cve_id": "CVE-2013-0249", "project": "curl"},
-        "/tmp/curl_stripped",
-        patch_spec=PATCH_SPEC,
-    )
-    ev1 = record_evidence(
-        observation_id="obs_0001", kind="disassembly_predicates", claim="guard",
-        excerpts=["0x10: cmp eax, 1"],
-    )
-    ev2 = record_evidence(
-        observation_id="obs_0002", kind="disassembly_calls", claim="bounded call",
-        excerpts=["0x20: call bounded_copy"],
-    )
-    new1 = _support(ev1["evidence_id"], behavior_id="B001", side="new")
-    new2 = _support(
-        ev2["evidence_id"], support_id="sup_0002", behavior_id="B002", side="new"
-    )
-    present_supports = [new1, new2]
-
-    # 1. Pending evidence cannot be cited before main-agent summarization.
-    r = submit_detection_result(
-        "present", "high", present_supports, _claim(present_supports), "none"
-    )
-    check(
-        "pending evidence rejected",
-        r["ok"] is False and any("must be summarized" in e for e in r["schema_errors"]),
-    )
-    _mark_summarized(ev1, "The comparison guards the required operation.")
-    _mark_summarized(ev2, "The bounded call implements the required operation.")
-
-    # 2. Host aggregation rejects a status assertion with unresolved behaviors.
-    empty_claim = _claim([], summary="No required behavior was resolved.", unresolved=["B001", "B002"])
-    r = submit_detection_result("present", "low", [], empty_claim, "none")
-    check(
-        "host-derived status mismatch rejected",
-        r["ok"] is False and any("Host derived 'inconclusive'" in e for e in r["schema_errors"]),
-    )
-
-    # 3. unknown evidence ids are rejected through their support records.
-    bad_supports = [
-        _support("ev_9999", behavior_id="B001"),
-        new2,
-    ]
-    r = submit_detection_result("present", "high", bad_supports, _claim(bad_supports), "none")
-    check("unknown-id rejected", r["ok"] is False and any("unknown evidence id" in e for e in r["schema_errors"]))
-
-    # 4. version strings in claim text are rejected.
-    r = submit_detection_result(
-        "present", "high", present_supports,
-        _claim(present_supports, summary="fixed in 7.29.0 per release"), "none",
-    )
-    check("version-string rejected", r["ok"] is False and any("version strings" in e for e in r["schema_errors"]))
-
-    # 5. inconclusive with reason none -> rejected
-    r = submit_detection_result("inconclusive", "low", [], empty_claim, "none")
-    check("inconclusive-none rejected", r["ok"] is False)
-
-    # 6. determinate with reason != none -> rejected
-    r = submit_detection_result("present", "high", present_supports, _claim(present_supports), "other")
-    check("determinate-with-reason rejected", r["ok"] is False)
-
-    # 7. bad enum status -> rejected by schema
-    r = submit_detection_result("patched", "high", present_supports, _claim(present_supports), "none")
-    check("bad-status rejected", r["ok"] is False)
-
-    # 8. valid present verdict is Host-derived and legacy fields are projected.
-    r = submit_detection_result("present", "high", present_supports, _claim(present_supports), "none")
-    check(
-        "valid-present accepted",
-        r["ok"] is True and r["status"] == "present" and r["cve_id"] == "CVE-2013-0249",
-    )
-    check(
-        "legacy projection derived",
-        r.get("evidence") == [new1["summary"], new2["summary"]]
-        and r.get("evidence_ids") == [ev1["evidence_id"], ev2["evidence_id"]]
-        and r.get("reasoning") == _claim(present_supports)["summary"],
-    )
-    check(
-        "verdict aggregation recorded",
-        r.get("verdict", {}).get("rule") == "all_applicable_required_new",
-    )
-
-    # 9. valid inconclusive with concrete reason -> accepted
-    r = submit_detection_result("inconclusive", "low", [], empty_claim, "no_binary_anchor")
-    check("valid-inconclusive accepted", r["ok"] is True and r["status"] == "inconclusive")
-
-    # 10. PatchSpec provenance is recorded separately and never becomes evidence.
-    initialize_agent_context(
-        {"cve_id": "CVE-2013-1944", "project": "curl"},
-        "/tmp/curl_stripped",
-        patch_spec_info={
-            "digest": "abc123",
-            "generation_mode": "model",
-            "resolution_mode": "generated",
-            "cache_key": "cache123",
-            "cache_hit": False,
-            "usage": {"input_tokens": 10, "output_tokens": 4},
-        },
-        patch_spec=PATCH_SPEC,
-    )
-    accepted = submit_detection_result("inconclusive", "low", [], empty_claim, "no_binary_anchor")
-    artifact, errors = build_final_artifact(accepted, [], time.time())
-    check("patchspec artifact valid", not errors and artifact.get("patch_spec", {}).get("digest") == "abc123")
-    check(
-        "patchspec behavior contract recorded",
-        artifact.get("patch_spec", {}).get("behavior_contract") == [
-            {"behavior_id": "B001", "required": True},
-            {"behavior_id": "B002", "required": True},
-        ],
-    )
-    check(
-        "patchspec usage separate",
-        artifact.get("usage_metrics", {}).get("patch_spec_generation", {}).get("input_tokens") == 10
-        and artifact.get("usage_metrics", {}).get("totals") == {},
-    )
-    check("patchspec not evidence", AGENT_CONTEXT.get("evidence_ledger") == [])
-
-    # 11. invented behavior ids are rejected.
-    ev = record_evidence(observation_id="obs_0003", kind="disassembly", claim="x", excerpts=["cmp eax, 1"])
-    ev_b2 = record_evidence(
-        observation_id="obs_0004", kind="disassembly", claim="y", excerpts=["call bounded_copy"]
-    )
-    _mark_summarized(ev, "The target comparison is present.")
-    _mark_summarized(ev_b2, "The target bounded call is present.")
-    current_new2 = _support(
-        ev_b2["evidence_id"], support_id="sup_0002", behavior_id="B002", side="new"
-    )
-    unknown_supports = [
-        _support(ev["evidence_id"], behavior_id="B999"),
-        _support(
-            ev["evidence_id"], support_id="sup_0002", behavior_id="B002", side="new"
-        ),
-    ]
-    r = submit_detection_result(
-        "present", "high", unknown_supports, _claim(unknown_supports), "none",
-    )
-    check("unknown behavior rejected", r["ok"] is False and any("unknown behavior id" in e for e in r["schema_errors"]))
-
-    # 12. every support must be referenced by the structured claim.
-    r = submit_detection_result(
-        "present", "high", present_supports,
-        {**_claim(present_supports), "support_ids": ["sup_0001"]}, "none",
-    )
-    check("orphan support rejected", r["ok"] is False and any("orphan" in e for e in r["schema_errors"]))
-
-    # 13. a pure negative/no-match observation cannot establish OLD/NEW/not-applicable.
-    negative = record_evidence(
-        observation_id="obs_0005", kind="no_pipeline_match", claim="no match",
-        excerpts=["stdout_lines=0"], polarity="negative",
-    )
-    _mark_summarized(negative, "The bounded search produced no matching discriminator.")
-    old_negative = _support(negative["evidence_id"], side="old")
-    old_negative_supports = [old_negative, current_new2]
-    r = submit_detection_result("absent", "medium", old_negative_supports, _claim(old_negative_supports), "none")
-    check("negative-only old rejected", r["ok"] is False and any("positive target-binary evidence" in e for e in r["schema_errors"]))
-
-    # 14. the same negative observation may be represented honestly as ambiguous.
-    ambiguous_support = _support(
-        negative["evidence_id"], side="ambiguous", summary="The bounded search found no discriminator."
-    )
-    ambiguous_claim = _claim(
-        [ambiguous_support],
-        summary="The local search did not distinguish either required behavior.",
-        unresolved=["B001", "B002"],
-    )
-    r = submit_detection_result(
-        "inconclusive", "low", [ambiguous_support], ambiguous_claim, "no_binary_anchor",
-    )
-    check("negative ambiguous accepted", r["ok"] is True)
-
-    # 15. support summaries are subject to the same version/path leakage gate.
-    version_supports = [
-        _support(ev["evidence_id"], summary="This is fixed in 7.29.0"),
-        _support(
-            ev["evidence_id"], support_id="sup_0002", behavior_id="B002", side="new"
-        ),
-    ]
-    r = submit_detection_result("present", "high", version_supports, _claim(version_supports), "none")
-    check("support version rejected", r["ok"] is False and any("version strings" in e for e in r["schema_errors"]))
-
-    # 16. one positively observed OLD required behavior is enough for absent.
-    old1 = _support(ev["evidence_id"], side="old")
-    absent_claim = _claim(
-        [old1], summary="One required behavior retains the vulnerable side.", unresolved=["B002"]
-    )
-    r = submit_detection_result("absent", "high", [old1], absent_claim, "none")
-    check("required old derives absent", r["ok"] is True and r["verdict"]["rule"] == "required_old_behavior")
-
-    # 17. all required behaviors positively not-applicable derive not_affected.
-    na1 = _support(ev["evidence_id"], side="not_applicable")
-    na2 = _support(
-        ev["evidence_id"], support_id="sup_0002", behavior_id="B002",
-        side="not_applicable",
-    )
-    na_supports = [na1, na2]
-    r = submit_detection_result("not_affected", "high", na_supports, _claim(na_supports), "none")
-    check("all not-applicable derives not_affected", r["ok"] is True)
-
-    # 18. tampering with a projected legacy field invalidates the artifact.
-    current_present = [_support(ev["evidence_id"]), current_new2]
-    valid_present = submit_detection_result(
-        "present", "high", current_present, _claim(current_present), "none"
-    )
-    artifact, errors = build_final_artifact(valid_present, [], time.time())
-    artifact["evidence_ids"] = []
-    tamper_errors = validate_final_result_artifact(artifact)
-    check("legacy tamper rejected", not errors and any("diverges" in item for item in tamper_errors))
-
-    # 19. Claim provenance state must remain internally consistent in artifacts.
-    provenance_artifact, provenance_errors = build_final_artifact(valid_present, [], time.time())
-    provenance_artifact = copy.deepcopy(provenance_artifact)
-    provenance_artifact["evidence_ledger"][0]["claim_status"] = "pending"
-    provenance_tamper_errors = validate_final_result_artifact(provenance_artifact)
-    check(
-        "claim provenance tamper rejected",
-        not provenance_errors
-        and any("pending evidence must retain" in item for item in provenance_tamper_errors),
-    )
-
-    # 20. Evidence cannot be returned before its creation response.
-    timeline_artifact, timeline_errors = build_final_artifact(valid_present, [], time.time())
-    timeline_artifact = copy.deepcopy(timeline_artifact)
-    timeline_artifact["evidence_ledger"][0]["created_response_index"] = 10
-    timeline_artifact["evidence_ledger"][0]["returned_response_index"] = 1
-    timeline_artifact["evidence_ledger"][0]["claim_updated_response_index"] = 2
-    timeline_tamper_errors = validate_final_result_artifact(timeline_artifact)
-    check(
-        "impossible evidence timeline rejected",
-        not timeline_errors
-        and any("before it was created" in item for item in timeline_tamper_errors),
-    )
-
-    # 21-23. Every host fallback emits the canonical v4 claim/verdict shape.
-    fallback_results = [
-        preflight_missing_result(
-            {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", {"ok": False}
-        ),
-        max_turns_fallback_result(
-            {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", 20
-        ),
-        api_failure_fallback_result(
-            {"cve_id": "CVE-X", "project": "curl"}, "/tmp/binary", "offline"
-        ),
-    ]
-    for index, fallback in enumerate(fallback_results, 21):
-        fallback_artifact, fallback_errors = build_final_artifact(fallback, [], time.time())
-        check(
-            f"fallback {index} schema-valid",
-            not fallback_errors
-            and fallback_artifact.get("schema_version") == "final_result.v4"
-            and fallback_artifact.get("evidence_verification", {}).get("mode") == "off"
-            and fallback_artifact.get("verdict", {}).get("status") == "inconclusive",
+    with tempfile.TemporaryDirectory() as tmp:
+        metadata = {"cve_id": "CVE-TEST", "project": "demo", "description": "bound check"}
+        initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
+        pending = record_evidence(
+            observation_id="obs_0001",
+            kind="disassembly",
+            claim="Host claim",
+            excerpts=["0x1010: cmp eax, 8"],
         )
+        rejected = submit_detection_result(
+            status="present",
+            confidence="high",
+            evidence_ids=[pending["evidence_id"]],
+            reasoning="The target code enforces the bound.",
+            decisive_addresses=["0x1010"],
+            inconclusive_reason="none",
+        )
+        check("pending evidence rejected", not rejected["ok"] and "summarized" in str(rejected["schema_errors"]))
 
-    # 24. Long transport errors remain a valid bounded fallback claim.
-    long_fallback = api_failure_fallback_result(
-        {"cve_id": "CVE-X", "project": "curl"},
-        "/tmp/binary",
-        "X" * 6000,
-    )
-    long_artifact, long_errors = build_final_artifact(long_fallback, [], time.time())
-    check(
-        "long fallback summary bounded",
-        not long_errors and len(long_artifact.get("claim", {}).get("summary", "")) <= 4000,
-    )
+        initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
+        no_evidence = submit_detection_result(
+            status="present",
+            confidence="high",
+            evidence_ids=[],
+            reasoning="The target code enforces the bound.",
+            decisive_addresses=["0x1010"],
+            inconclusive_reason="none",
+        )
+        check("determinate verdict needs evidence", not no_evidence["ok"])
+
+        initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
+        evidence = _summarized_evidence()
+        accepted = submit_detection_result(
+            status="present",
+            confidence="high",
+            evidence_ids=[evidence["evidence_id"]],
+            reasoning="The comparison at 0x1010 enforces the relevant upper bound.",
+            decisive_addresses=["0x1010"],
+            inconclusive_reason="none",
+        )
+        artifact, errors = build_final_artifact(accepted, [], time.time())
+        check("summarized positive evidence accepted", accepted["ok"] and not errors)
+        check("artifact uses v6 direct fields", artifact.get("schema_version") == "final_result.v6" and "metadata_sha256" in artifact)
+        check("artifact records cited claim", artifact.get("evidence") == [evidence["claim"]])
+
+        initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
+        negative = _summarized_evidence(polarity="negative")
+        only_negative = submit_detection_result(
+            status="absent",
+            confidence="medium",
+            evidence_ids=[negative["evidence_id"]],
+            reasoning="No matching anchor was printed.",
+            decisive_addresses=[],
+            inconclusive_reason="none",
+        )
+        check("negative-only determinate verdict rejected", not only_negative["ok"])
+
+        inconclusive = submit_detection_result(
+            status="inconclusive",
+            confidence="low",
+            evidence_ids=[],
+            reasoning="The stripped target code could not be localized.",
+            decisive_addresses=[],
+            inconclusive_reason="no_binary_anchor",
+        )
+        check("inconclusive without citations accepted", inconclusive["ok"])
+
+        fallback = max_turns_fallback_result(metadata, "/workspace/binary", 2)
+        _, fallback_errors = build_final_artifact(fallback, [], time.time())
+        check("fallback artifact validates", not fallback_errors)
 
     if failures:
         print("FINALIZE TESTS FAILED:")
-        for line in failures:
-            print("  -", line)
+        for failure in failures:
+            print("  -", failure)
         return 1
-    print("FINALIZE TESTS PASSED (24 cases)")
+    print("FINALIZE TESTS PASSED")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(_run())
+    raise SystemExit(_run())

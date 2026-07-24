@@ -34,9 +34,7 @@ def bump_command_failure() -> None:
 def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("observations", [])
     AGENT_CONTEXT.setdefault("evidence_ledger", [])
-    AGENT_CONTEXT.setdefault("patch_spec_behavior_contract", [])
-    AGENT_CONTEXT.setdefault("evidence_verifier_mode", "off")
-    AGENT_CONTEXT.setdefault("evidence_verifier_session", None)
+    AGENT_CONTEXT.setdefault("metadata_sha256", "")
     AGENT_CONTEXT.setdefault("observation_counter", 0)
     AGENT_CONTEXT.setdefault("evidence_counter", 0)
     AGENT_CONTEXT.setdefault("script_counter", 0)
@@ -45,42 +43,21 @@ def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("metrics", {})
 
 
-def patch_spec_behavior_contract(patch_spec: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Return the host-side behavior ids/required flags used at finalization.
-
-    The full PatchSpec remains prompt input/provenance. Final validation only
-    needs this compact contract to reject invented behavior ids while keeping
-    PatchSpec text out of the target-binary evidence ledger.
-    """
-    if not isinstance(patch_spec, dict):
-        return []
-    behaviors = patch_spec.get("behaviors")
-    if not isinstance(behaviors, list):
-        return []
-    contract: list[dict[str, Any]] = []
-    for behavior in behaviors:
-        if not isinstance(behavior, dict):
-            continue
-        behavior_id = behavior.get("behavior_id")
-        if not isinstance(behavior_id, str) or not behavior_id:
-            continue
-        contract.append({
-            "behavior_id": behavior_id,
-            "required": bool(behavior.get("required", False)),
-        })
-    return contract
-
-
 def initialize_agent_context(
     metadata: dict[str, Any],
     binary: str,
     cve_id: str = "",
     output_dir: str = "",
     scratch_dir: str = "",
-    patch_spec_info: dict[str, Any] | None = None,
-    patch_spec: dict[str, Any] | None = None,
-    evidence_verifier_mode: str = "off",
+    metadata_sha256: str = "",
 ) -> None:
+    if not metadata_sha256:
+        from claudeagent.metadata_input import metadata_sha256 as compute_metadata_sha256
+
+        metadata_sha256 = compute_metadata_sha256(
+            metadata,
+            str(metadata.get("cve_id") or cve_id or "") or None,
+        )
     AGENT_CONTEXT.clear()
     AGENT_CONTEXT.update({
         "metadata": metadata,
@@ -88,17 +65,7 @@ def initialize_agent_context(
         "cve_id": metadata.get("cve_id", cve_id),
         "output_dir": output_dir,
         "scratch_dir": scratch_dir,
-        "patch_spec_info": patch_spec_info or {
-            "digest": "",
-            "generation_mode": "not_generated",
-            "resolution_mode": "not_resolved",
-            "cache_key": "",
-            "cache_hit": False,
-            "usage": {},
-        },
-        "patch_spec_behavior_contract": patch_spec_behavior_contract(patch_spec),
-        "evidence_verifier_mode": evidence_verifier_mode,
-        "evidence_verifier_session": None,
+        "metadata_sha256": metadata_sha256,
         "observations": [],
         "evidence_ledger": [],
         "observation_counter": 0,
@@ -108,21 +75,6 @@ def initialize_agent_context(
         "current_model_response": 0,
         "metrics": {},
     })
-
-
-def configure_evidence_verifier(session: Any) -> None:
-    """Attach the per-run verifier session after provider/PatchSpec resolution."""
-    AGENT_CONTEXT["evidence_verifier_session"] = session
-    mode = getattr(session, "mode", None)
-    if isinstance(mode, str):
-        AGENT_CONTEXT["evidence_verifier_mode"] = mode
-
-
-def evidence_verifier_repair_pending() -> bool:
-    session = AGENT_CONTEXT.get("evidence_verifier_session")
-    return bool(getattr(session, "repair_pending", False))
-
-
 def begin_model_response() -> int:
     """Advance the monotonic response index used for evidence visibility checks."""
     ensure_runtime_state()
@@ -144,6 +96,8 @@ def record_evidence(
     polarity: str = "positive",
 ) -> dict[str, Any]:
     ensure_runtime_state()
+    if polarity not in {"positive", "negative"}:
+        raise ValueError("evidence polarity must be 'positive' or 'negative'")
     evidence_id = next_id("ev", "evidence_counter")
     host_claim = str(claim)
     item = {
@@ -212,11 +166,6 @@ def harness_metrics() -> dict[str, int]:
     metrics.setdefault("truncated_observations", 0)
     metrics.setdefault("schema_repair_attempts", 0)
     metrics.setdefault("no_evidence_verdicts", 0)
-    metrics.setdefault("evidence_verifier_calls", 0)
-    metrics.setdefault("evidence_verifier_accepts", 0)
-    metrics.setdefault("evidence_verifier_rejections", 0)
-    metrics.setdefault("evidence_verifier_repairs", 0)
-    metrics.setdefault("evidence_verifier_failures", 0)
     metrics.setdefault("evidence_summary_calls", 0)
     metrics.setdefault("evidence_summary_updates", 0)
     metrics.setdefault("evidence_summary_revisions", 0)

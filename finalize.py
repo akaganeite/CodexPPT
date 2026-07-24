@@ -1,11 +1,4 @@
-"""Final verdict validation, repair payloads, and artifact writing.
-
-Validation combines JSON schema, ledger citations, behavior-scoped support
-references, evidence polarity, determinate/inconclusive consistency, and a
-version/path-string rejection. Schema/gate failures are returned to the model as
-a repair payload (never raised), so the loop can fix the verdict instead of
-crashing.
-"""
+"""Direct evidence-cited finalization and artifact writing."""
 
 from __future__ import annotations
 
@@ -14,22 +7,6 @@ import time
 from typing import Any
 
 from claudeagent.common import jdump, write_artifact
-from claudeagent.decision import (
-    FINAL_SCHEMA_VERSION,
-    aggregate_verdict,
-    fallback_decision_fields,
-    project_legacy_fields,
-    resolve_behavior_claims,
-    support_evidence_ids,
-    validate_claim_record,
-    validate_support_records,
-)
-from claudeagent.evidence_verifier import (
-    EvidenceVerifierSession,
-    validate_verification,
-    verifier_audit,
-    verifier_usage,
-)
 from claudeagent.runtime import AGENT_CONTEXT, bump_metric, harness_metrics
 from claudeagent.schema_validate import (
     DETERMINATE_STATUSES,
@@ -40,6 +17,9 @@ from claudeagent.schema_validate import (
 )
 from claudeagent.truncation import text_head_tail
 
+
+FINAL_SCHEMA_VERSION = "final_result.v6"
+_UNSET = object()
 
 # Determinate verdicts must rely on binary semantics, not version/release/path labels.
 VERSION_EVIDENCE_RE = re.compile(
@@ -55,81 +35,100 @@ VERSION_EVIDENCE_RE = re.compile(
 
 
 def _bounded_fallback_summary(value: Any) -> str:
-    """Keep Host-generated fallback claims within the final schema limit."""
+    """Keep Host-generated fallback reasoning within the artifact schema limit."""
     text = str(value or "")
     if len(text) <= 3800:
         return text
     parts = text_head_tail(text, 3500)
-    return (
-        f"{parts['head']}\n... {parts['omitted_chars']} chars omitted ...\n"
-        f"{parts['tail']}"
-    )[:3800]
+    return f"{parts['head']}\n... {parts['omitted_chars']} chars omitted ...\n{parts['tail']}"[:3800]
+
+
+def _ledger_by_id(evidence_ledger: Any) -> dict[str, dict[str, Any]]:
+    items = evidence_ledger if isinstance(evidence_ledger, list) else []
+    return {
+        str(item.get("evidence_id")): item
+        for item in items
+        if isinstance(item, dict) and item.get("evidence_id")
+    }
 
 
 def resolve_final_tool_args(
     candidate: dict[str, Any],
     *,
-    behavior_contract: list[dict[str, Any]],
-    evidence_ledger: list[dict[str, Any]],
+    evidence_ledger: Any,
 ) -> tuple[dict[str, Any], list[str]]:
-    """Validate a model submission and derive the canonical/legacy decision."""
+    """Validate one direct verdict and derive its canonical evidence projection."""
     errors = validate_json_schema(candidate, final_tool_parameters_schema())
-    supports = candidate.get("supports") if isinstance(candidate.get("supports"), list) else []
-    claim = candidate.get("claim") if isinstance(candidate.get("claim"), dict) else {}
-    behavior_claims = resolve_behavior_claims(supports, claim, behavior_contract)
-    verdict = aggregate_verdict(behavior_claims)
-    derived_status = str(verdict["status"])
-    legacy = project_legacy_fields(supports, claim)
+    status = str(candidate.get("status", ""))
+    raw_ids = candidate.get("evidence_ids")
+    evidence_ids = [str(value) for value in raw_ids] if isinstance(raw_ids, list) else []
+    if len(evidence_ids) != len(set(evidence_ids)):
+        errors.append("$.evidence_ids: duplicate evidence ids are not allowed")
 
-    errors.extend(validate_support_records(
-        supports,
-        status=derived_status,
-        evidence_ids=support_evidence_ids(supports),
-        behavior_contract=behavior_contract,
-        evidence_ledger=evidence_ledger,
-    ))
-    errors.extend(validate_claim_record(
-        claim,
-        supports=supports,
-        behavior_contract=behavior_contract,
-    ))
-
-    submitted_status = str(candidate.get("status", ""))
-    if submitted_status != derived_status:
+    ledger_by_id = _ledger_by_id(evidence_ledger)
+    unknown_ids = sorted(set(evidence_ids) - set(ledger_by_id))
+    if unknown_ids:
+        errors.append(f"$.evidence_ids: unknown evidence id(s) not in the ledger: {unknown_ids}")
+    cited = [ledger_by_id[item] for item in evidence_ids if item in ledger_by_id]
+    pending_ids = [
+        str(item.get("evidence_id", ""))
+        for item in cited
+        if str(item.get("claim_status", "pending")) != "summarized"
+    ]
+    if pending_ids:
         errors.append(
-            f"$.status: submitted {submitted_status!r}, but Host derived {derived_status!r} "
-            f"using rule {verdict['rule']!r}"
+            "$.evidence_ids: cited evidence must be summarized with summarize_evidence "
+            f"before finalization; pending id(s): {pending_ids}"
+        )
+    if status in DETERMINATE_STATUSES and not evidence_ids:
+        errors.append(f"$.evidence_ids: {status} verdicts require cited target-binary evidence")
+    invalid_polarity_ids = [
+        str(item.get("evidence_id", ""))
+        for item in cited
+        if item.get("polarity") not in {"positive", "negative"}
+    ]
+    if invalid_polarity_ids:
+        errors.append(
+            "$.evidence_ids: cited evidence has invalid Host-recorded polarity: "
+            f"{invalid_polarity_ids}"
+        )
+    if status in DETERMINATE_STATUSES and cited and all(
+        str(item.get("polarity", "positive")) == "negative" for item in cited
+    ):
+        errors.append(
+            "$.evidence_ids: determinate verdicts require positive target-binary evidence; "
+            "pure no-match/anchor-miss evidence is insufficient"
         )
 
     reason = candidate.get("inconclusive_reason")
     if reason not in INCONCLUSIVE_REASONS:
         errors.append(f"$.inconclusive_reason: expected one of {sorted(INCONCLUSIVE_REASONS)}")
-    if derived_status == "inconclusive" and reason in {"", "none", None}:
+    if status == "inconclusive" and reason in {"", "none", None}:
         errors.append("$.inconclusive_reason: inconclusive verdicts must name a concrete reason")
-    if derived_status != "inconclusive" and reason not in {"", "none", None}:
+    if status != "inconclusive" and reason not in {"", "none", None}:
         errors.append("$.inconclusive_reason: determinate verdicts should use 'none'")
-    if derived_status in DETERMINATE_STATUSES and not legacy["evidence_ids"]:
-        errors.append(f"$.supports: Host-derived {derived_status} verdict requires cited evidence")
 
-    if derived_status in DETERMINATE_STATUSES:
-        verdict_text = "\n".join([
-            *(str(item) for item in legacy["evidence"]),
-            str(legacy["reasoning"]),
-        ])
+    reasoning = str(candidate.get("reasoning", ""))
+    if status in DETERMINATE_STATUSES:
+        verdict_text = "\n".join([*(str(item.get("claim", "")) for item in cited), reasoning])
         if VERSION_EVIDENCE_RE.search(verdict_text):
             errors.append(
-                "$.supports/claim: determinate verdict appears to rely on version strings, "
-                "filenames, paths, or release labels instead of semantic binary evidence"
+                "$.reasoning/evidence_ids: determinate verdict appears to rely on version "
+                "strings, filenames, paths, or release labels instead of semantic binary evidence"
             )
 
     canonical = {
         "schema_version": FINAL_SCHEMA_VERSION,
-        "status": derived_status,
+        "status": status,
         "confidence": candidate.get("confidence"),
-        "supports": supports,
-        "claim": claim,
-        "verdict": verdict,
-        **legacy,
+        "evidence": [str(item.get("claim", "")) for item in cited],
+        "evidence_ids": evidence_ids,
+        "reasoning": reasoning,
+        "decisive_addresses": (
+            [str(value) for value in candidate.get("decisive_addresses", [])]
+            if isinstance(candidate.get("decisive_addresses"), list)
+            else []
+        ),
         "inconclusive_reason": reason,
     }
     return canonical, errors
@@ -147,48 +146,56 @@ def compact_known_evidence_ids() -> dict[str, Any]:
         for item in ledger
         if item.get("claim_status") == "summarized"
     )
-    pending = sorted(set(ids) - set(summarized))
     return {
         "count": len(ids),
         "head": ids[:12],
         "tail": ids[-12:] if len(ids) > 12 else [],
         "summarized": summarized[:24],
-        "pending": pending[:24],
+        "pending": sorted(set(ids) - set(summarized))[:24],
     }
 
 
 def compact_rejected_tool_args(candidate: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": candidate.get("status"),
-        "confidence": candidate.get("confidence"),
-        "supports": candidate.get("supports", []),
-        "claim": candidate.get("claim", {}),
-        "inconclusive_reason": candidate.get("inconclusive_reason", ""),
-    }
+    """Return only the direct final-tool fields in a repair response."""
+    fields = (
+        "status",
+        "confidence",
+        "evidence_ids",
+        "reasoning",
+        "decisive_addresses",
+        "inconclusive_reason",
+    )
+    return {field: candidate.get(field) for field in fields if field in candidate}
 
 
 def submit_detection_result(
     status: str,
     confidence: str,
-    supports: list[dict[str, Any]],
-    claim: dict[str, Any],
-    inconclusive_reason: str,
+    evidence_ids: Any = _UNSET,
+    reasoning: Any = _UNSET,
+    decisive_addresses: Any = _UNSET,
+    inconclusive_reason: Any = _UNSET,
+    **extra: Any,
 ) -> dict[str, Any]:
-    candidate = {
-        "status": status,
-        "confidence": confidence,
-        "supports": supports,
-        "claim": claim,
-        "inconclusive_reason": inconclusive_reason,
-    }
+    """Validate the investigator's direct verdict without inventing evidence."""
+    candidate: dict[str, Any] = {"status": status, "confidence": confidence, **extra}
+    if evidence_ids is not _UNSET:
+        candidate["evidence_ids"] = evidence_ids
+    if reasoning is not _UNSET:
+        candidate["reasoning"] = reasoning
+    if decisive_addresses is not _UNSET:
+        candidate["decisive_addresses"] = decisive_addresses
+    if inconclusive_reason is not _UNSET:
+        candidate["inconclusive_reason"] = inconclusive_reason
+
     canonical, validation_errors = resolve_final_tool_args(
         candidate,
-        behavior_contract=AGENT_CONTEXT.get("patch_spec_behavior_contract", []),
         evidence_ledger=AGENT_CONTEXT.get("evidence_ledger", []),
     )
     if validation_errors:
         bump_metric("schema_repair_attempts")
-        if status in DETERMINATE_STATUSES and not support_evidence_ids(supports):
+        cited_ids = candidate.get("evidence_ids", [])
+        if status in DETERMINATE_STATUSES and not cited_ids:
             bump_metric("no_evidence_verdicts")
         return {
             "ok": False,
@@ -197,15 +204,11 @@ def submit_detection_result(
             "known_evidence_ids": compact_known_evidence_ids(),
             "rejected_candidate": compact_rejected_tool_args(candidate),
             "repair_instruction": (
-                "Repair the rejected supports/claim; do not restart the investigation. Cite only real "
-                "ledger evidence and PatchSpec behavior ids. Summarize every cited pending evidence "
-                "item with summarize_evidence. Claim every submitted support exactly "
-                "once. List each required behavior with no single decisive side in "
-                "claim.unresolved_behavior_ids. Pure no-match evidence can only support ambiguous. "
-                "The submitted status must equal the Host-derived behavior aggregation reported in "
-                "schema_errors. Remove versions, paths, filenames, and release chronology from support "
-                "summaries and claim.summary. Downgrade to inconclusive only when the binary evidence "
-                "is genuinely unresolved."
+                "Repair the rejected direct verdict without restarting the investigation. Cite only "
+                "real ledger evidence_ids and summarize every cited pending item first. Determinate "
+                "statuses require positive target-binary evidence; an anchor miss alone is not enough. "
+                "Remove versions, paths, filenames, release chronology, and unsupported interpretations "
+                "from reasoning. Use inconclusive only when the binary evidence is genuinely unresolved."
             ),
         }
     metadata = AGENT_CONTEXT["metadata"]
@@ -217,60 +220,6 @@ def submit_detection_result(
         **canonical,
         "completed_at_epoch": time.time(),
     }
-
-
-def verify_detection_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Run the independent semantic gate after the Host artifact preflight."""
-    verifier_session = AGENT_CONTEXT.get("evidence_verifier_session")
-    verifier_mode = str(AGENT_CONTEXT.get("evidence_verifier_mode", "off"))
-    if isinstance(verifier_session, EvidenceVerifierSession):
-        verification = verifier_session.verify(
-            result,
-            evidence_ledger=AGENT_CONTEXT.get("evidence_ledger", []),
-            observations=AGENT_CONTEXT.get("observations", []),
-        )
-    elif verifier_mode == "llm" and result.get("status") in DETERMINATE_STATUSES:
-        verification = {
-            "decision": "fail_closed",
-            "reason": "tool_failure",
-            "summary": (
-                "Independent evidence verification was configured but unavailable; "
-                "the determinate claim was not accepted."
-            ),
-        }
-    else:
-        verification = {"decision": "accept"}
-
-    if verification.get("decision") == "repair":
-        return {
-            "ok": False,
-            "tool": "submit_detection_result",
-            "error": (
-                "independent evidence verification rejected the determinate claim; "
-                "repair supports/claim once using existing evidence"
-            ),
-            "verifier_repair_required": True,
-            "verification": verification.get("verification", {}),
-            "known_evidence_ids": compact_known_evidence_ids(),
-            "rejected_candidate": compact_rejected_tool_args(result),
-            "repair_instruction": verification.get("repair_instruction", ""),
-        }
-    if verification.get("decision") == "fail_closed":
-        reason = str(verification.get("reason", "tool_failure"))
-        fallback = _fallback_result(
-            AGENT_CONTEXT["metadata"],
-            AGENT_CONTEXT["binary_path"],
-            ok=reason != "tool_failure",
-            summary=str(verification.get("summary", "Independent evidence verification failed.")),
-            inconclusive_reason=reason,
-        )
-        if reason == "tool_failure":
-            # Internal dispatch marker: the artifact is terminal even though
-            # ok=false accurately records verifier/API failure. The loop strips
-            # this marker before writing final_result.json.
-            fallback["_terminal_submit"] = True
-        return fallback
-    return result
 
 
 def flatten_numeric_usage(obj: Any, prefix: str = "") -> dict[str, int | float]:
@@ -295,225 +244,124 @@ def aggregate_usage(transcript: list[dict[str, Any]]) -> dict[str, Any]:
         for key, value in flat.items():
             totals[key] = totals.get(key, 0) + value
         by_turn.append({"turn": entry.get("turn"), "usage": usage})
-    return {"provider": "openai-responses", "model_turns": len(by_turn), "totals": totals, "by_turn": by_turn}
+    return {
+        "provider": "openai-responses",
+        "model_turns": len(by_turn),
+        "totals": totals,
+        "by_turn": by_turn,
+    }
 
 
-def validate_final_result_artifact(
+def _validate_ledger_provenance(
     result: dict[str, Any],
-    *,
-    check_verifier: bool = True,
-) -> list[str]:
-    errors = validate_json_schema(result, load_final_result_schema())
-    evidence_ledger = result.get("evidence_ledger")
-    if isinstance(evidence_ledger, list):
-        for index, evidence in enumerate(evidence_ledger):
-            if not isinstance(evidence, dict):
-                continue
-            prefix = f"$.evidence_ledger[{index}]"
-            status = evidence.get("claim_status")
-            source = evidence.get("claim_source")
-            revision = evidence.get("claim_revision")
-            created_at = evidence.get("created_response_index")
-            updated_at = evidence.get("claim_updated_response_index")
-            returned_at = evidence.get("returned_response_index")
-            if (
-                isinstance(created_at, int)
-                and not isinstance(created_at, bool)
-                and isinstance(returned_at, int)
-                and not isinstance(returned_at, bool)
-                and returned_at < created_at
-            ):
+    errors: list[str],
+) -> None:
+    observations = result.get("observations")
+    observation_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(observations, list):
+        observation_ids = [
+            str(item.get("observation_id"))
+            for item in observations
+            if isinstance(item, dict) and item.get("observation_id")
+        ]
+        if len(observation_ids) != len(set(observation_ids)):
+            errors.append("$.observations: duplicate observation_id values are not allowed")
+        observation_by_id = {
+            str(item["observation_id"]): item
+            for item in observations
+            if isinstance(item, dict) and item.get("observation_id")
+        }
+
+    cited_ids = {str(value) for value in result.get("evidence_ids", []) if isinstance(value, str)}
+    determinate = str(result.get("status", "")) in DETERMINATE_STATUSES
+    ledger = result.get("evidence_ledger")
+    if not isinstance(ledger, list):
+        return
+    evidence_ids = [
+        str(item.get("evidence_id"))
+        for item in ledger
+        if isinstance(item, dict) and item.get("evidence_id")
+    ]
+    if len(evidence_ids) != len(set(evidence_ids)):
+        errors.append("$.evidence_ledger: duplicate evidence_id values are not allowed")
+
+    for index, evidence in enumerate(ledger):
+        if not isinstance(evidence, dict):
+            continue
+        prefix = f"$.evidence_ledger[{index}]"
+        observation_id = str(evidence.get("observation_id", ""))
+        observation = observation_by_id.get(observation_id)
+        if observation is None:
+            errors.append(f"{prefix}.observation_id: unknown observation id {observation_id!r}")
+        elif determinate and str(evidence.get("evidence_id", "")) in cited_ids:
+            if observation.get("tool") != "run_python":
+                errors.append(f"{prefix}.observation_id: determinate evidence must come from run_python")
+            if observation.get("ok") is not True or observation.get("exit_code") != 0:
                 errors.append(
-                    f"{prefix}.returned_response_index: evidence cannot be returned before it was created"
+                    f"{prefix}.observation_id: determinate evidence must come from a successful observation"
                 )
-            if status == "pending":
-                if (
-                    source != "host"
-                    or revision != 0
-                    or evidence.get("claim") != evidence.get("host_claim")
-                ):
-                    errors.append(
-                        f"{prefix}: pending evidence must retain the Host claim/source at revision 0"
-                    )
-                if updated_at is not None:
-                    errors.append(
-                        f"{prefix}.claim_updated_response_index: pending evidence cannot record a claim update"
-                    )
-            elif status == "summarized":
-                if source != "main_agent" or not isinstance(revision, int) or revision < 1:
-                    errors.append(
-                        f"{prefix}: summarized evidence requires main_agent source and revision >= 1"
-                    )
-                if (
-                    not isinstance(returned_at, int)
-                    or isinstance(returned_at, bool)
-                    or not isinstance(updated_at, int)
-                    or isinstance(updated_at, bool)
-                    or updated_at <= returned_at
-                ):
-                    errors.append(
-                        f"{prefix}: summarized evidence must be updated after it was returned"
-                    )
-    patch_spec = result.get("patch_spec") if isinstance(result.get("patch_spec"), dict) else {}
-    artifact_candidate = {
+
+        status = evidence.get("claim_status")
+        source = evidence.get("claim_source")
+        revision = evidence.get("claim_revision")
+        created_at = evidence.get("created_response_index")
+        returned_at = evidence.get("returned_response_index")
+        updated_at = evidence.get("claim_updated_response_index")
+        if (
+            isinstance(created_at, int)
+            and not isinstance(created_at, bool)
+            and isinstance(returned_at, int)
+            and not isinstance(returned_at, bool)
+            and returned_at < created_at
+        ):
+            errors.append(f"{prefix}.returned_response_index: evidence cannot be returned before it was created")
+        if status == "pending":
+            if source != "host" or revision != 0 or evidence.get("claim") != evidence.get("host_claim"):
+                errors.append(f"{prefix}: pending evidence must retain the Host claim/source at revision 0")
+            if updated_at is not None:
+                errors.append(f"{prefix}.claim_updated_response_index: pending evidence cannot record a claim update")
+        elif status == "summarized":
+            if source != "main_agent" or not isinstance(revision, int) or revision < 1:
+                errors.append(f"{prefix}: summarized evidence requires main_agent source and revision >= 1")
+            if (
+                not isinstance(returned_at, int)
+                or isinstance(returned_at, bool)
+                or not isinstance(updated_at, int)
+                or isinstance(updated_at, bool)
+                or updated_at <= returned_at
+            ):
+                errors.append(f"{prefix}: summarized evidence must be updated after it was returned")
+
+
+def validate_final_result_artifact(result: dict[str, Any]) -> list[str]:
+    """Validate serialized artifacts against schema and ledger provenance."""
+    errors = validate_json_schema(result, load_final_result_schema())
+    _validate_ledger_provenance(result, errors)
+    candidate = {
         "status": result.get("status"),
         "confidence": result.get("confidence"),
-        "supports": result.get("supports"),
-        "claim": result.get("claim"),
+        "evidence_ids": result.get("evidence_ids"),
+        "reasoning": result.get("reasoning"),
+        "decisive_addresses": result.get("decisive_addresses"),
         "inconclusive_reason": result.get("inconclusive_reason"),
     }
     canonical, decision_errors = resolve_final_tool_args(
-        artifact_candidate,
-        behavior_contract=patch_spec.get("behavior_contract", []),
+        candidate,
         evidence_ledger=result.get("evidence_ledger", []),
     )
     errors.extend(decision_errors)
     for field in (
         "schema_version",
         "status",
+        "confidence",
         "evidence",
         "evidence_ids",
         "reasoning",
         "decisive_addresses",
-        "verdict",
+        "inconclusive_reason",
     ):
         if result.get(field) != canonical.get(field):
-            errors.append(
-                f"$.{field}: artifact value diverges from Host-derived canonical projection"
-            )
-    verification = (
-        result.get("evidence_verification")
-        if isinstance(result.get("evidence_verification"), dict)
-        else {}
-    )
-    mode = str(verification.get("mode", ""))
-    outcome = str(verification.get("outcome", ""))
-    attempts = (
-        verification.get("attempts")
-        if isinstance(verification.get("attempts"), list)
-        else []
-    )
-    attempt_outcomes = [
-        str(item.get("outcome", ""))
-        for item in attempts
-        if isinstance(item, dict)
-    ]
-    if check_verifier and verification.get("repair_pending") is True:
-        errors.append("$.evidence_verification.repair_pending: final artifacts cannot remain pending")
-    if not check_verifier:
-        return errors
-
-    status = str(result.get("status", ""))
-    reason = str(result.get("inconclusive_reason", ""))
-    if mode == "off" and outcome != "off":
-        errors.append("$.evidence_verification.outcome: off mode requires outcome=off")
-    if mode == "llm" and outcome == "off":
-        errors.append("$.evidence_verification.outcome: llm mode cannot use outcome=off")
-    if mode == "off" and (
-        verification.get("model")
-        or verification.get("reasoning") is not None
-        or verification.get("config_digest")
-    ):
-        errors.append(
-            "$.evidence_verification: off mode must not record model/reasoning/config_digest"
-        )
-    if mode == "llm" and outcome != "not_run":
-        digest = str(verification.get("config_digest", ""))
-        if not verification.get("model") or not re.fullmatch(r"[0-9a-f]{64}", digest):
-            errors.append(
-                "$.evidence_verification: executed llm verification requires model and config_digest"
-            )
-    if status in DETERMINATE_STATUSES:
-        if mode == "llm" and outcome not in {"accepted", "accepted_after_repair"}:
-            errors.append(
-                "$.evidence_verification.outcome: determinate llm-mode artifacts require "
-                "accepted or accepted_after_repair"
-            )
-        if mode == "off" and outcome != "off":
-            errors.append(
-                "$.evidence_verification.outcome: determinate off-mode artifacts require off"
-            )
-        if mode == "llm" and outcome in {"accepted", "accepted_after_repair"}:
-            accepted_attempts = [
-                item
-                for item in attempts
-                if isinstance(item, dict)
-                and item.get("outcome") == "accept"
-                and isinstance(item.get("verification"), dict)
-            ]
-            if not accepted_attempts:
-                errors.append(
-                    "$.evidence_verification.attempts: accepted determinate artifacts require "
-                    "an accepted verifier report"
-                )
-            else:
-                verifier_errors = validate_verification(accepted_attempts[-1]["verification"], result)
-                errors.extend(
-                    f"$.evidence_verification.attempts: {item}"
-                    for item in verifier_errors
-                )
-        if mode == "off" and verification.get("attempts"):
-            errors.append(
-                "$.evidence_verification.attempts: off-mode artifacts must not contain verifier calls"
-            )
-    if outcome == "accepted" and attempt_outcomes != ["accept"]:
-        errors.append(
-            "$.evidence_verification.attempts: accepted requires exactly one accept attempt"
-        )
-    if outcome == "accepted_after_repair" and attempt_outcomes != ["repair", "accept"]:
-        errors.append(
-            "$.evidence_verification.attempts: accepted_after_repair requires repair then accept"
-        )
-    if outcome in {"accepted", "accepted_after_repair"} and status not in DETERMINATE_STATUSES:
-        errors.append(
-            "$.evidence_verification.outcome: accepted outcomes require a determinate result"
-        )
-    if outcome == "rejected_after_repair":
-        if attempt_outcomes != ["repair", "repair"]:
-            errors.append(
-                "$.evidence_verification.attempts: rejected_after_repair requires two repair outcomes"
-            )
-        if status != "inconclusive" or reason != "conflicting_evidence":
-            errors.append(
-                "$.evidence_verification.outcome: rejected_after_repair requires "
-                "inconclusive/conflicting_evidence"
-            )
-    if outcome == "repair_not_completed":
-        if attempt_outcomes != ["repair", "abandoned"]:
-            errors.append(
-                "$.evidence_verification.attempts: repair_not_completed requires repair then abandoned"
-            )
-        if status != "inconclusive" or reason != "conflicting_evidence":
-            errors.append(
-                "$.evidence_verification.outcome: repair_not_completed requires "
-                "inconclusive/conflicting_evidence"
-            )
-    if outcome == "tool_failure":
-        if not attempt_outcomes or attempt_outcomes[-1] != "error":
-            errors.append(
-                "$.evidence_verification.attempts: tool_failure requires a final error outcome"
-            )
-        if status != "inconclusive" or reason != "tool_failure" or result.get("ok") is not False:
-            errors.append(
-                "$.evidence_verification.outcome: tool_failure requires "
-                "ok=false and inconclusive/tool_failure"
-            )
-    if outcome == "repaired_to_inconclusive":
-        if attempt_outcomes != ["repair"] or status != "inconclusive":
-            errors.append(
-                "$.evidence_verification.outcome: repaired_to_inconclusive requires "
-                "one repair attempt and an inconclusive result"
-            )
-    if outcome in {"off", "not_run", "skipped_inconclusive"} and attempt_outcomes:
-        errors.append(
-            f"$.evidence_verification.attempts: {outcome} must not contain verifier attempts"
-        )
-    if outcome == "skipped_inconclusive" and status != "inconclusive":
-        errors.append(
-            "$.evidence_verification.outcome: skipped_inconclusive requires an inconclusive result"
-        )
-    if outcome == "repair_requested":
-        errors.append("$.evidence_verification.outcome: repair_requested cannot be final")
+            errors.append(f"$.{field}: artifact value diverges from Host-derived canonical projection")
     return errors
 
 
@@ -521,46 +369,26 @@ def build_final_artifact(
     result: dict[str, Any],
     transcript: list[dict[str, Any]],
     start_epoch: float,
-    *,
-    check_verifier: bool = True,
 ) -> tuple[dict[str, Any], list[str]]:
     timing = {"wall_seconds": round(time.time() - start_epoch, 3)}
     usage = aggregate_usage(transcript)
     usage["timing"] = timing
-    patch_spec_info = AGENT_CONTEXT.get("patch_spec_info", {})
-    if not isinstance(patch_spec_info, dict):
-        patch_spec_info = {}
-    patch_spec_usage = patch_spec_info.get("usage")
-    usage["patch_spec_generation"] = patch_spec_usage if isinstance(patch_spec_usage, dict) else {}
-    verifier_session = AGENT_CONTEXT.get("evidence_verifier_session")
-    verifier_mode = str(AGENT_CONTEXT.get("evidence_verifier_mode", "off"))
-    usage["evidence_verifier"] = verifier_usage(verifier_session)
     out = dict(result)
     out["timing"] = timing
     out["usage_metrics"] = usage
+    out["metadata_sha256"] = str(AGENT_CONTEXT.get("metadata_sha256", ""))
     out["observations"] = AGENT_CONTEXT.get("observations", [])
     out["evidence_ledger"] = AGENT_CONTEXT.get("evidence_ledger", [])
     out["harness_metrics"] = harness_metrics()
-    out["patch_spec"] = {
-        "digest": str(patch_spec_info.get("digest", "")),
-        "generation_mode": str(patch_spec_info.get("generation_mode", "not_generated")),
-        "resolution_mode": str(patch_spec_info.get("resolution_mode", "not_resolved")),
-        "cache_key": str(patch_spec_info.get("cache_key", "")),
-        "cache_hit": bool(patch_spec_info.get("cache_hit", False)),
-        "behavior_contract": [
-            dict(item)
-            for item in AGENT_CONTEXT.get("patch_spec_behavior_contract", [])
-            if isinstance(item, dict)
-        ],
-    }
-    out["evidence_verification"] = verifier_audit(
-        verifier_session,
-        mode=verifier_mode,
-    )
-    return out, validate_final_result_artifact(out, check_verifier=check_verifier)
+    return out, validate_final_result_artifact(out)
 
 
-def write_run_outputs(output_dir: str, result: dict[str, Any], transcript: list[dict[str, Any]], start_epoch: float) -> dict[str, Any]:
+def write_run_outputs(
+    output_dir: str,
+    result: dict[str, Any],
+    transcript: list[dict[str, Any]],
+    start_epoch: float,
+) -> dict[str, Any]:
     out, schema_errors = build_final_artifact(result, transcript, start_epoch)
     if schema_errors:
         out["ok"] = False
@@ -575,9 +403,6 @@ def compact_rejected_preview(preview: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": preview.get("status"),
         "confidence": preview.get("confidence"),
-        "supports": preview.get("supports", []),
-        "claim": preview.get("claim", {}),
-        "verdict": preview.get("verdict", {}),
         "evidence_ids": preview.get("evidence_ids", []),
         "inconclusive_reason": preview.get("inconclusive_reason", ""),
         "observation_count": len(preview.get("observations", [])) if isinstance(preview.get("observations"), list) else 0,
@@ -599,21 +424,21 @@ def _fallback_result(
     inconclusive_reason: str,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    summary = _bounded_fallback_summary(summary)
     return {
         "ok": ok,
         "project": metadata.get("project", "curl"),
         "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
         "binary": binary,
+        "schema_version": FINAL_SCHEMA_VERSION,
         "status": "inconclusive",
         "confidence": "low",
-        **fallback_decision_fields(
-            AGENT_CONTEXT.get("patch_spec_behavior_contract", []),
-            summary=summary,
-        ),
+        "evidence": [],
+        "evidence_ids": [],
+        "reasoning": _bounded_fallback_summary(summary),
+        "decisive_addresses": [],
         "inconclusive_reason": inconclusive_reason,
-        **(extra or {}),
         "completed_at_epoch": time.time(),
+        **(extra or {}),
     }
 
 
@@ -642,38 +467,10 @@ def max_turns_fallback_result(metadata: dict[str, Any], binary: str, max_turns: 
 
 
 def api_failure_fallback_result(metadata: dict[str, Any], binary: str, error: str) -> dict[str, Any]:
-    """Inconclusive result written when the model API is unreachable after all
-    retries. The run still produces a valid artifact (so a batch can score it)
-    rather than dying empty-handed."""
     return _fallback_result(
         metadata,
         binary,
         ok=False,
         summary=f"Model API failed after all retries; no verdict could be sampled. Error: {error}",
         inconclusive_reason="tool_failure",
-    )
-
-
-def verifier_pending_fallback_result(
-    metadata: dict[str, Any],
-    binary: str,
-    *,
-    error: str = "Verifier-requested repair was not completed before the run ended.",
-    inconclusive_reason: str = "conflicting_evidence",
-) -> dict[str, Any]:
-    """Fail closed when a verifier repair cannot reach a second valid submit."""
-    session = AGENT_CONTEXT.get("evidence_verifier_session")
-    if isinstance(session, EvidenceVerifierSession):
-        tool_failure = inconclusive_reason == "tool_failure"
-        session.abandon_pending(
-            outcome="tool_failure" if tool_failure else "repair_not_completed",
-            error=error,
-            attempt_outcome="error" if tool_failure else "abandoned",
-        )
-    return _fallback_result(
-        metadata,
-        binary,
-        ok=inconclusive_reason != "tool_failure",
-        summary=error,
-        inconclusive_reason=inconclusive_reason,
     )

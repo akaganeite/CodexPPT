@@ -1,105 +1,20 @@
-# CLAUDE.md
+# claudeagent
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+`claudeagent` is a model-driven harness for binary patch-presence testing. Given complete, answer-scrubbed CVE metadata and one stripped target binary, the investigator uses bounded local `binutils` observations to return `present`, `absent`, `not_affected`, or `inconclusive`.
 
-## What this project is
+## Non-negotiable constraints
 
-`claudeagent` is a **from-scratch, model-driven harness for binary patch presence testing**, designed independently in this repo (not a fork of the sibling `../pptagent` prototype, though it shares the same task contract). Given one project, one CVE, and one binary, a DeepSeek model uses bounded `binutils` observations to decide a verdict:
+- Metadata is investigation guidance, never verdict evidence.
+- The model sees only supplied metadata, `/workspace/binary`, and controlled inspection output. Do not expose source repositories, debug artifacts, DWARF data, sibling binaries, paths, or ground truth.
+- `run_python` is the only inspection surface. Every determinate verdict must cite earlier returned, summarized evidence IDs.
+- The Host validates tool schemas, ledger provenance, evidence polarity, and final artifacts. Failures repair in-band instead of crashing.
 
-- `present` — the patch's semantics are present in the binary
-- `absent` — the vulnerable (unpatched) behavior is present
-- `not_affected` — this version/binary is outside the CVE's affected range
-- `inconclusive` — evidence is insufficient
+## Architecture
 
-The verdict **must** be produced by the model calling a finalization tool after a controlled tool loop — never by a static, CVE-specific pattern matcher baked into the default path. The valuable artifacts are the prompt, the tool schema, typed observations, an evidence ledger, a schema-repair loop, the transcript, finalization, and batch metrics.
+- `agent_loop.py`: bounded model/tool loop and finalization phases.
+- `run_python_tool.py`, `sandbox.py`: isolated binary inspection.
+- `runtime.py`, `observations.py`, `evidence_summary.py`: immutable observations plus revisable Agent claims.
+- `finalize.py`: direct evidence-cited verdict validation and `final_result.v6` artifacts.
+- `batch.py`: testset selection, groundtruth lookup, resume protection using the metadata SHA-256, and aggregate metrics.
 
-## Non-negotiable harness constraints
-
-These come from `../AGENTS.md` and define what "correct" means here. Read that file before changing input handling, evidence flow, or verdict validation.
-
-- **Model input is bounded.** The investigation model may see only: (1) the host-compiled PatchSpec and its exact metadata source excerpts, (2) the target binary itself, and (3) controlled `binutils` observations derived directly from that binary. Full CVE metadata and PatchSpec generation provenance remain host-side.
-- **Never leak debug/source signals** into the model, transcript, evidence ledger, or default verdict validation. Forbidden as default inputs/evidence: sibling debug/unstripped artifacts (`curl_debug`, `.debug` files), local source repos (e.g. `~/extrepo/...`), source files, DWARF / source-line tables, `addr2line` source mapping, `objdump -S`, `readelf --debug-dump=*`. Humans may diagnose with these *outside* the harness, but such facts cannot become model input or final evidence.
-- **Determinate verdicts must cite evidence.** `present` / `absent` / `not_affected` must reference concrete `evidence_id`s emitted by inspection tools and updated to `claim_status=summarized` with `summarize_evidence` after the real output was returned. Free-text-only or still-pending evidence is rejected and returned to the model for repair rather than silently accepted.
-- **Schema failures repair, not crash.** When the finalization payload fails schema validation, send the error back as tool output so the model can fix it, instead of ending the run.
-- **Keep changes small and modular.** Prefer focused Python modules over one growing script; prefer stage-local edits over cross-cutting rewrites.
-
-## Model configuration
-
-DeepSeek via an OpenAI-compatible chat-completions endpoint.
-
-- Default mode is **flash / non-thinking**: the request sets `thinking: {"type": "disabled"}` (no `reasoning_effort`). Only enable `thinking: {"type": "enabled"}` + `reasoning_effort` when a run explicitly asks for it.
-- Auth: `DEEPSEEK_API_KEY` (already set in this environment), or an OpenAI-compatible `OPENAI_API_KEY` / `OPENAI_BASE_URL` pair. Load from a repo-local `.env` if present.
-- Tool calling uses `tool_choice: "auto"`, `stream: false`.
-
-## Default data paths
-
-Unless a run overrides them, `<project>` is substituted with the current project name (currently only `curl`):
-
-- Binaries root: `~/extdisk/dataset4ppt/<project>/binaries`
-- curl testset / groundtruth exports: `/home/zhangxb/extdisk/dataset4ppt/curl/exports`
-- curl metadata (behavior analysis): `/home/zhangxb/ClawSpace/agent/straight_detect/metadata/curl/curl_project_source_analysis.behavior.json`
-
-curl is currently the **only** supported testset.
-
-## Reference implementation
-
-`../pptagent` is a working prototype of the same task. Treat it as a reference for the prompt/tool-schema/loop/finalization/metrics shape — not as code to copy wholesale. Its module split (entrypoint → loop → tools → command policy → observations → runtime/ledger → finalization → schema utils → prompting → model client → host → batch) is a reasonable starting decomposition. Its `final_result.schema.json` shows the validated verdict shape (verdict + cited `evidence_ids`).
-
-The upstream `openai/codex` agent loop lives at `../codex/codex` (note the doubled path); `../AGENTS.md` lists the source regions worth mining for prompt/tool-loop/turn/finalization patterns.
-
-## Status
-
-Working end-to-end. The harness is a lean tool loop (distilled from the codex agent loop) over a general policy-gated shell, reproducing what made direct `codex exec` detection effective.
-
-### Architecture
-
-Run all commands from the package parent (`/home/zhangxb/ClawSpace/codex`) so `claudeagent` imports resolve.
-
-- **Loop** (`agent_loop.py`): build prompt → sample model → dispatch tool calls → feed bounded results back → repeat until `submit_detection_result` is accepted. Three bounded phases: explore (`--max-turns`, default 12) → finalize-nudge (`--finalization-turns`, default 3) → forced repair (≤2). Tool/schema failures repair in-band; only model-API failures (after retries) abort.
-- **PatchSpec** (`patchspec/`): normalize source metadata into stable hunks, anchors, trusted OLD/NEW indicators, and model-generated advisory semantics. Generation is metadata-only, validated against exact JSON references, cached per metadata/model fingerprint, and never enters the binary evidence ledger.
-- **Tools** (`run_python_tool.py`, `evidence_summary.py`, `tools.json`): `run_python` is the single sandboxed binary-inspection surface, `summarize_evidence` adds or revises the main investigator's natural-language claim for evidence returned by an earlier observation, and `submit_detection_result` finalizes. Every successful inspection mints a typed observation (`obs_XXXX`) and pending evidence-ledger item (`ev_XXXX`). Summarization never creates evidence or changes the Host claim, raw excerpts, kind, polarity, or provenance.
-- **Sandbox** (`sandbox.py`): bubblewrap exposes only `/workspace/binary` read-only plus writable `/scratch`, system Python/binutils, and no network. Model-authored Python remains confined to that environment.
-- **Finalize** (`decision.py`, `finalize.py`, `evidence_verifier.py`, `schemas/final_result.schema.json`): the model submits behavior-scoped supports plus a structured claim. The Host resolves every PatchSpec behavior and derives the canonical verdict. Determinate claims then receive an independent, fresh LLM review over only cited evidence; one rejection can repair supports/claim, while a second rejection or verifier failure fails closed to inconclusive. Verifier output is audit data, never ledger evidence. Artifacts use `final_result.v4`.
-- **Verdicts**: `present` / `absent` / `not_affected` / `inconclusive`. Default model mode is flash/non-thinking (`thinking:{type:disabled}`).
-
-### Run a single case
-
-```
-python3 -m claudeagent.agent_loop \
-  --cve-id CVE-2013-0249 \
-  --metadata-json /home/zhangxb/ClawSpace/agent/straight_detect/metadata/curl/curl_project_source_analysis.behavior.json \
-  --binary ~/extdisk/dataset4ppt/curl/binaries/target/curl_stripped/curl-7.29.0-libcurl-gcc-O0 \
-  --output-dir /tmp/claudeagent_runs/case1
-```
-
-Add `--dry-run` to validate tool/result schemas, render the prompt, and run host preflight with no API call or writes. `--verbose` streams per-turn model messages to stderr. Other flags: `--model`, `--base-url`, `--env-file`, `--no-strict`, `--thinking`/`--reasoning-effort`, `--api-timeout`, `--api-max-retries`, `--no-finalize-on-max-turns`.
-
-Independent evidence verification defaults to `--evidence-verifier llm`; use `--evidence-verifier off` only for controlled compatibility runs. Verifier usage and audit are stored separately from investigator turns.
-
-Generate or inspect a PatchSpec independently with `python3 -m claudeagent.patchspec --metadata-json <metadata.json> --cve-id <CVE> --output <patch_spec.json>`. Pass a prebuilt artifact to a case with `--patchspec-json`; otherwise the case lazily resolves `<output-dir>/patch_spec.json`.
-
-Per-case artifacts in `--output-dir`: `final_result.json` (verdict + observations + evidence_ledger, including Host/main-Agent claims and revisions + harness_metrics + usage), `transcript.json`, `usage_metrics.json`.
-
-### Run the curl batch
-
-```
-python3 -m claudeagent.batch --out-root /tmp/claudeagent_batch/run1 [--cve CVE-...] [--limit N] [--max-workers 4] [--dry-run]
-```
-
-Defaults: groundtruth `…/exports/groundtruth_with_not_affected.json` (364 cases), binaries `~/extdisk/dataset4ppt/curl/binaries` under variant `target/curl_stripped`, metadata behavior.json. Groundtruth maps vuln→absent, patch→present, not_affected→not_affected. Each case runs as an isolated subprocess. Writes per-case subdirs + pptagent-shaped `batch_metrics.json`; the stderr aggregate includes the 4-way confusion matrix, repair totals, and evidence-summary call/update/revision/failure totals. `--dry-run` lists resolved cases and missing binaries without any API call.
-
-### Tests
-
-```
-python3 -m claudeagent.tests.test_sandbox          # confinement + pending run_python evidence
-python3 -m claudeagent.tests.test_finalize         # evidence/status/schema gates and repair
-python3 -m claudeagent.tests.test_evidence_summary # visibility, summaries, revisions, atomic failures
-```
-
-### Validated
-
-Single-case: CVE-2013-0249 → `present` on patched (7.29.0) and `absent` on vulnerable (7.27.0), both high-confidence, evidence-cited, schema-valid. Batch: 6/6 (100%) on CVE-2013-0249's balanced cases.
-
-### Known limitation
-
-Generic `run_python` output cannot prove its own provenance because the model authors the script. The independent verifier can assess relevance and direction from cited output, but it cannot independently rerun the inspection.
+Run commands from `/home/zhangxb/ClawSpace/codex`. Use `--dry-run` before provider-backed runs when changing prompts, schemas, or model configuration.

@@ -32,7 +32,7 @@
     "type": "function",
     "name": "summarize_evidence",
     "strict": false,
-    "description": "Write or revise natural-language claims for evidence returned by one earlier inspection-tool observation. This tool never creates evidence or changes excerpts, kind, polarity, or provenance. Every evidence item cited by a final support must be summarized first.",
+    "description": "Write or revise natural-language claims for evidence returned by one earlier inspection-tool observation. This tool never creates evidence or changes excerpts, kind, polarity, or provenance. Every evidence item cited by a final verdict must be summarized first.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -73,7 +73,7 @@
     "type": "function",
     "name": "submit_detection_result",
     "strict": false,
-    "description": "Submit behavior-scoped supports, a claim covering every support and required behavior, and a status assertion. The Host derives and validates the canonical verdict plus legacy evidence fields from supports + claim.",
+    "description": "Submit a patch-presence status using summarized target-binary evidence ids, concise reasoning, and decisive addresses. The Host validates every cited ledger item before writing the artifact.",
     "parameters": { "$ref": "schemas/final_result.schema.json#/$defs/submit_detection_result" }
   }
 ]
