@@ -22,154 +22,6 @@
         "inconclusive_reason"
       ],
       "additionalProperties": false
-    },
-    "verification_claim_check": {
-      "type": "object",
-      "required": [
-        "evidence_id",
-        "relation",
-        "decisive",
-        "verifier_evidence_ids",
-        "reason"
-      ],
-      "properties": {
-        "evidence_id": { "type": "string", "pattern": "^ev_[0-9]{4,}$" },
-        "relation": {
-          "type": "string",
-          "enum": ["supported", "contradicted", "insufficient"]
-        },
-        "decisive": { "type": "boolean" },
-        "verifier_evidence_ids": {
-          "type": "array",
-          "items": { "type": "string", "pattern": "^vev_[0-9]{4,}$" },
-          "maxItems": 20
-        },
-        "reason": { "type": "string", "minLength": 1, "maxLength": 1600 }
-      },
-      "additionalProperties": false
-    },
-    "verification_session": {
-      "type": "object",
-      "required": [
-        "session_index",
-        "outcome",
-        "claim_budget",
-        "claim_calls",
-        "verdict_budget",
-        "verdict_calls",
-        "protocol_repairs",
-        "failure_kind",
-        "wall_seconds"
-      ],
-      "properties": {
-        "session_index": { "type": "integer", "minimum": 1 },
-        "outcome": {
-          "type": "string",
-          "enum": ["confirmed", "contradicted", "unresolved"]
-        },
-        "claim_budget": { "type": "integer", "minimum": 0, "maximum": 8 },
-        "claim_calls": { "type": "integer", "minimum": 0, "maximum": 8 },
-        "verdict_budget": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "verdict_calls": { "type": "integer", "minimum": 0, "maximum": 5 },
-        "protocol_repairs": { "type": "integer", "minimum": 0, "maximum": 2 },
-        "failure_kind": { "type": "string" },
-        "wall_seconds": { "type": "number", "minimum": 0 }
-      },
-      "additionalProperties": false
-    },
-    "verification_repair": {
-      "type": "object",
-      "required": [
-        "requested",
-        "run_python_calls",
-        "schema_repairs",
-        "resubmitted",
-        "reverified"
-      ],
-      "properties": {
-        "requested": { "type": "boolean" },
-        "run_python_calls": { "type": "integer", "minimum": 0, "maximum": 1 },
-        "schema_repairs": { "type": "integer", "minimum": 0, "maximum": 1 },
-        "resubmitted": { "type": "boolean" },
-        "reverified": { "type": "boolean" }
-      },
-      "additionalProperties": false
-    },
-    "verification_usage_summary": {
-      "type": "object",
-      "required": ["provider", "model", "model_turns", "totals"],
-      "properties": {
-        "provider": { "type": "string" },
-        "model": { "type": "string" },
-        "model_turns": { "type": "integer", "minimum": 0 },
-        "totals": { "type": "object", "additionalProperties": true }
-      },
-      "additionalProperties": false
-    },
-    "verification_audit": {
-      "type": "object",
-      "required": [
-        "mode",
-        "protocol_version",
-        "config_digest",
-        "initial_status",
-        "final_status",
-        "recommended_status",
-        "outcome",
-        "claim_checks",
-        "coverage_status",
-        "coverage_reason",
-        "verdict_evidence_ids",
-        "reason",
-        "sessions",
-        "repair",
-        "usage",
-        "timing",
-        "error"
-      ],
-      "properties": {
-        "mode": { "type": "string", "enum": ["on", "off"] },
-        "protocol_version": { "type": "string" },
-        "config_digest": { "type": "string" },
-        "initial_status": { "$ref": "#/properties/status" },
-        "final_status": { "$ref": "#/properties/status" },
-        "recommended_status": { "$ref": "#/properties/status" },
-        "outcome": {
-          "type": "string",
-          "enum": ["off", "skipped", "confirmed", "contradicted", "unresolved"]
-        },
-        "claim_checks": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/verification_claim_check" },
-          "maxItems": 8
-        },
-        "coverage_status": {
-          "type": "string",
-          "enum": ["not_run", "complete", "incomplete", "uncertain"]
-        },
-        "coverage_reason": { "type": "string", "maxLength": 1600 },
-        "verdict_evidence_ids": {
-          "type": "array",
-          "items": { "type": "string", "pattern": "^vev_[0-9]{4,}$" },
-          "maxItems": 30
-        },
-        "reason": { "type": "string", "maxLength": 2400 },
-        "sessions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/verification_session" },
-          "maxItems": 2
-        },
-        "repair": { "$ref": "#/$defs/verification_repair" },
-        "usage": { "$ref": "#/$defs/verification_usage_summary" },
-        "timing": {
-          "type": "object",
-          "required": ["wall_seconds"],
-          "properties": { "wall_seconds": { "type": "number", "minimum": 0 } },
-          "additionalProperties": false
-        },
-        "error": { "type": "string", "maxLength": 4000 }
-      },
-      "additionalProperties": false
     }
   },
   "type": "object",
@@ -192,11 +44,10 @@
     "evidence_ledger",
     "harness_metrics",
     "timing",
-    "usage_metrics",
-    "verification"
+    "usage_metrics"
   ],
   "properties": {
-    "schema_version": { "enum": ["final_result.v7"] },
+    "schema_version": { "enum": ["final_result.v6"] },
     "ok": { "type": "boolean" },
     "project": { "type": "string" },
     "cve_id": { "type": "string" },
@@ -357,7 +208,6 @@
         "timing": { "type": "object" }
       },
       "additionalProperties": true
-    },
-    "verification": { "$ref": "#/$defs/verification_audit" }
+    }
   }
 }

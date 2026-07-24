@@ -17,13 +17,7 @@ from claudeagent.model_config import (
     ModelProfile,
     parse_profile,
     reasoning_param,
-    resolve_named_profile,
-    resolve_named_profile_name,
     resolve_profile,
-)
-from claudeagent.verify_config import (
-    expected_verify_agent_signature,
-    resolve_verify_agent_settings,
 )
 
 
@@ -95,60 +89,6 @@ def _run() -> int:
     default = resolve_profile(a2)
     check("shipped default mode on", default.reasoning_mode == "on")
     check("shipped default sends effort", reasoning_param(default) == {"effort": default.reasoning_effort})
-
-    # 8. Secondary agents can resolve a name or alias without constructing an
-    #    argparse namespace.
-    check("value resolver accepts alias", resolve_named_profile_name("deepseek") == "cliproxy_deepseek_v4_flash")
-    check("value resolver returns profile", resolve_named_profile("deepseek").name == "cliproxy_deepseek_v4_flash")
-
-    # 9. An inherited verifier uses effective main provider overrides while
-    #    retaining the main profile's reasoning semantics.
-    inherited_args = argparse.Namespace(
-        model_profile="",
-        model="override-model",
-        base_url="http://override/v1",
-        api_timeout=321,
-        api_max_retries=4,
-        api_turn_retries=2,
-        verify_model_profile="",
-        verify_verdict_calls=4,
-        no_strict=False,
-        verify_agent="on",
-    )
-    inherited = resolve_verify_agent_settings(
-        inherited_args,
-        main_profile=_profile(mode="on", effort="high"),
-    )
-    check("inherited verifier uses main model override", inherited.config.model == "override-model")
-    check("inherited verifier uses main base URL override", inherited.config.base_url == "http://override/v1")
-    check("inherited verifier keeps profile reasoning", inherited.config.reasoning == {"effort": "high"})
-    check("inherited verifier uses effective API knobs", (
-        inherited.config.api_timeout,
-        inherited.config.api_max_retries,
-        inherited.config.api_turn_retries,
-    ) == (321, 4, 2))
-    check("inherited verifier carries requested budget", inherited.config.verdict_calls == 4)
-    check("digest placeholder has no API key", inherited.config.api_key == "" and len(inherited.config_digest) == 64)
-
-    # 10. An explicit verifier profile ignores main provider overrides.
-    explicit_args = argparse.Namespace(**{
-        **vars(inherited_args),
-        "verify_model_profile": "deepseek",
-    })
-    explicit = resolve_verify_agent_settings(explicit_args, main_profile=_profile())
-    check("explicit verifier alias canonicalized", explicit.profile_name == "cliproxy_deepseek_v4_flash")
-    check("explicit verifier ignores main model override", explicit.config.model == "deepseek-v4-flash-nothinking")
-    check("explicit verifier ignores main URL override", explicit.config.base_url == "http://127.0.0.1:8317/v1")
-    check("explicit verifier reasoning mode honored", explicit.config.reasoning is None)
-
-    # 11. Off mode has a stable empty resume digest and does not require a
-    #     verifier profile or API key.
-    off_args = argparse.Namespace(**{
-        **vars(inherited_args),
-        "verify_agent": "off",
-        "verify_model_profile": "does-not-need-resolution",
-    })
-    check("off verifier resume signature", expected_verify_agent_signature(off_args) == ("off", ""))
 
     if failures:
         print("FAIL:", failures)

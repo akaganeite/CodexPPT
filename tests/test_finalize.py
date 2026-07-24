@@ -6,22 +6,14 @@
 from __future__ import annotations
 
 import copy
-import json
 import tempfile
 import time
-from unittest.mock import patch
 
 from claudeagent.finalize import (
-    build_verification_bundle,
     build_final_artifact,
-    conflicting_evidence_result,
     max_turns_fallback_result,
     submit_detection_result,
     validate_final_result_artifact,
-    verification_conflict_bundle,
-    verification_off_bundle,
-    verification_skipped_bundle,
-    write_run_outputs,
 )
 from claudeagent.runtime import AGENT_CONTEXT, initialize_agent_context, record_evidence
 
@@ -72,72 +64,6 @@ def _summarized_evidence(
     return evidence
 
 
-def _verification_usage(tokens: int = 17) -> dict:
-    return {
-        "provider": "openai-responses",
-        "model": "gpt-test",
-        "model_turns": 1,
-        "totals": {"total_tokens": tokens},
-        "by_turn": [{"turn": 1, "usage": {"total_tokens": tokens}}],
-        "timing": {"wall_seconds": 0.25},
-    }
-
-
-def _verification_session(outcome: str) -> dict:
-    return {
-        "session_index": 1,
-        "outcome": outcome,
-        "claim_budget": 1,
-        "claim_calls": 1,
-        "verdict_budget": 5,
-        "verdict_calls": 1,
-        "protocol_repairs": 0,
-        "failure_kind": "",
-        "wall_seconds": 0.25,
-    }
-
-
-def _claim_check(relation: str = "supported") -> dict:
-    return {
-        "evidence_id": "ev_0001",
-        "relation": relation,
-        "decisive": True,
-        "verifier_evidence_ids": ["vev_0001"],
-        "reason": "The verifier independently inspected the cited branch.",
-    }
-
-
-def _executed_verification_bundle(
-    outcome: str,
-    *,
-    final_status: str = "present",
-    recommended_status: str | None = None,
-) -> dict:
-    coverage = "complete" if outcome == "confirmed" else "uncertain"
-    return build_verification_bundle(
-        mode="on",
-        protocol_version="verify_agent.v1",
-        config_digest="b" * 64,
-        initial_status="present",
-        final_status=final_status,
-        recommended_status=(
-            recommended_status
-            if recommended_status is not None
-            else final_status
-        ),
-        outcome=outcome,
-        claim_checks=[_claim_check()],
-        coverage_status=coverage,
-        coverage_reason="The cited behavior was independently revisited.",
-        verdict_evidence_ids=["vev_0001"],
-        reason="Independent verification completed.",
-        sessions=[_verification_session(outcome)],
-        full={"sessions": [{"observations": [], "evidence_ledger": []}]},
-        transcript=[{"stage": "verification_input"}],
-        usage=_verification_usage(),
-    )
-
-
 def _run() -> int:
     failures: list[str] = []
 
@@ -185,127 +111,10 @@ def _run() -> int:
             decisive_addresses=["0x1010"],
             inconclusive_reason="none",
         )
-        artifact, errors = build_final_artifact(
-            accepted,
-            [],
-            time.time(),
-            verification_bundle=verification_off_bundle("present"),
-        )
+        artifact, errors = build_final_artifact(accepted, [], time.time())
         check("summarized positive evidence accepted", accepted["ok"] and not errors)
-        check("artifact uses v7 direct fields", artifact.get("schema_version") == "final_result.v7" and "metadata_sha256" in artifact)
-        check(
-            "artifact stores compact off verification",
-            artifact.get("verification", {}).get("mode") == "off"
-            and artifact.get("verification", {}).get("outcome") == "off",
-        )
+        check("artifact uses v6 direct fields", artifact.get("schema_version") == "final_result.v6" and "metadata_sha256" in artifact)
         check("artifact records cited claim", artifact.get("evidence") == [evidence["claim"]])
-
-        unresolved_artifact, unresolved_errors = build_final_artifact(
-            accepted,
-            [],
-            time.time(),
-            verification_bundle=_executed_verification_bundle(
-                "unresolved",
-                recommended_status="inconclusive",
-            ),
-        )
-        check(
-            "unresolved verification retains determinate result",
-            unresolved_artifact.get("status") == "present" and not unresolved_errors,
-        )
-        check(
-            "verifier usage remains independent",
-            unresolved_artifact["verification"]["usage"]["totals"].get("total_tokens") == 17
-            and unresolved_artifact["usage_metrics"]["totals"].get("total_tokens", 0) == 0,
-        )
-        inconsistent_usage = _executed_verification_bundle("unresolved")
-        inconsistent_usage["audit"]["usage"]["model_turns"] = 99
-        try:
-            build_final_artifact(
-                accepted,
-                [],
-                time.time(),
-                verification_bundle=inconsistent_usage,
-            )
-            check("split verifier usage is rejected", False)
-        except ValueError:
-            check("split verifier usage is rejected", True)
-
-        mismatched_status = copy.deepcopy(unresolved_artifact)
-        mismatched_status["verification"]["final_status"] = "absent"
-        check(
-            "verification final status must match artifact",
-            any(
-                "must equal the serialized final result status" in error
-                for error in validate_final_result_artifact(mismatched_status)
-            ),
-        )
-        invalid_off = copy.deepcopy(artifact)
-        invalid_off["verification"]["outcome"] = "confirmed"
-        check(
-            "off verification rejects executed outcome",
-            any(
-                "mode=off requires outcome=off" in error
-                for error in validate_final_result_artifact(invalid_off)
-            ),
-        )
-
-        write_order: list[str] = []
-        written_payloads: dict[str, object] = {}
-
-        def capture_write(_output_dir: str, name: str, content: str):
-            write_order.append(name)
-            written_payloads[name] = json.loads(content)
-            return None
-
-        executed_bundle = _executed_verification_bundle("confirmed")
-        with patch("claudeagent.finalize.write_artifact", side_effect=capture_write):
-            written = write_run_outputs(
-                tmp,
-                accepted,
-                [],
-                time.time(),
-                verification_bundle=executed_bundle,
-            )
-        check(
-            "verification auxiliary artifacts precede final result",
-            write_order == [
-                "verification.json",
-                "verification_transcript.json",
-                "verification_usage_metrics.json",
-                "transcript.json",
-                "usage_metrics.json",
-                "final_result.json",
-            ],
-        )
-        check(
-            "full verification audit is written separately",
-            isinstance(written_payloads.get("verification.json"), dict)
-            and written_payloads["verification.json"].get("audit") == written["verification"],
-        )
-        tampered_confirmed = copy.deepcopy(written)
-        tampered_confirmed["verification"]["claim_checks"][0]["relation"] = "insufficient"
-        check(
-            "confirmed artifact revalidates decisive claim relations",
-            any(
-                "decisive confirmed claim must be supported" in error
-                for error in validate_final_result_artifact(tampered_confirmed)
-            ),
-        )
-        tampered_unresolved = copy.deepcopy(unresolved_artifact)
-        tampered_unresolved["verification"]["claim_checks"][0]["relation"] = "contradicted"
-        check(
-            "unresolved artifact rejects contradicted claims",
-            any(
-                "unresolved cannot contain a contradicted claim" in error
-                for error in validate_final_result_artifact(tampered_unresolved)
-            ),
-        )
-        check(
-            "separate verifier usage is preserved",
-            written_payloads.get("verification_usage_metrics.json") == executed_bundle["usage"],
-        )
-
         bad_excerpt_artifact = copy.deepcopy(artifact)
         bad_excerpt_artifact["evidence_ledger"][0]["verification_excerpt"] = [
             "0x9999: invented"
@@ -412,56 +221,8 @@ def _run() -> int:
         )
         check("inconclusive without citations accepted", inconclusive["ok"])
 
-        conflict_result = conflicting_evidence_result(
-            metadata,
-            "/workspace/binary",
-            "Independent binary evidence contradicted the candidate after one repair attempt.",
-        )
-        conflict_bundle = verification_conflict_bundle(
-            initial_status="present",
-            protocol_version="verify_agent.v1",
-            config_digest="c" * 64,
-            claim_checks=[_claim_check("contradicted")],
-            coverage_status="incomplete",
-            coverage_reason="A decisive cited claim was contradicted.",
-            verdict_evidence_ids=["vev_0001"],
-            reason="The contradiction remained after the repair.",
-            sessions=[_verification_session("contradicted")],
-            repair={
-                "requested": True,
-                "run_python_calls": 1,
-                "schema_repairs": 0,
-                "resubmitted": True,
-                "reverified": True,
-            },
-            full={"sessions": [{"observations": [], "evidence_ledger": []}]},
-            transcript=[],
-            usage=_verification_usage(),
-        )
-        conflict_artifact, conflict_errors = build_final_artifact(
-            conflict_result,
-            [],
-            time.time(),
-            verification_bundle=conflict_bundle,
-        )
-        check(
-            "terminal contradiction records conflict fallback",
-            conflict_artifact["status"] == "inconclusive"
-            and conflict_artifact["verification"]["outcome"] == "contradicted"
-            and not conflict_errors,
-        )
-
         fallback = max_turns_fallback_result(metadata, "/workspace/binary", 2)
-        _, fallback_errors = build_final_artifact(
-            fallback,
-            [],
-            time.time(),
-            verification_bundle=verification_skipped_bundle(
-                "inconclusive",
-                protocol_version="verify_agent.v1",
-                config_digest="a" * 64,
-            ),
-        )
+        _, fallback_errors = build_final_artifact(fallback, [], time.time())
         check("fallback artifact validates", not fallback_errors)
 
     if failures:

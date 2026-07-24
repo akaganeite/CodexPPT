@@ -18,12 +18,7 @@ from claudeagent.common import DETERMINATE_STATUSES, ROOT, VERDICTS, expand, jdu
 from claudeagent.finalize import FINAL_SCHEMA_VERSION, validate_final_result_artifact
 from claudeagent.host import import_env_from_interactive_shell
 from claudeagent.metadata_input import metadata_sha256, validate_metadata_prompt_input
-from claudeagent.model_config import resolve_api_key, resolve_named_profile, resolve_profile
-from claudeagent.verify_config import (
-    ResolvedVerifyAgentSettings,
-    expected_verify_agent_signature,
-    resolve_verify_agent_settings,
-)
+from claudeagent.model_config import resolve_api_key, resolve_profile
 
 
 PACKAGE_PARENT = ROOT.parent
@@ -98,22 +93,6 @@ def _sum_usage(records: list[dict[str, Any]]) -> dict[str, int | float]:
     return totals
 
 
-def _sum_verification_usage(records: list[dict[str, Any]]) -> dict[str, int | float]:
-    """Sum verifier-only usage without folding it into main-agent usage."""
-    totals: dict[str, int | float] = {}
-    wall_seconds = 0.0
-    for record in records:
-        for key, value in (record.get("verification_usage_totals") or {}).items():
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                totals[key] = totals.get(key, 0) + value
-        timing = record.get("verification_timing") or {}
-        wall = timing.get("wall_seconds") if isinstance(timing, dict) else None
-        if isinstance(wall, (int, float)) and not isinstance(wall, bool):
-            wall_seconds += float(wall)
-    totals["case_wall_seconds_sum"] = round(wall_seconds, 3)
-    return totals
-
-
 def _mean_usage(totals: dict[str, int | float], count: int) -> dict[str, float]:
     if count <= 0:
         return {key: 0.0 for key in totals}
@@ -149,8 +128,6 @@ def batch_metrics_pptagent(
     usage_mean = _mean_usage(usage_totals, len(scored))
     if batch_wall_seconds is not None:
         usage_mean["batch_wall_seconds"] = round(batch_wall_seconds / len(scored), 6) if scored else 0.0
-    verification_usage_totals = _sum_verification_usage(scored)
-    verification_usage_mean = _mean_usage(verification_usage_totals, len(scored))
     return {
         "binary_metrics": {
             "DSR": safe_ratio(binary_correct, len(affected)),
@@ -177,19 +154,6 @@ def batch_metrics_pptagent(
         ).items())),
         "usage_totals": usage_totals,
         "usage_mean": usage_mean,
-        "verification_metrics": {
-            "mode_counts": dict(sorted(Counter(
-                str(record.get("verification_mode") or "unknown") for record in scored
-            ).items())),
-            "outcome_counts": dict(sorted(Counter(
-                str(record.get("verification_outcome") or "unknown") for record in scored
-            ).items())),
-            "claim_calls": sum(int(record.get("verification_claim_calls", 0) or 0) for record in scored),
-            "verdict_calls": sum(int(record.get("verification_verdict_calls", 0) or 0) for record in scored),
-            "model_turns": sum(int(record.get("verification_model_turns", 0) or 0) for record in scored),
-            "usage_totals": verification_usage_totals,
-            "usage_mean": verification_usage_mean,
-        },
     }
 
 
@@ -353,43 +317,22 @@ def _select_resume_cases(
     out_root: Path,
     args: argparse.Namespace,
     metadata_hashes: dict[str, str],
-    verify_signature: tuple[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     to_run: list[dict[str, Any]] = []
     to_reuse: list[dict[str, Any]] = []
-    expected_mode, expected_digest = verify_signature or expected_verify_agent_signature(args)
-    counts = {
-        "total": len(cases),
-        "completed": 0,
-        "inconclusive": 0,
-        "stale_metadata": 0,
-        "stale_verify_agent": 0,
-        "retry": 0,
-        "skipped": 0,
-    }
+    counts = {"total": len(cases), "completed": 0, "inconclusive": 0, "stale_metadata": 0, "retry": 0, "skipped": 0}
     for case in cases:
         artifact = _existing_case_artifact(safe_case_dir(out_root, case["cve_id"], case["binary_name"]))
         status = str(artifact["status"]) if artifact else None
-        stale_metadata = bool(
+        stale = bool(
             artifact
             and metadata_hashes.get(case["cve_id"])
             and artifact.get("metadata_sha256") != metadata_hashes[case["cve_id"]]
         )
-        verification = artifact.get("verification") if isinstance(artifact, dict) else None
-        stale_verify_agent = bool(
-            artifact
-            and (
-                not isinstance(verification, dict)
-                or verification.get("mode") != expected_mode
-                or verification.get("config_digest") != expected_digest
-            )
-        )
-        stale = stale_metadata or stale_verify_agent
         if status is not None:
             counts["completed"] += 1
             counts["inconclusive"] += status == "inconclusive"
-            counts["stale_metadata"] += stale_metadata
-            counts["stale_verify_agent"] += stale_verify_agent
+            counts["stale_metadata"] += stale
         if args.resume == "all":
             run_it = True
         elif args.resume == "inconclusive":
@@ -428,10 +371,6 @@ def _case_command(case: dict[str, Any], args: argparse.Namespace, binary_path: P
         str(args.api_max_retries),
         "--api-turn-retries",
         str(args.api_turn_retries),
-        "--verify-agent",
-        args.verify_agent,
-        "--verify-verdict-calls",
-        str(args.verify_verdict_calls),
     ]
     if args.model:
         command += ["--model", args.model]
@@ -439,8 +378,6 @@ def _case_command(case: dict[str, Any], args: argparse.Namespace, binary_path: P
         command += ["--base-url", args.base_url]
     if args.model_profile:
         command += ["--model-profile", args.model_profile]
-    if args.verify_model_profile:
-        command += ["--verify-model-profile", args.verify_model_profile]
     if args.no_strict:
         command.append("--no-strict")
     return command
@@ -457,53 +394,11 @@ def _empty_record(case: dict[str, Any], binary_path: Path, case_dir: Path) -> di
         "usage_totals": {},
         "timing": {},
         "model_turns": 0,
-        "verification": {},
-        "verification_mode": "",
-        "verification_outcome": "",
-        "verification_claim_calls": 0,
-        "verification_verdict_calls": 0,
-        "verification_usage_totals": {},
-        "verification_timing": {},
-        "verification_model_turns": 0,
     }
 
 
 def _update_record_from_final(record: dict[str, Any], final: dict[str, Any], *, wall_seconds: float | None = None) -> None:
     usage = final.get("usage_metrics") if isinstance(final.get("usage_metrics"), dict) else {}
-    verification = final.get("verification") if isinstance(final.get("verification"), dict) else {}
-    verification_usage = (
-        final.get("verification_usage_metrics")
-        if isinstance(final.get("verification_usage_metrics"), dict)
-        else verification.get("usage")
-        if isinstance(verification.get("usage"), dict)
-        else {}
-    )
-    verification_timing = (
-        verification_usage.get("timing")
-        if isinstance(verification_usage.get("timing"), dict)
-        else verification.get("timing")
-        if isinstance(verification.get("timing"), dict)
-        else {}
-    )
-    verification_sessions = (
-        verification.get("sessions") if isinstance(verification.get("sessions"), list) else []
-    )
-    verification_claim_calls = verification.get("claim_calls")
-    if not isinstance(verification_claim_calls, int) or isinstance(verification_claim_calls, bool):
-        verification_claim_calls = sum(
-            int(session.get("claim_calls", 0) or 0)
-            for session in verification_sessions
-            if isinstance(session, dict)
-        )
-    verification_verdict_calls = verification.get("verdict_calls")
-    if not isinstance(verification_verdict_calls, int) or isinstance(
-        verification_verdict_calls, bool
-    ):
-        verification_verdict_calls = sum(
-            int(session.get("verdict_calls", 0) or 0)
-            for session in verification_sessions
-            if isinstance(session, dict)
-        )
     predicted = str(final.get("status", "error"))
     expected = record["expected"]
     record.update({
@@ -519,14 +414,6 @@ def _update_record_from_final(record: dict[str, Any], final: dict[str, Any], *, 
         "timing": final.get("timing", {}),
         "model_turns": usage.get("model_turns", 0),
         "metadata_sha256": final.get("metadata_sha256", ""),
-        "verification": verification,
-        "verification_mode": verification.get("mode", ""),
-        "verification_outcome": verification.get("outcome", ""),
-        "verification_claim_calls": verification_claim_calls,
-        "verification_verdict_calls": verification_verdict_calls,
-        "verification_usage_totals": rename_usage(verification_usage.get("totals", {})),
-        "verification_timing": verification_timing,
-        "verification_model_turns": verification_usage.get("model_turns", 0),
     })
     if wall_seconds is not None:
         record["wall_seconds"] = round(wall_seconds, 2)
@@ -599,15 +486,6 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         "evidence_summary_updates",
         "evidence_summary_revisions",
         "evidence_summary_failures",
-        "verify_agent_sessions",
-        "verify_agent_claim_calls",
-        "verify_agent_verdict_calls",
-        "verify_agent_confirms",
-        "verify_agent_contradictions",
-        "verify_agent_unresolved",
-        "verify_agent_failures",
-        "verify_agent_main_repairs",
-        "verify_agent_rechecks",
     )
     totals = {name: 0 for name in repair_names}
     correct = 0
@@ -632,23 +510,15 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def bootstrap_api_keys(api_key_envs: list[str]) -> set[str]:
-    """Import every distinct main/verifier provider key needed by workers."""
-    names = list(dict.fromkeys(name for name in api_key_envs if name))
-    missing = [name for name in names if not os.environ.get(name)]
-    if missing:
-        import_env_from_interactive_shell(missing)
-    return {name for name in names if os.environ.get(name)}
-
-
 def bootstrap_api_key(args: argparse.Namespace) -> str | None:
-    """Backward-compatible single-profile wrapper used by callers/tests."""
     try:
         profile = resolve_profile(args)
     except ValueError:
         return None
-    imported = bootstrap_api_keys([profile.api_key_env])
-    return profile.api_key_env if profile.api_key_env in imported else None
+    if os.environ.get(profile.api_key_env):
+        return profile.api_key_env
+    imported = import_env_from_interactive_shell([profile.api_key_env])
+    return profile.api_key_env if imported and os.environ.get(profile.api_key_env) else None
 
 
 def run_batch(args: argparse.Namespace) -> int:
@@ -659,13 +529,6 @@ def run_batch(args: argparse.Namespace) -> int:
         profile = resolve_profile(args)
     except ValueError as exc:
         raise SystemExit(f"model config error: {exc}") from exc
-    verify_settings: ResolvedVerifyAgentSettings | None = None
-    if args.verify_agent == "on":
-        try:
-            verify_settings = resolve_verify_agent_settings(args, main_profile=profile)
-        except ValueError as exc:
-            raise SystemExit(f"verify-agent model config error: {exc}") from exc
-    verify_signature = expected_verify_agent_signature(args, main_profile=profile)
     try:
         metadata_by_cve = load_metadata_index(args.metadata_json)
     except Exception as exc:
@@ -682,13 +545,7 @@ def run_batch(args: argparse.Namespace) -> int:
             raise SystemExit(f"metadata input rejected for {cve_id}: {exc}") from exc
 
     out_root = expand(args.out_root)
-    to_run, to_reuse, counts = _select_resume_cases(
-        cases,
-        out_root,
-        args,
-        metadata_hashes,
-        verify_signature,
-    )
+    to_run, to_reuse, counts = _select_resume_cases(cases, out_root, args, metadata_hashes)
     if args.dry_run:
         missing_binaries = [
             case
@@ -704,9 +561,6 @@ def run_batch(args: argparse.Namespace) -> int:
         print("by_expected:", {value: sum(case["expected"] == value for case in cases) for value in (*VERDICTS, "unknown")})
         print("metadata_hashes:", metadata_hashes)
         print("resume_mode:", args.resume, "retry_inconclusive:", args.retry_inconclusive)
-        print("verify_agent:", verify_signature[0])
-        print("verify_model_profile:", verify_settings.profile_name if verify_settings else "")
-        print("verify_config_digest:", verify_signature[1])
         print("resume_counts:", counts)
         print("missing_binaries:", len(missing_binaries))
         for case in missing_binaries[:10]:
@@ -714,30 +568,13 @@ def run_batch(args: argparse.Namespace) -> int:
         return 0
 
     out_root.mkdir(parents=True, exist_ok=True)
-    key_envs = [profile.api_key_env]
-    if verify_settings is not None:
-        key_envs.append(verify_settings.api_key_env)
-    available_env_keys = bootstrap_api_keys(key_envs)
-    if profile.api_key_env not in available_env_keys and not resolve_api_key(profile):
+    if not bootstrap_api_key(args) and not resolve_api_key(profile):
         print(f"WARNING: API key for profile {profile.name!r} is not available to worker subprocesses.", file=sys.stderr)
-    if verify_settings is not None:
-        verifier_profile = resolve_named_profile(verify_settings.profile_name)
-        if (
-            verify_settings.api_key_env not in available_env_keys
-            and not resolve_api_key(verifier_profile)
-        ):
-            print(
-                f"WARNING: API key for verifier profile {verify_settings.profile_name!r} "
-                "is not available to worker subprocesses.",
-                file=sys.stderr,
-            )
     started = time.time()
     print(
         f"resume={args.resume} retry_inconclusive={args.retry_inconclusive} "
         f"total={counts['total']} retry={counts['retry']} skipped={counts['skipped']} "
-        f"(completed={counts['completed']} inconclusive={counts['inconclusive']} "
-        f"stale_metadata={counts['stale_metadata']} "
-        f"stale_verify_agent={counts['stale_verify_agent']})",
+        f"(completed={counts['completed']} inconclusive={counts['inconclusive']} stale_metadata={counts['stale_metadata']})",
         file=sys.stderr,
     )
     records = [
@@ -778,16 +615,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--cve", default="")
     parser.add_argument("--max-workers", type=int, default=4)
-    parser.add_argument("--case-timeout", type=int, default=3600)
+    parser.add_argument("--case-timeout", type=int, default=900)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", default="auto", choices=RESUME_MODES)
     parser.add_argument("--retry-inconclusive", action="store_true")
     parser.add_argument("--model", default="")
     parser.add_argument("--base-url", default="")
     parser.add_argument("--model-profile", default="")
-    parser.add_argument("--verify-agent", choices=["on", "off"], default="on")
-    parser.add_argument("--verify-model-profile", default="")
-    parser.add_argument("--verify-verdict-calls", type=int, default=5)
     parser.add_argument("--no-strict", action="store_true")
     parser.add_argument("--max-turns", type=int, default=20)
     parser.add_argument("--finalization-turns", type=int, default=3)

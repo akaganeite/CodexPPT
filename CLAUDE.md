@@ -14,8 +14,7 @@
 - `agent_loop.py`: bounded model/tool loop and finalization phases.
 - `run_python_tool.py`, `sandbox.py`: isolated binary inspection.
 - `runtime.py`, `observations.py`, `evidence_summary.py`: immutable observations plus revisable Agent claims.
-- `verify_agent.py`, `verify_config.py`: bounded, isolated reinspection and independent profile resolution.
-- `finalize.py`: direct evidence-cited verdict validation and `final_result.v7` artifacts.
+- `finalize.py`: direct evidence-cited verdict validation and `final_result.v6` artifacts.
 - `batch.py`: testset selection, groundtruth lookup, resume protection using the metadata SHA-256, and aggregate metrics.
 
 Run commands from `/home/zhangxb/ClawSpace/codex`. Use `--dry-run` before provider-backed runs when changing prompts, schemas, or model configuration.

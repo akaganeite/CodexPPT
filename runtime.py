@@ -172,13 +172,4 @@ def harness_metrics() -> dict[str, int]:
     metrics.setdefault("evidence_summary_updates", 0)
     metrics.setdefault("evidence_summary_revisions", 0)
     metrics.setdefault("evidence_summary_failures", 0)
-    metrics.setdefault("verify_agent_sessions", 0)
-    metrics.setdefault("verify_agent_claim_calls", 0)
-    metrics.setdefault("verify_agent_verdict_calls", 0)
-    metrics.setdefault("verify_agent_confirms", 0)
-    metrics.setdefault("verify_agent_contradictions", 0)
-    metrics.setdefault("verify_agent_unresolved", 0)
-    metrics.setdefault("verify_agent_failures", 0)
-    metrics.setdefault("verify_agent_main_repairs", 0)
-    metrics.setdefault("verify_agent_rechecks", 0)
     return metrics
