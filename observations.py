@@ -191,6 +191,16 @@ def compact_evidence_for_model(evidence: list[dict[str, Any]]) -> list[dict[str,
             "claim_status": item.get("claim_status", "pending"),
             "claim_revision": item.get("claim_revision", 0),
             "supporting_excerpt": compact_value_for_model(excerpts[:8]),
+            "verification_excerpt": compact_value_for_model(
+                item.get("verification_excerpt", [])
+                if isinstance(item.get("verification_excerpt"), list)
+                else []
+            ),
+            "verification_locators": compact_value_for_model(
+                item.get("verification_locators", [])
+                if isinstance(item.get("verification_locators"), list)
+                else []
+            ),
             "location": compact_value_for_model(item.get("location", {})),
             "polarity": item.get("polarity", "positive"),
         })
@@ -218,7 +228,7 @@ def compact_tool_result_for_model(result: dict[str, Any]) -> dict[str, Any]:
         }
     stdout_text = f"{result.get('stdout_head', '')}\n{result.get('stdout_tail', '')}"
     stderr_text = str(result.get("stderr_tail", ""))
-    stdout_parts = text_head_tail(stdout_text.strip(), MODEL_STDOUT_BUDGET)
+    stdout_parts = text_head_tail(stdout_text, MODEL_STDOUT_BUDGET)
     stderr_parts = text_head_tail(stderr_text, MODEL_STDERR_BUDGET)
     return {
         "_compacted_for_model": True,

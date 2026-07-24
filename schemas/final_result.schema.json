@@ -60,12 +60,12 @@
     "evidence": {
       "type": "array",
       "items": { "type": "string" },
-      "maxItems": 30
+      "maxItems": 8
     },
     "evidence_ids": {
       "type": "array",
       "items": { "type": "string", "pattern": "^ev_[0-9]{4,}$" },
-      "maxItems": 30
+      "maxItems": 8
     },
     "reasoning": { "type": "string", "minLength": 1, "maxLength": 4000 },
     "decisive_addresses": {
@@ -143,6 +143,8 @@
           "created_response_index",
           "returned_response_index",
           "supporting_excerpt",
+          "verification_excerpt",
+          "verification_locators",
           "location",
           "confidence",
           "polarity"
@@ -160,6 +162,24 @@
           "returned_response_index": { "type": ["integer", "null"], "minimum": 0 },
           "claim_updated_response_index": { "type": "integer", "minimum": 1 },
           "supporting_excerpt": { "type": "array", "items": { "type": "string" } },
+          "verification_excerpt": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "maxItems": 12
+          },
+          "verification_locators": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": { "type": "string", "pattern": "^0x[0-9a-fA-F]+$" },
+                "end": { "type": "string", "pattern": "^0x[0-9a-fA-F]+$" }
+              },
+              "required": ["start", "end"],
+              "additionalProperties": false
+            }
+          },
           "location": { "type": "object", "additionalProperties": true },
           "confidence": { "type": "string" },
           "polarity": { "type": "string", "enum": ["positive", "negative"] }

@@ -20,6 +20,37 @@ from claudeagent.runtime import (
 )
 
 
+def _add_observation(observation_id: str, lines: list[str]) -> None:
+    AGENT_CONTEXT["observations"].append({
+        "observation_id": observation_id,
+        "tool": "run_python",
+        "command": ["python3", "-I", "/work/script.py"],
+        "command_text": "python3 -I /work/script.py",
+        "exit_code": 0,
+        "ok": True,
+        "stdout_head": "\n".join(lines),
+        "stdout_tail": "",
+        "stderr_tail": "",
+        "truncated": False,
+        "truncation": {},
+        "parsed_facts": {},
+    })
+
+
+def _claim(
+    evidence_id: str,
+    claim: str,
+    excerpt: list[str],
+    address_ranges: list[dict[str, str]] | None = None,
+) -> dict:
+    return {
+        "evidence_id": evidence_id,
+        "claim": claim,
+        "excerpt": excerpt,
+        "address_ranges": address_ranges if address_ranges is not None else [],
+    }
+
+
 def _run() -> int:
     failures: list[str] = []
 
@@ -32,6 +63,16 @@ def _run() -> int:
         "/anonymous/target_binary",
     )
     begin_model_response()
+    _add_observation(
+        "obs_0001",
+        [
+            "0x1010: cmp eax, 16",
+            "0x1013: ja 0x1030",
+            "0x1018: call memcpy",
+            *(f"0x{0x1100 + index:x}: nop" for index in range(13)),
+        ],
+    )
+    _add_observation("obs_0002", ["cookie domain"])
     ev1 = record_evidence(
         observation_id="obs_0001",
         kind="disassembly_predicates",
@@ -75,13 +116,20 @@ def _run() -> int:
             and item["claim_revision"] == 0
             and item["created_response_index"] == 1
             and item["returned_response_index"] is None
+            and item["verification_excerpt"] == []
+            and item["verification_locators"] == []
             for item in (ev1, ev2, ev_other)
         ),
     )
 
     invisible = summarize_evidence(
         observation_id="obs_0001",
-        claims=[{"evidence_id": ev1["evidence_id"], "claim": "A guard controls the copy."}],
+        claims=[_claim(
+            ev1["evidence_id"],
+            "A guard controls the copy.",
+            ["0x1010: cmp eax, 16"],
+            [{"start": "0x1010", "end": "0x1030"}],
+        )],
     )
     check(
         "unreturned evidence rejected",
@@ -94,14 +142,18 @@ def _run() -> int:
     first = summarize_evidence(
         observation_id="obs_0001",
         claims=[
-            {
-                "evidence_id": ev1["evidence_id"],
-                "claim": "The unsigned length comparison branches around the following copy.",
-            },
-            {
-                "evidence_id": ev2["evidence_id"],
-                "claim": "The guarded path reaches the memory-copy call.",
-            },
+            _claim(
+                ev1["evidence_id"],
+                "The unsigned length comparison branches around the following copy.",
+                ["0x1010: cmp eax, 16", "0x1013: ja 0x1030"],
+                [{"start": "0x001010", "end": "0x1030"}],
+            ),
+            _claim(
+                ev2["evidence_id"],
+                "The guarded path reaches the memory-copy call.",
+                ["0x1018: call memcpy"],
+                [{"start": "0x1018", "end": "0x1018"}],
+            ),
         ],
     )
     check(
@@ -122,6 +174,11 @@ def _run() -> int:
         and ev1["claim_updated_response_index"] == 2,
     )
     check(
+        "verification fields stored and addresses normalized",
+        ev1["verification_excerpt"] == ["0x1010: cmp eax, 16", "0x1013: ja 0x1030"]
+        and ev1["verification_locators"] == [{"start": "0x1010", "end": "0x1030"}],
+    )
+    check(
         "provenance fields remain immutable",
         all(
             all(item[key] == immutable[item["evidence_id"]][key] for key in immutable[item["evidence_id"]])
@@ -133,12 +190,19 @@ def _run() -> int:
         "summary result is replayable",
         compact.get("tool") == "summarize_evidence"
         and compact.get("evidence", [{}])[0].get("claim_status") == "summarized"
-        and compact.get("evidence", [{}])[0].get("host_claim") == ev1["host_claim"],
+        and compact.get("evidence", [{}])[0].get("host_claim") == ev1["host_claim"]
+        and compact.get("evidence", [{}])[0].get("verification_locators")
+        == [{"start": "0x1010", "end": "0x1030"}],
     )
 
     idempotent = summarize_evidence(
         observation_id="obs_0001",
-        claims=[{"evidence_id": ev1["evidence_id"], "claim": ev1["claim"]}],
+        claims=[_claim(
+            ev1["evidence_id"],
+            ev1["claim"],
+            list(ev1["verification_excerpt"]),
+            copy.deepcopy(ev1["verification_locators"]),
+        )],
     )
     check(
         "same summary is idempotent",
@@ -150,22 +214,52 @@ def _run() -> int:
 
     revised = summarize_evidence(
         observation_id="obs_0001",
-        claims=[{
-            "evidence_id": ev1["evidence_id"],
-            "claim": "The length guard controls whether execution reaches the copy call.",
-        }],
+        claims=[_claim(
+            ev1["evidence_id"],
+            "The length guard controls whether execution reaches the copy call.",
+            list(ev1["verification_excerpt"]),
+            copy.deepcopy(ev1["verification_locators"]),
+        )],
     )
     check(
         "different summary creates revision",
         revised.get("revision_count") == 1 and ev1["claim_revision"] == 2,
     )
 
+    locator_revision = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(
+            ev1["evidence_id"],
+            ev1["claim"],
+            list(ev1["verification_excerpt"]),
+            [{"start": "0x1000", "end": "0x1030"}],
+        )],
+    )
+    check(
+        "different locator creates revision",
+        locator_revision.get("revision_count") == 1 and ev1["claim_revision"] == 3,
+    )
+
+    excerpt_revision = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(
+            ev1["evidence_id"],
+            ev1["claim"],
+            ["0x1010: cmp eax, 16"],
+            copy.deepcopy(ev1["verification_locators"]),
+        )],
+    )
+    check(
+        "different excerpt creates revision",
+        excerpt_revision.get("revision_count") == 1 and ev1["claim_revision"] == 4,
+    )
+
     before_atomic = copy.deepcopy(ev1)
     atomic_failure = summarize_evidence(
         observation_id="obs_0001",
         claims=[
-            {"evidence_id": ev1["evidence_id"], "claim": "MUST NOT COMMIT"},
-            {"evidence_id": "ev_9999", "claim": "Unknown evidence."},
+            _claim(ev1["evidence_id"], "MUST NOT COMMIT", ["0x1010: cmp eax, 16"]),
+            _claim("ev_9999", "Unknown evidence.", ["0x1013: ja 0x1030"]),
         ],
     )
     check(
@@ -174,7 +268,7 @@ def _run() -> int:
     )
     cross_observation = summarize_evidence(
         observation_id="obs_0001",
-        claims=[{"evidence_id": ev_other["evidence_id"], "claim": "Wrong observation."}],
+        claims=[_claim(ev_other["evidence_id"], "Wrong observation.", ["0x1010: cmp eax, 16"])],
     )
     check(
         "cross-observation evidence rejected",
@@ -183,8 +277,8 @@ def _run() -> int:
     duplicate = summarize_evidence(
         observation_id="obs_0001",
         claims=[
-            {"evidence_id": ev1["evidence_id"], "claim": "First."},
-            {"evidence_id": ev1["evidence_id"], "claim": "Second."},
+            _claim(ev1["evidence_id"], "First.", ["0x1010: cmp eax, 16"]),
+            _claim(ev1["evidence_id"], "Second.", ["0x1013: ja 0x1030"]),
         ],
     )
     check(
@@ -192,7 +286,56 @@ def _run() -> int:
         duplicate.get("ok") is False and "duplicate evidence id" in duplicate.get("error", ""),
     )
 
+    wrong_excerpt = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(ev1["evidence_id"], "Wrong excerpt.", ["0x9999: invented"])],
+    )
+    check(
+        "invented excerpt rejected",
+        wrong_excerpt.get("ok") is False and "exact line" in wrong_excerpt.get("error", ""),
+    )
+    too_many_excerpt_lines = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(
+            ev1["evidence_id"],
+            "Too many lines.",
+            [f"0x{0x1100 + index:x}: nop" for index in range(13)],
+        )],
+    )
+    check("excerpt line limit enforced", too_many_excerpt_lines.get("ok") is False)
+    bad_address = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(
+            ev1["evidence_id"],
+            "Bad address.",
+            ["0x1010: cmp eax, 16"],
+            [{"start": "1010", "end": "0x1030"}],
+        )],
+    )
+    check("address syntax enforced", bad_address.get("ok") is False)
+    inverted_address = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(
+            ev1["evidence_id"],
+            "Inverted address.",
+            ["0x1010: cmp eax, 16"],
+            [{"start": "0x1030", "end": "0x1010"}],
+        )],
+    )
+    check("address ordering enforced", inverted_address.get("ok") is False)
+    too_many_ranges = summarize_evidence(
+        observation_id="obs_0001",
+        claims=[_claim(
+            ev1["evidence_id"],
+            "Too many ranges.",
+            ["0x1010: cmp eax, 16"],
+            [{"start": f"0x{index:x}", "end": f"0x{index:x}"} for index in range(5)],
+        )],
+    )
+    check("address range limit enforced", too_many_ranges.get("ok") is False)
+
     begin_model_response()
+    _add_observation("obs_0003", ["0x2000: test eax,eax"])
     same_response = record_evidence(
         observation_id="obs_0003",
         kind="command_output",
@@ -201,7 +344,12 @@ def _run() -> int:
     )
     too_early = summarize_evidence(
         observation_id="obs_0003",
-        claims=[{"evidence_id": same_response["evidence_id"], "claim": "The test checks zero."}],
+        claims=[_claim(
+            same_response["evidence_id"],
+            "The test checks zero.",
+            ["0x2000: test eax,eax"],
+            [{"start": "0x2000", "end": "0x2000"}],
+        )],
     )
     check(
         "same-response evidence rejected",
@@ -211,7 +359,12 @@ def _run() -> int:
     begin_model_response()
     later = summarize_evidence(
         observation_id="obs_0003",
-        claims=[{"evidence_id": same_response["evidence_id"], "claim": "The test checks zero."}],
+        claims=[_claim(
+            same_response["evidence_id"],
+            "The test checks zero.",
+            ["0x2000: test eax,eax"],
+            [{"start": "0x2000", "end": "0x2000"}],
+        )],
     )
     check(
         "later response can summarize",
@@ -219,10 +372,10 @@ def _run() -> int:
     )
 
     metrics = harness_metrics()
-    check("summary calls counted", metrics["evidence_summary_calls"] == 9)
+    check("summary calls counted", metrics["evidence_summary_calls"] == 16)
     check("summary updates counted", metrics["evidence_summary_updates"] == 3)
-    check("summary revisions counted", metrics["evidence_summary_revisions"] == 1)
-    check("summary failures counted", metrics["evidence_summary_failures"] == 5)
+    check("summary revisions counted", metrics["evidence_summary_revisions"] == 3)
+    check("summary failures counted", metrics["evidence_summary_failures"] == 10)
 
     if failures:
         print("EVIDENCE SUMMARY TESTS FAILED:")

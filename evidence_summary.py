@@ -1,4 +1,4 @@
-"""Main-agent natural-language claims over existing evidence ledger items.
+"""Main-agent claims and verification locators over existing evidence.
 
 The tool never creates evidence. It can only annotate evidence that the model
 already received in an earlier response, preserving the Host's original claim
@@ -8,6 +8,7 @@ and immutable observation/excerpt provenance.
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any
 
 from claudeagent.runtime import AGENT_CONTEXT, bump_metric, ensure_runtime_state
@@ -15,11 +16,78 @@ from claudeagent.runtime import AGENT_CONTEXT, bump_metric, ensure_runtime_state
 
 MAX_CLAIMS_PER_CALL = 16
 MAX_CLAIM_CHARS = 2000
+MAX_VERIFICATION_EXCERPT_LINES = 12
+MAX_VERIFICATION_ADDRESS_RANGES = 4
+HEX_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]+$")
 
 
 def _error(message: str) -> dict[str, Any]:
     bump_metric("evidence_summary_failures")
     return {"ok": False, "tool": "summarize_evidence", "error": message}
+
+
+def _observation_lines(observation: dict[str, Any]) -> set[str]:
+    lines: set[str] = set()
+    for field in ("stdout_head", "stdout_tail", "stderr_tail"):
+        value = observation.get(field)
+        if isinstance(value, str):
+            lines.update(value.splitlines())
+    return lines
+
+
+def _normalize_excerpt(
+    value: Any,
+    *,
+    claim_index: int,
+    observation_lines: set[str],
+) -> list[str] | str:
+    path = f"claims[{claim_index}].excerpt"
+    if not isinstance(value, list) or not value:
+        return f"{path} must contain at least one observation line"
+    if len(value) > MAX_VERIFICATION_EXCERPT_LINES:
+        return f"{path} exceeds {MAX_VERIFICATION_EXCERPT_LINES} lines"
+    normalized: list[str] = []
+    for line_index, line in enumerate(value):
+        if not isinstance(line, str) or not line:
+            return f"{path}[{line_index}] must be a non-empty string"
+        if "\n" in line or "\r" in line:
+            return f"{path}[{line_index}] must contain exactly one line"
+        if line not in observation_lines:
+            return (
+                f"{path}[{line_index}] is not an exact line from the parent "
+                "observation output"
+            )
+        normalized.append(line)
+    return normalized
+
+
+def _normalize_address_ranges(
+    value: Any,
+    *,
+    claim_index: int,
+) -> list[dict[str, str]] | str:
+    path = f"claims[{claim_index}].address_ranges"
+    if not isinstance(value, list):
+        return f"{path} must be an array"
+    if len(value) > MAX_VERIFICATION_ADDRESS_RANGES:
+        return f"{path} exceeds {MAX_VERIFICATION_ADDRESS_RANGES} ranges"
+    normalized: list[dict[str, str]] = []
+    for range_index, address_range in enumerate(value):
+        item_path = f"{path}[{range_index}]"
+        if not isinstance(address_range, dict) or set(address_range) != {"start", "end"}:
+            return f"{item_path} must contain only start and end"
+        start = address_range.get("start")
+        end = address_range.get("end")
+        if not isinstance(start, str) or not HEX_ADDRESS_RE.fullmatch(start):
+            return f"{item_path}.start must be a 0x-prefixed hexadecimal address"
+        if not isinstance(end, str) or not HEX_ADDRESS_RE.fullmatch(end):
+            return f"{item_path}.end must be a 0x-prefixed hexadecimal address"
+        start_value = int(start, 16)
+        end_value = int(end, 16)
+        if start_value > end_value:
+            return f"{item_path}: start must be less than or equal to end"
+        normalized.append({"start": hex(start_value), "end": hex(end_value)})
+    return normalized
 
 
 def summarize_evidence(
@@ -44,6 +112,20 @@ def summarize_evidence(
     if len(claims) > MAX_CLAIMS_PER_CALL:
         return _error(f"claims exceeds {MAX_CLAIMS_PER_CALL} items")
 
+    observations = AGENT_CONTEXT.get("observations", [])
+    observation = next(
+        (
+            item
+            for item in observations
+            if isinstance(item, dict)
+            and str(item.get("observation_id", "")) == observation_id
+        ),
+        None,
+    )
+    if observation is None:
+        return _error(f"observation id {observation_id!r} is not in the observation ledger")
+    observation_lines = _observation_lines(observation)
+
     ledger = AGENT_CONTEXT.get("evidence_ledger", [])
     ledger_by_id = {
         str(item.get("evidence_id")): item
@@ -51,13 +133,14 @@ def summarize_evidence(
         if isinstance(item, dict) and item.get("evidence_id")
     }
     current_response = int(AGENT_CONTEXT.get("current_model_response", 0))
-    normalized: list[tuple[dict[str, Any], str]] = []
+    normalized: list[tuple[dict[str, Any], str, list[str], list[dict[str, str]]]] = []
     seen_ids: set[str] = set()
 
     for index, entry in enumerate(claims):
-        if not isinstance(entry, dict) or set(entry) != {"evidence_id", "claim"}:
+        required_fields = {"evidence_id", "claim", "excerpt", "address_ranges"}
+        if not isinstance(entry, dict) or set(entry) != required_fields:
             return _error(
-                f"claims[{index}] must contain only evidence_id and claim"
+                f"claims[{index}] must contain only evidence_id, claim, excerpt, and address_ranges"
             )
         evidence_id = entry.get("evidence_id")
         claim = entry.get("claim")
@@ -74,6 +157,19 @@ def summarize_evidence(
             return _error(
                 f"claims[{index}].claim exceeds {MAX_CLAIM_CHARS} characters"
             )
+        excerpt = _normalize_excerpt(
+            entry.get("excerpt"),
+            claim_index=index,
+            observation_lines=observation_lines,
+        )
+        if isinstance(excerpt, str):
+            return _error(excerpt)
+        address_ranges = _normalize_address_ranges(
+            entry.get("address_ranges"),
+            claim_index=index,
+        )
+        if isinstance(address_ranges, str):
+            return _error(address_ranges)
 
         evidence = ledger_by_id.get(evidence_id)
         if evidence is None:
@@ -92,14 +188,19 @@ def summarize_evidence(
             return _error(
                 f"evidence id {evidence_id!r} was not returned in an earlier model response"
             )
-        normalized.append((evidence, claim))
+        normalized.append((evidence, claim, excerpt, address_ranges))
 
     updated = 0
     revised = 0
     idempotent_ids: list[str] = []
-    for evidence, claim in normalized:
+    for evidence, claim, excerpt, address_ranges in normalized:
         evidence_id = str(evidence["evidence_id"])
-        if evidence.get("claim_status") == "summarized" and evidence.get("claim") == claim:
+        if (
+            evidence.get("claim_status") == "summarized"
+            and evidence.get("claim") == claim
+            and evidence.get("verification_excerpt") == excerpt
+            and evidence.get("verification_locators") == address_ranges
+        ):
             idempotent_ids.append(evidence_id)
             continue
         previous_status = str(evidence.get("claim_status", "pending"))
@@ -109,6 +210,8 @@ def summarize_evidence(
         evidence["claim_status"] = "summarized"
         evidence["claim_revision"] = revision
         evidence["claim_updated_response_index"] = current_response
+        evidence["verification_excerpt"] = list(excerpt)
+        evidence["verification_locators"] = copy.deepcopy(address_ranges)
         if previous_status == "summarized":
             revised += 1
         else:
@@ -123,7 +226,7 @@ def summarize_evidence(
         "ok": True,
         "tool": "summarize_evidence",
         "observation_id": observation_id,
-        "evidence": [copy.deepcopy(evidence) for evidence, _claim in normalized],
+        "evidence": [copy.deepcopy(evidence) for evidence, _claim, _excerpt, _ranges in normalized],
         "updated_count": updated,
         "revision_count": revised,
         "idempotent_evidence_ids": idempotent_ids,

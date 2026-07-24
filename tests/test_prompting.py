@@ -37,6 +37,12 @@ def _run() -> int:
     check("complete metadata supplied", payload.get("cve_metadata") == metadata)
     check("binary is anonymized", payload.get("target_binary") == "/workspace/binary" and "/private/work" not in rendered)
     check("metadata is guidance", payload.get("mode_contract", {}).get("metadata_is_guidance_not_evidence") is True)
+    check(
+        "task advertises locator contract",
+        payload.get("mode_contract", {}).get("summary_requires_exact_excerpt_lines") is True
+        and payload.get("mode_contract", {}).get("present_absent_require_address_locator") is True
+        and payload.get("mode_contract", {}).get("max_cited_evidence_ids") == 8,
+    )
     check("task stays compact", "\n" not in rendered)
 
     unsafe = dict(metadata)
@@ -50,13 +56,29 @@ def _run() -> int:
 
     tools = load_tools(strict=True)
     submit = next(item for item in tools if item["name"] == "submit_detection_result")
+    summarize = next(item for item in tools if item["name"] == "summarize_evidence")
     required = set(submit["parameters"].get("required", []))
     check(
         "direct final tool schema",
         required == {"status", "confidence", "evidence_ids", "reasoning", "decisive_addresses", "inconclusive_reason"},
     )
+    summary_item = summarize["parameters"]["properties"]["claims"]["items"]
+    check(
+        "summary requires verification locators",
+        set(summary_item.get("required", []))
+        == {"evidence_id", "claim", "excerpt", "address_ranges"},
+    )
+    check(
+        "final citations bounded",
+        submit["parameters"]["properties"]["evidence_ids"].get("maxItems") == 8,
+    )
     prompt = SYSTEM_PROMPT.read_text()
-    check("prompt has binary evidence boundary", "/workspace/binary" in prompt and "summarize_evidence" in prompt)
+    check(
+        "prompt has binary evidence boundary",
+        "/workspace/binary" in prompt
+        and "summarize_evidence" in prompt
+        and "at most eight evidence ids" in prompt,
+    )
 
     if failures:
         print("PROMPTING TESTS FAILED:")

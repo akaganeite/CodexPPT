@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import tempfile
 import time
 
@@ -12,6 +13,7 @@ from claudeagent.finalize import (
     build_final_artifact,
     max_turns_fallback_result,
     submit_detection_result,
+    validate_final_result_artifact,
 )
 from claudeagent.runtime import AGENT_CONTEXT, initialize_agent_context, record_evidence
 
@@ -33,7 +35,11 @@ def _add_observation(observation_id: str) -> None:
     })
 
 
-def _summarized_evidence(*, polarity: str = "positive") -> dict:
+def _summarized_evidence(
+    *,
+    polarity: str = "positive",
+    with_locator: bool = True,
+) -> dict:
     _add_observation("obs_0001")
     evidence = record_evidence(
         observation_id="obs_0001",
@@ -50,6 +56,10 @@ def _summarized_evidence(*, polarity: str = "positive") -> dict:
         "created_response_index": 1,
         "returned_response_index": 1,
         "claim_updated_response_index": 2,
+        "verification_excerpt": ["0x1010: cmp eax, 8"],
+        "verification_locators": (
+            [{"start": "0x1010", "end": "0x1010"}] if with_locator else []
+        ),
     })
     return evidence
 
@@ -105,6 +115,89 @@ def _run() -> int:
         check("summarized positive evidence accepted", accepted["ok"] and not errors)
         check("artifact uses v6 direct fields", artifact.get("schema_version") == "final_result.v6" and "metadata_sha256" in artifact)
         check("artifact records cited claim", artifact.get("evidence") == [evidence["claim"]])
+        bad_excerpt_artifact = copy.deepcopy(artifact)
+        bad_excerpt_artifact["evidence_ledger"][0]["verification_excerpt"] = [
+            "0x9999: invented"
+        ]
+        check(
+            "artifact rejects invented verification excerpt",
+            any(
+                "exact line" in error
+                for error in validate_final_result_artifact(bad_excerpt_artifact)
+            ),
+        )
+        inverted_locator_artifact = copy.deepcopy(artifact)
+        inverted_locator_artifact["evidence_ledger"][0]["verification_locators"] = [{
+            "start": "0x1020",
+            "end": "0x1010",
+        }]
+        check(
+            "artifact rejects inverted verification locator",
+            any(
+                "start must be less than or equal to end" in error
+                for error in validate_final_result_artifact(inverted_locator_artifact)
+            ),
+        )
+
+        initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
+        no_locator = _summarized_evidence(with_locator=False)
+        missing_locator = submit_detection_result(
+            status="present",
+            confidence="high",
+            evidence_ids=[no_locator["evidence_id"]],
+            reasoning="The target code enforces the bound.",
+            decisive_addresses=["0x1010"],
+            inconclusive_reason="none",
+        )
+        check(
+            "present verdict requires a verification locator",
+            not missing_locator["ok"]
+            and "verification address range" in str(missing_locator["schema_errors"]),
+        )
+        not_affected = submit_detection_result(
+            status="not_affected",
+            confidence="high",
+            evidence_ids=[no_locator["evidence_id"]],
+            reasoning="The inspected architecture lacks the affected execution mode.",
+            decisive_addresses=[],
+            inconclusive_reason="none",
+        )
+        check("not_affected may cite non-address evidence", not_affected["ok"])
+
+        initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
+        _add_observation("obs_0001")
+        too_many: list[dict] = []
+        for _index in range(9):
+            item = record_evidence(
+                observation_id="obs_0001",
+                kind="disassembly",
+                claim="Host captured a comparison in the target binary.",
+                excerpts=["0x1010: cmp eax, 8"],
+            )
+            item.update({
+                "claim": "The target comparison enforces the relevant bound.",
+                "claim_source": "main_agent",
+                "claim_status": "summarized",
+                "claim_revision": 1,
+                "created_response_index": 1,
+                "returned_response_index": 1,
+                "claim_updated_response_index": 2,
+                "verification_excerpt": ["0x1010: cmp eax, 8"],
+                "verification_locators": [{"start": "0x1010", "end": "0x1010"}],
+            })
+            too_many.append(item)
+        oversized_citation = submit_detection_result(
+            status="present",
+            confidence="high",
+            evidence_ids=[item["evidence_id"] for item in too_many],
+            reasoning="The cited target comparisons enforce the relevant bound.",
+            decisive_addresses=["0x1010"],
+            inconclusive_reason="none",
+        )
+        check(
+            "final citations limited to eight",
+            not oversized_citation["ok"] and "at most 8" in str(oversized_citation["schema_errors"]),
+        )
 
         initialize_agent_context(metadata, "/workspace/binary", "CVE-TEST", tmp, tmp)
         negative = _summarized_evidence(polarity="negative")

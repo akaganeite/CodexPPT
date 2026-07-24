@@ -112,6 +112,8 @@ def record_evidence(
         "created_response_index": int(AGENT_CONTEXT.get("current_model_response", 0)),
         "returned_response_index": None,
         "supporting_excerpt": compact_lines(excerpts, limit=excerpt_limit),
+        "verification_excerpt": [],
+        "verification_locators": [],
         "location": location or {},
         "confidence": confidence,
         "polarity": polarity,

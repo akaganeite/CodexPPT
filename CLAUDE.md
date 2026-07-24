@@ -6,7 +6,7 @@
 
 - Metadata is investigation guidance, never verdict evidence.
 - The model sees only supplied metadata, `/workspace/binary`, and controlled inspection output. Do not expose source repositories, debug artifacts, DWARF data, sibling binaries, paths, or ground truth.
-- `run_python` is the only inspection surface. Every determinate verdict must cite earlier returned, summarized evidence IDs.
+- `run_python` is the only inspection surface. Every determinate verdict must cite earlier returned, summarized evidence IDs. Each summary preserves exact observation lines and address locators for independent verification.
 - The Host validates tool schemas, ledger provenance, evidence polarity, and final artifacts. Failures repair in-band instead of crashing.
 
 ## Architecture

@@ -86,7 +86,12 @@ def _run() -> int:
 
         summary = _call("summary", "summarize_evidence", {
             "observation_id": "obs_0001",
-            "claims": [{"evidence_id": "ev_0001", "claim": "The target comparison enforces the bound."}],
+            "claims": [{
+                "evidence_id": "ev_0001",
+                "claim": "The target comparison enforces the bound.",
+                "excerpt": ["0x1010: cmp eax, 8"],
+                "address_ranges": [{"start": "0x1010", "end": "0x1010"}],
+            }],
         })
         submit = _call("submit", "submit_detection_result", {
             "status": "present",

@@ -7,6 +7,11 @@ import time
 from typing import Any
 
 from claudeagent.common import jdump, write_artifact
+from claudeagent.evidence_summary import (
+    HEX_ADDRESS_RE,
+    MAX_VERIFICATION_ADDRESS_RANGES,
+    MAX_VERIFICATION_EXCERPT_LINES,
+)
 from claudeagent.runtime import AGENT_CONTEXT, bump_metric, harness_metrics
 from claudeagent.schema_validate import (
     DETERMINATE_STATUSES,
@@ -19,6 +24,7 @@ from claudeagent.truncation import text_head_tail
 
 
 FINAL_SCHEMA_VERSION = "final_result.v6"
+MAX_CITED_EVIDENCE = 8
 _UNSET = object()
 
 # Determinate verdicts must rely on binary semantics, not version/release/path labels.
@@ -64,6 +70,11 @@ def resolve_final_tool_args(
     evidence_ids = [str(value) for value in raw_ids] if isinstance(raw_ids, list) else []
     if len(evidence_ids) != len(set(evidence_ids)):
         errors.append("$.evidence_ids: duplicate evidence ids are not allowed")
+    if len(evidence_ids) > MAX_CITED_EVIDENCE:
+        errors.append(
+            f"$.evidence_ids: cite at most {MAX_CITED_EVIDENCE} evidence items, "
+            f"got {len(evidence_ids)}"
+        )
 
     ledger_by_id = _ledger_by_id(evidence_ledger)
     unknown_ids = sorted(set(evidence_ids) - set(ledger_by_id))
@@ -98,6 +109,15 @@ def resolve_final_tool_args(
         errors.append(
             "$.evidence_ids: determinate verdicts require positive target-binary evidence; "
             "pure no-match/anchor-miss evidence is insufficient"
+        )
+    if status in {"present", "absent"} and cited and not any(
+        isinstance(item.get("verification_locators"), list)
+        and bool(item.get("verification_locators"))
+        for item in cited
+    ):
+        errors.append(
+            f"$.evidence_ids: {status} verdicts require at least one cited evidence "
+            "item with a verification address range"
         )
 
     reason = candidate.get("inconclusive_reason")
@@ -207,6 +227,7 @@ def submit_detection_result(
                 "Repair the rejected direct verdict without restarting the investigation. Cite only "
                 "real ledger evidence_ids and summarize every cited pending item first. Determinate "
                 "statuses require positive target-binary evidence; an anchor miss alone is not enough. "
+                "Cite at most eight items, and include a verification address range for present/absent. "
                 "Remove versions, paths, filenames, release chronology, and unsupported interpretations "
                 "from reasoning. Use inconclusive only when the binary evidence is genuinely unresolved."
             ),
@@ -307,6 +328,8 @@ def _validate_ledger_provenance(
         created_at = evidence.get("created_response_index")
         returned_at = evidence.get("returned_response_index")
         updated_at = evidence.get("claim_updated_response_index")
+        verification_excerpt = evidence.get("verification_excerpt")
+        verification_locators = evidence.get("verification_locators")
         if (
             isinstance(created_at, int)
             and not isinstance(created_at, bool)
@@ -320,6 +343,8 @@ def _validate_ledger_provenance(
                 errors.append(f"{prefix}: pending evidence must retain the Host claim/source at revision 0")
             if updated_at is not None:
                 errors.append(f"{prefix}.claim_updated_response_index: pending evidence cannot record a claim update")
+            if verification_excerpt != [] or verification_locators != []:
+                errors.append(f"{prefix}: pending evidence cannot record verification excerpts or locators")
         elif status == "summarized":
             if source != "main_agent" or not isinstance(revision, int) or revision < 1:
                 errors.append(f"{prefix}: summarized evidence requires main_agent source and revision >= 1")
@@ -331,6 +356,51 @@ def _validate_ledger_provenance(
                 or updated_at <= returned_at
             ):
                 errors.append(f"{prefix}: summarized evidence must be updated after it was returned")
+            if (
+                not isinstance(verification_excerpt, list)
+                or not verification_excerpt
+                or len(verification_excerpt) > MAX_VERIFICATION_EXCERPT_LINES
+            ):
+                errors.append(
+                    f"{prefix}.verification_excerpt: summarized evidence requires 1-"
+                    f"{MAX_VERIFICATION_EXCERPT_LINES} lines"
+                )
+            elif observation is not None:
+                observation_lines = {
+                    line
+                    for field in ("stdout_head", "stdout_tail", "stderr_tail")
+                    for line in str(observation.get(field, "")).splitlines()
+                }
+                for line_index, line in enumerate(verification_excerpt):
+                    if not isinstance(line, str) or line not in observation_lines:
+                        errors.append(
+                            f"{prefix}.verification_excerpt[{line_index}]: must be an exact "
+                            "line from the parent observation output"
+                        )
+            if (
+                not isinstance(verification_locators, list)
+                or len(verification_locators) > MAX_VERIFICATION_ADDRESS_RANGES
+            ):
+                errors.append(
+                    f"{prefix}.verification_locators: expected at most "
+                    f"{MAX_VERIFICATION_ADDRESS_RANGES} address ranges"
+                )
+            elif isinstance(verification_locators, list):
+                for locator_index, locator in enumerate(verification_locators):
+                    locator_prefix = f"{prefix}.verification_locators[{locator_index}]"
+                    if not isinstance(locator, dict) or set(locator) != {"start", "end"}:
+                        errors.append(f"{locator_prefix}: must contain only start and end")
+                        continue
+                    start = locator.get("start")
+                    end = locator.get("end")
+                    if not isinstance(start, str) or not HEX_ADDRESS_RE.fullmatch(start):
+                        errors.append(f"{locator_prefix}.start: invalid hexadecimal address")
+                        continue
+                    if not isinstance(end, str) or not HEX_ADDRESS_RE.fullmatch(end):
+                        errors.append(f"{locator_prefix}.end: invalid hexadecimal address")
+                        continue
+                    if int(start, 16) > int(end, 16):
+                        errors.append(f"{locator_prefix}: start must be less than or equal to end")
 
 
 def validate_final_result_artifact(result: dict[str, Any]) -> list[str]:

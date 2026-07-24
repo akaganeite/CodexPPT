@@ -32,7 +32,7 @@
     "type": "function",
     "name": "summarize_evidence",
     "strict": false,
-    "description": "Write or revise natural-language claims for evidence returned by one earlier inspection-tool observation. This tool never creates evidence or changes excerpts, kind, polarity, or provenance. Every evidence item cited by a final verdict must be summarized first.",
+    "description": "Write or revise natural-language claims and verification locators for evidence returned by one earlier inspection-tool observation. This tool never creates evidence or changes the Host supporting excerpt, kind, polarity, or provenance. Every evidence item cited by a final verdict must be summarized first.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -58,9 +58,30 @@
                 "minLength": 1,
                 "maxLength": 2000,
                 "description": "A concise natural-language statement of what the raw target-binary output establishes."
+              },
+              "excerpt": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 12,
+                "items": { "type": "string", "minLength": 1 },
+                "description": "One to twelve exact, complete lines copied from the specified observation output for independent verification."
+              },
+              "address_ranges": {
+                "type": "array",
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "start": { "type": "string", "pattern": "^0x[0-9a-fA-F]+$" },
+                    "end": { "type": "string", "pattern": "^0x[0-9a-fA-F]+$" }
+                  },
+                  "required": ["start", "end"],
+                  "additionalProperties": false
+                },
+                "description": "Up to four inclusive binary address ranges that locate the claimed behavior. Use an empty array only when the evidence has no meaningful code address."
               }
             },
-            "required": ["evidence_id", "claim"],
+            "required": ["evidence_id", "claim", "excerpt", "address_ranges"],
             "additionalProperties": false
           }
         }

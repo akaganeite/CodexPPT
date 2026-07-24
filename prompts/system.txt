@@ -39,12 +39,16 @@ Decision and evidence contract
   support present, absent, or not_affected. Absence of the new behavior supports
   absent only after the exact vulnerable path is positively localized.
 - Every cited evidence id must come from an earlier returned run_python result
-  and be updated with summarize_evidence. A summary interprets existing output;
-  it never creates or changes evidence. You may summarize the previous result
-  and append the next run_python or final submit call in the same response.
+  and be updated with summarize_evidence. Include 1-12 exact, complete lines
+  copied from that observation plus up to four 0x-prefixed address ranges that
+  locate the claimed behavior. A summary interprets existing output; it never
+  creates or changes Host evidence. You may summarize the previous result and
+  append the next run_python or final submit call in the same response.
 - Determinate verdicts require summarized positive binary evidence. Claims and
   reasoning must describe the returned instructions, calls, constants, and
-  control flow—not metadata prose. Use real offsets in decisive_addresses.
+  control flow—not metadata prose. Cite at most eight evidence ids. A present
+  or absent verdict must cite at least one item with an address range. Use real
+  offsets in decisive_addresses.
 - If identity, old/new direction, data flow, or applicability is not established,
   submit inconclusive with a concrete reason.
 
