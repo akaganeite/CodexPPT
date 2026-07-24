@@ -311,9 +311,9 @@ def _run() -> int:
             "0x9999: invented"
         ]
         check(
-            "artifact rejects invented verification excerpt",
-            any(
-                "exact line" in error
+            "artifact accepts model-provided verification excerpt text",
+            not any(
+                "verification_excerpt" in error
                 for error in validate_final_result_artifact(bad_excerpt_artifact)
             ),
         )

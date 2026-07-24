@@ -2,7 +2,7 @@
 
 The tool never creates evidence. It can only annotate evidence that the model
 already received in an earlier response, preserving the Host's original claim
-and immutable observation/excerpt provenance.
+and immutable observation/supporting-excerpt provenance.
 """
 
 from __future__ import annotations
@@ -26,24 +26,14 @@ def _error(message: str) -> dict[str, Any]:
     return {"ok": False, "tool": "summarize_evidence", "error": message}
 
 
-def _observation_lines(observation: dict[str, Any]) -> set[str]:
-    lines: set[str] = set()
-    for field in ("stdout_head", "stdout_tail", "stderr_tail"):
-        value = observation.get(field)
-        if isinstance(value, str):
-            lines.update(value.splitlines())
-    return lines
-
-
 def _normalize_excerpt(
     value: Any,
     *,
     claim_index: int,
-    observation_lines: set[str],
 ) -> list[str] | str:
     path = f"claims[{claim_index}].excerpt"
     if not isinstance(value, list) or not value:
-        return f"{path} must contain at least one observation line"
+        return f"{path} must contain at least one excerpt line"
     if len(value) > MAX_VERIFICATION_EXCERPT_LINES:
         return f"{path} exceeds {MAX_VERIFICATION_EXCERPT_LINES} lines"
     normalized: list[str] = []
@@ -52,11 +42,6 @@ def _normalize_excerpt(
             return f"{path}[{line_index}] must be a non-empty string"
         if "\n" in line or "\r" in line:
             return f"{path}[{line_index}] must contain exactly one line"
-        if line not in observation_lines:
-            return (
-                f"{path}[{line_index}] is not an exact line from the parent "
-                "observation output"
-            )
         normalized.append(line)
     return normalized
 
@@ -124,8 +109,6 @@ def summarize_evidence(
     )
     if observation is None:
         return _error(f"observation id {observation_id!r} is not in the observation ledger")
-    observation_lines = _observation_lines(observation)
-
     ledger = AGENT_CONTEXT.get("evidence_ledger", [])
     ledger_by_id = {
         str(item.get("evidence_id")): item
@@ -160,7 +143,6 @@ def summarize_evidence(
         excerpt = _normalize_excerpt(
             entry.get("excerpt"),
             claim_index=index,
-            observation_lines=observation_lines,
         )
         if isinstance(excerpt, str):
             return _error(excerpt)

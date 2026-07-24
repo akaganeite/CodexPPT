@@ -39,7 +39,8 @@ def _run() -> int:
     check("metadata is guidance", payload.get("mode_contract", {}).get("metadata_is_guidance_not_evidence") is True)
     check(
         "task advertises locator contract",
-        payload.get("mode_contract", {}).get("summary_requires_exact_excerpt_lines") is True
+        payload.get("mode_contract", {}).get("summary_requires_excerpt_lines") is True
+        and payload.get("mode_contract", {}).get("summary_excerpt_content_checked") is False
         and payload.get("mode_contract", {}).get("present_absent_require_address_locator") is True
         and payload.get("mode_contract", {}).get("max_cited_evidence_ids") == 8,
     )

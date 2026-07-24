@@ -64,7 +64,7 @@
                 "minItems": 1,
                 "maxItems": 12,
                 "items": { "type": "string", "minLength": 1 },
-                "description": "One to twelve exact, complete lines copied from the specified observation output for independent verification."
+                "description": "One to twelve concise excerpt lines that help independently verify the claim. The Host validates structure, not textual correspondence with the observation."
               },
               "address_ranges": {
                 "type": "array",

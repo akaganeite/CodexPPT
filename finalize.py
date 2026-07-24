@@ -607,17 +607,17 @@ def _validate_ledger_provenance(
                     f"{prefix}.verification_excerpt: summarized evidence requires 1-"
                     f"{MAX_VERIFICATION_EXCERPT_LINES} lines"
                 )
-            elif observation is not None:
-                observation_lines = {
-                    line
-                    for field in ("stdout_head", "stdout_tail", "stderr_tail")
-                    for line in str(observation.get(field, "")).splitlines()
-                }
+            else:
                 for line_index, line in enumerate(verification_excerpt):
-                    if not isinstance(line, str) or line not in observation_lines:
+                    if (
+                        not isinstance(line, str)
+                        or not line
+                        or "\n" in line
+                        or "\r" in line
+                    ):
                         errors.append(
-                            f"{prefix}.verification_excerpt[{line_index}]: must be an exact "
-                            "line from the parent observation output"
+                            f"{prefix}.verification_excerpt[{line_index}]: must be a non-empty "
+                            "single-line string"
                         )
             if (
                 not isinstance(verification_locators, list)

@@ -29,7 +29,8 @@ def build_task(
         "mode_contract": {
             "metadata_is_guidance_not_evidence": True,
             "cited_evidence_must_be_summarized": True,
-            "summary_requires_exact_excerpt_lines": True,
+            "summary_requires_excerpt_lines": True,
+            "summary_excerpt_content_checked": False,
             "present_absent_require_address_locator": True,
             "max_cited_evidence_ids": 8,
             "finish_tool": "submit_detection_result",
@@ -44,7 +45,7 @@ def append_finalization_prompt(input_items: list[dict[str, Any]], max_turns: int
         "role": "user",
         "content": (
             f"Evidence budget reached after {max_turns} turns. Finalize now: if the ledger "
-            "evidence is decisive, summarize every item you will cite with exact returned lines "
+            "evidence is decisive, summarize every item you will cite with concise excerpt lines "
             "and address ranges, then call "
             "submit_detection_result with status, evidence_ids, reasoning, and decisive addresses. "
             "Otherwise run at most one narrow deciding run_python call; on the following response "
@@ -62,14 +63,14 @@ def append_finalization_budget_prompt(
     if remaining_turns <= 1:
         content = (
             "Last-mile budget exhausted. Summarize any pending evidence you intend to cite, "
-            "including exact returned lines and address ranges, then call submit_detection_result "
+            "including concise excerpt lines and address ranges, then call submit_detection_result "
             "with existing evidence_ids. Do not inspect further. "
             "Use inconclusive with a concrete reason if the evidence is not decisive."
         )
     else:
         content = (
             f"Last-mile budget remaining: {remaining_turns}. Summarize the last evidence_ids and "
-            "their exact lines/address ranges, then submit if decisive; otherwise run one narrow "
+            "their excerpt lines/address ranges, then submit if decisive; otherwise run one narrow "
             "deciding run_python call, summarize its "
             "evidence on the following response, and submit. No broad search."
         )
@@ -81,7 +82,7 @@ def repair_finalization_prompt() -> str:
     return (
         "Repair/finalization only: the previous response did not produce an accepted "
         "submit_detection_result. Do not call run_python. Summarize every pending evidence "
-        "item you intend to cite with exact returned lines and address ranges, then submit a "
+        "item you intend to cite with concise excerpt lines and address ranges, then submit a "
         "direct status using existing evidence_ids, "
         "reasoning, and decisive addresses. If the evidence is not decisive, submit "
         "inconclusive with a concrete reason."
