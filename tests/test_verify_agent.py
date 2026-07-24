@@ -30,7 +30,7 @@ METADATA = {
 
 def _candidate(*, evidence_ids: list[str] | None = None, status: str = "present") -> dict:
     return {
-        "schema_version": "final_result.v6",
+        "schema_version": "final_result.v7",
         "status": status,
         "confidence": "high",
         "evidence": ["MODEL_VISIBLE_BUT_NOT_PAYLOAD_AUTHORITY"],
@@ -150,6 +150,12 @@ def _run() -> int:
     discouraged_wording = "un" + "trusted"
     check("prompt uses neutral claim wording", discouraged_wording not in prompt.lower())
     check("prompt defines patch-presence direction", "present: positive binary evidence establishes the patched behavior" in prompt)
+    check("prompt treats submitted reasoning as data", "submitted reasoning" in prompt)
+    try:
+        _config(verdict_calls=6)
+        check("verdict budget is capped at five", False)
+    except ValueError:
+        check("verdict budget is capped at five", True)
 
     descriptors = [_evidence("ev_0001", 0x1010), _evidence("ev_0002", 0x2010)]
     payload = build_verify_agent_payload(
@@ -382,12 +388,23 @@ def _run() -> int:
             {
                 "evidence_id": "vev_0001",
                 "observation_id": "vobs_0001",
+                "phase": "claim",
                 "ok": True,
+                "excerpt": ["0x1010: cmp eax, 0x100"],
             },
             {
                 "evidence_id": "vev_0002",
                 "observation_id": "vobs_0002",
+                "phase": "verdict",
                 "ok": False,
+                "excerpt": [],
+            },
+            {
+                "evidence_id": "vev_0003",
+                "observation_id": "vobs_0003",
+                "phase": "verdict",
+                "ok": True,
+                "excerpt": [],
             },
         ])
         contradicted_unresolved = copy.deepcopy(insufficient_submit)
@@ -398,6 +415,37 @@ def _run() -> int:
             any(
                 "requires action=contradicted" in error
                 for error in validation_session._verification_errors(contradicted_unresolved)
+            ),
+        )
+        claim_only_opposite = {
+            "action": "contradicted",
+            "claim_checks": [{
+                "evidence_id": "ev_0001",
+                "relation": "supported",
+                "decisive": True,
+                "verifier_evidence_ids": ["vev_0001"],
+                "reason": "The dedicated claim inspection supports the submitted claim.",
+            }],
+            "coverage_status": "complete",
+            "coverage_reason": "The submitted claim was checked.",
+            "recommended_status": "absent",
+            "verdict_evidence_ids": ["vev_0001"],
+            "reason": "A claim-phase observation alone must not establish an opposite verdict.",
+        }
+        check(
+            "contradiction requires claim contradiction or verdict-phase evidence",
+            any(
+                "verdict-phase evidence" in error
+                for error in validation_session._verification_errors(claim_only_opposite)
+            ),
+        )
+        empty_opposite = copy.deepcopy(claim_only_opposite)
+        empty_opposite["verdict_evidence_ids"] = ["vev_0003"]
+        check(
+            "empty verifier output cannot support an opposite verdict",
+            any(
+                "non-empty returned excerpts" in error
+                for error in validation_session._verification_errors(empty_opposite)
             ),
         )
         failed_verdict_support = {

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Run this flat Python package from its parent (`/home/zhangxb/ClawSpace/codex`) so `claudeagent` imports resolve. `agent_loop.py` runs one CVE/binary investigation; `batch.py` runs a test set. Evidence state and artifacts live in `runtime.py`, `observations.py`, `evidence_summary.py`, and `finalize.py`. Tool contracts are in `tools.json`, `prompts/`, and `schemas/`. Put regression tests in `tests/`; never commit ignored `runs/` output.
+Run this flat Python package from its parent (`/home/zhangxb/ClawSpace/codex`) so `claudeagent` imports resolve. `agent_loop.py` runs one investigation; `verify_agent.py` independently rechecks determinate submissions; `batch.py` runs a test set. Evidence state and artifacts live in `runtime.py`, `observations.py`, `evidence_summary.py`, and `finalize.py`. Tool contracts are in `tools.json`, `prompts/`, and `schemas/`. Put regression tests in `tests/`; never commit ignored `runs/` output.
 
 ## Build, Test, and Development Commands
 
@@ -20,7 +20,7 @@ python3 -m claudeagent.batch --testset <testset.json> \
 
 ```sh
 for test in test_finalize test_model_config test_responses_loop test_sandbox \
-  test_waf test_prompting test_batch test_evidence_summary; do
+  test_waf test_prompting test_batch test_evidence_summary test_verify_agent; do
   python3 -m claudeagent.tests.$test || exit 1
 done
 ```

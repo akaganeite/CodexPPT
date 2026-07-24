@@ -94,16 +94,15 @@ def load_model_config() -> dict[str, Any]:
     return {"active_profile": active_profile, "aliases": aliases, "profiles": profiles}
 
 
-def resolve_profile_name(args: argparse.Namespace) -> str:
-    """Pick the profile name: --model-profile (a name or an alias), else active.
+def resolve_named_profile_name(requested: str | None = None) -> str:
+    """Resolve a profile name or alias, falling back to the active profile.
 
-    ``--model-profile`` accepts either a full profile name or one of the short
-    ``aliases`` from the config. When the flag is absent, the config's
-    ``active_profile`` is used.
+    This value-oriented helper is shared by the main and verification agents;
+    callers do not need to manufacture an ``argparse.Namespace`` merely to
+    resolve a secondary model profile.
     """
     raw = load_model_config()
     aliases = raw["aliases"]
-    requested = getattr(args, "model_profile", None)
     if not requested:
         return raw["active_profile"]
     if requested in aliases:
@@ -112,6 +111,17 @@ def resolve_profile_name(args: argparse.Namespace) -> str:
         return requested
     available = ", ".join(sorted(set(raw["profiles"]) | set(aliases)))
     raise ValueError(f"unknown model profile or alias {requested!r}; available: {available}")
+
+
+def resolve_profile_name(args: argparse.Namespace) -> str:
+    """Pick the profile name: --model-profile (a name or an alias), else active.
+
+    ``--model-profile`` accepts either a full profile name or one of the short
+    ``aliases`` from the config. When the flag is absent, the config's
+    ``active_profile`` is used.
+    """
+    requested = getattr(args, "model_profile", None)
+    return resolve_named_profile_name(requested)
 
 
 def parse_profile(name: str, raw: object) -> ModelProfile:
@@ -173,8 +183,13 @@ def parse_profile(name: str, raw: object) -> ModelProfile:
 
 
 def resolve_profile(args: argparse.Namespace) -> ModelProfile:
+    return resolve_named_profile(getattr(args, "model_profile", None))
+
+
+def resolve_named_profile(requested: str | None = None) -> ModelProfile:
+    """Return the parsed profile selected by a full name, alias, or default."""
     raw = load_model_config()
-    name = resolve_profile_name(args)
+    name = resolve_named_profile_name(requested)
     return parse_profile(name, raw["profiles"][name])
 
 

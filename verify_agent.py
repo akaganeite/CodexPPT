@@ -28,8 +28,10 @@ from claudeagent.truncation import text_head_tail
 
 VERIFY_AGENT_PROTOCOL_VERSION = "verify_agent.v1"
 VERIFY_AGENT_PROMPT_VERSION = "verify_agent_prompt.v1"
+VERIFY_AGENT_RESULT_POLICY_VERSION = "verify_agent_result_policy.v1"
 VERIFY_AGENT_PROMPT = Path(__file__).resolve().parent / "prompts" / "verify_agent.txt"
 DEFAULT_VERDICT_CALLS = 5
+MAX_VERDICT_CALLS = 5
 MAX_CITED_EVIDENCE = 8
 MAX_PROTOCOL_REPAIRS = 2
 MAX_EXCERPT_LINES = 12
@@ -184,10 +186,15 @@ class VerifyAgentConfig:
             raise ValueError("verify-agent api_max_retries must be positive")
         if self.api_turn_retries <= 0:
             raise ValueError("verify-agent api_turn_retries must be positive")
-        if not 0 <= self.verdict_calls <= 20:
-            raise ValueError("verify-agent verdict_calls must be between 0 and 20")
-        if not 0 <= self.max_protocol_repairs <= 5:
-            raise ValueError("verify-agent max_protocol_repairs must be between 0 and 5")
+        if not 0 <= self.verdict_calls <= MAX_VERDICT_CALLS:
+            raise ValueError(
+                f"verify-agent verdict_calls must be between 0 and {MAX_VERDICT_CALLS}"
+            )
+        if not 0 <= self.max_protocol_repairs <= MAX_PROTOCOL_REPAIRS:
+            raise ValueError(
+                "verify-agent max_protocol_repairs must be between 0 and "
+                f"{MAX_PROTOCOL_REPAIRS}"
+            )
 
 
 def verify_agent_config_from_profile(
@@ -236,9 +243,18 @@ def verify_agent_config_digest(config: VerifyAgentConfig) -> str:
         "verdict_calls": config.verdict_calls,
         "max_protocol_repairs": config.max_protocol_repairs,
         "result_policy": {
+            "version": VERIFY_AGENT_RESULT_POLICY_VERSION,
             "insufficient_is_contradicted": False,
             "unresolved_retains_main_candidate": True,
             "confirmed_requires_complete_coverage": True,
+            "contradiction_main_repairs": 1,
+            "main_repair_model_responses": 4,
+            "main_repair_run_python_calls": 1,
+            "main_repair_schema_repairs": 1,
+            "determinate_repair_gets_fresh_verification": True,
+            "repaired_inconclusive_skips_reverification": True,
+            "repair_failure_result": "inconclusive/conflicting_evidence",
+            "second_contradiction_result": "inconclusive/conflicting_evidence",
         },
     }
     encoded = json.dumps(
@@ -754,6 +770,21 @@ class VerifyAgentSession:
                         f"$.claim_checks[{evidence_id}].verifier_evidence_ids: "
                         f"supported/contradicted checks require successful observations; failed {failed_ids}"
                     )
+                empty_ids = [
+                    verifier_id
+                    for verifier_id in verifier_ids
+                    if verifier_id in verifier_by_id
+                    and not any(
+                        isinstance(line, str) and line.strip()
+                        for line in verifier_by_id[verifier_id].get("excerpt", [])
+                    )
+                ]
+                if empty_ids:
+                    errors.append(
+                        f"$.claim_checks[{evidence_id}].verifier_evidence_ids: "
+                        "supported/contradicted checks require non-empty returned excerpts; "
+                        f"empty {empty_ids}"
+                    )
 
         verdict_ids = [str(item) for item in verification.get("verdict_evidence_ids", [])]
         if len(verdict_ids) != len(set(verdict_ids)):
@@ -771,6 +802,20 @@ class VerifyAgentSession:
             errors.append(
                 "$.verdict_evidence_ids: verdict support requires successful observations; "
                 f"failed {failed_verdict_ids}"
+            )
+        empty_verdict_ids = [
+            verifier_id
+            for verifier_id in verdict_ids
+            if verifier_id in verifier_by_id
+            and not any(
+                isinstance(line, str) and line.strip()
+                for line in verifier_by_id[verifier_id].get("excerpt", [])
+            )
+        ]
+        if empty_verdict_ids:
+            errors.append(
+                "$.verdict_evidence_ids: verdict support requires non-empty returned excerpts; "
+                f"empty {empty_verdict_ids}"
             )
 
         action = str(verification.get("action", ""))
@@ -796,11 +841,14 @@ class VerifyAgentSession:
                 errors.append(
                     "$.recommended_status: contradicted must recommend a different status or inconclusive"
                 )
-            has_opposite_evidence = bool(verdict_ids)
+            has_opposite_evidence = any(
+                verifier_by_id.get(verifier_id, {}).get("phase") == "verdict"
+                for verifier_id in verdict_ids
+            )
             if not contradicted_checks and not has_opposite_evidence:
                 errors.append(
                     "$.action: contradicted requires a contradicted cited claim or independent "
-                    "verdict evidence"
+                    "verdict-phase evidence"
                 )
         elif action == "unresolved":
             if recommended not in {candidate_status, "inconclusive"}:
