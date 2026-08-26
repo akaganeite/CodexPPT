@@ -11,6 +11,12 @@ from typing import Any
 from .anonymize import prepare_anonymous_targets, remap_result_to_original
 from .batch_manifest import create_batch_manifest, finalize_batch_manifest
 from .evaluation import evaluate_results
+from .ghidra_manager import (
+    GhidraState,
+    ghidra_failure_is_fatal,
+    list_codex_mcp_server_names,
+    prepare_ghidra,
+)
 from .io import is_relative_to, load_json, write_json
 from .paths import derive_project_paths
 from .prompt import STATIC_ONLY_POLICY_PATH, build_prompt
@@ -91,6 +97,10 @@ def validate_inputs(args: argparse.Namespace, paths: dict[str, Path | None]) -> 
         raise ValueError(f"prompt template does not exist: {args.prompt_template}")
     if not STATIC_ONLY_POLICY_PATH.is_file():
         raise ValueError(f"static-only policy does not exist: {STATIC_ONLY_POLICY_PATH}")
+    if args.ghidra != "off" and not args.binarywise:
+        raise ValueError("Ghidra integration requires --binarywise so each MCP server binds exactly one binary")
+    if args.ghidra_timeout <= 0:
+        raise ValueError("--ghidra-timeout must be positive")
 
 
 def safe_objdump_helper_for_prompt(cd: Path, script_dir: Path) -> str:
@@ -165,6 +175,42 @@ def process_cve(
         run_safe_objdump_helper = anonymous_targets.safe_objdump_helper
         run_binary_resolution = anonymous_targets.binary_resolution
 
+    ghidra_state_path = raw_dir / f"{run_id}.ghidra.json"
+    ghidra_query_log = raw_dir / f"{run_id}.ghidra_queries.jsonl"
+    ghidra_query_log.touch(exist_ok=True)
+    ghidra_state = GhidraState(requested="off")
+    if len(run_binaries) == 1:
+        resolved_name = (
+            run_binary_resolution.get(run_binaries[0], run_binaries[0])
+            if run_binary_resolution is not None
+            else run_binaries[0]
+        )
+        ghidra_state = prepare_ghidra(
+            mode=args.ghidra,
+            binary=run_target_dir / resolved_name,
+            cache_dir=args.ghidra_cache_dir,
+            install_dir=args.ghidra_install_dir,
+            timeout_sec=args.ghidra_timeout,
+            state_path=ghidra_state_path,
+            dry_run=args.dry_run,
+        )
+
+    if ghidra_failure_is_fatal(args.ghidra, args.dry_run, ghidra_state):
+        if anonymous_targets is not None:
+            write_json(raw_dir / f"{run_id}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
+            anonymous_targets.cleanup()
+        with lock:
+            merged.setdefault(cve, {}).update(
+                error_result(
+                    cve,
+                    binaries,
+                    "Required Ghidra analysis failed before Codex was started.",
+                    ghidra_state.error or "required Ghidra analysis was unavailable",
+                )
+            )
+            write_json(output, merged)
+        return
+
     prompt_metadata = metadata_for_prompt(metadata[cve], args.metadata)
     prompt = build_prompt(
         args.prompt_template,
@@ -176,6 +222,7 @@ def process_cve(
         args.opt,
         run_safe_objdump_helper,
         run_binary_resolution,
+        ghidra_enabled=ghidra_state.enabled or ghidra_state.status == "preflight_ready",
     )
 
     label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
@@ -199,6 +246,10 @@ def process_cve(
             cd=run_cd,
             target_dir=run_target_dir,
             safe_objdump_dir=run_safe_objdump_dir,
+            ghidra_state=ghidra_state,
+            ghidra_query_log=ghidra_query_log,
+            disabled_mcp_servers=args.disabled_mcp_servers,
+            script_dir=script_dir,
         )
         if rc != 0:
             detail = stderr_text.strip() or final_text.strip()
@@ -277,6 +328,12 @@ def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
     paths = resolve_run_paths(args, script_dir)
     validate_inputs(args, paths)
     validate_profile_environment(resolve_profile(args))
+    args.ghidra_cache_dir = args.ghidra_cache_dir.expanduser().resolve()
+    if args.ghidra_install_dir is not None:
+        args.ghidra_install_dir = args.ghidra_install_dir.expanduser().resolve()
+    args.disabled_mcp_servers = (
+        list_codex_mcp_server_names(args.codex_bin) if args.ghidra != "off" else []
+    )
 
     metadata = load_json(require_path(paths["project_json"]))
     testset = normalize_testset(load_json(require_path(paths["testset_json"])))
@@ -354,7 +411,7 @@ def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
         run_error = str(exc)
         raise
     finally:
-        finalize_batch_manifest(manifest, merged, raw_tasks, run_status, run_error)
+        finalize_batch_manifest(manifest, merged, raw_tasks, run_status, run_error, raw_dir)
         write_json(manifest_path, manifest)
     return 0
 

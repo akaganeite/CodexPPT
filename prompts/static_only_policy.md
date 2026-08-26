@@ -15,8 +15,11 @@ Never invoke or use:
 
 Allowed evidence tools are read-only inspection tools such as `file`,
 `readelf`, `nm`, `objdump`, `strings`, `addr2line`, `dwarfdump`, `xxd`, `dd`,
-`rg`, and the supplied `safe_objdump.py` helper. Python may be used only to
+`rg`, the supplied `safe_objdump.py` helper, and any host-provided
+`ghidra_*` MCP tools explicitly listed for this run. Python may be used only to
 parse or transform already-existing local files without launching processes.
+The host-side Ghidra service is part of the inspection harness; it does not
+authorize executing the target or using arbitrary Ghidra scripts.
 
 Do not modify files in the target directory or create executable copies of
 target files. Do not use observed runtime behavior, exit status, timeout,

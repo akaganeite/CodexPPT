@@ -113,6 +113,14 @@ Install or make available:
 - `jq` for local dataset checks.
 - Model/API credentials needed by the selected profile.
 
+Optional native Ghidra mode additionally requires the pinned packages in
+`requirements-ghidra.txt` (`mcp==2.1.1`, `pyghidra==2.2.0`) and a compatible
+Ghidra installation. Install them with:
+
+```bash
+python3 -m pip install -r requirements-ghidra.txt
+```
+
 Run commands from the repository root:
 
 ```bash
@@ -578,6 +586,13 @@ Useful flags:
 - `--jobs N`: concurrent `codex exec` tasks.
 - `--resume`: skip completed entries already in `--output`.
 - `--retry-errors`: with `--resume`, rerun entries with status `error`.
+- `--ghidra off|auto|on`: disable Ghidra (default), allow graceful fallback,
+  or require it per testcase.
+- `--ghidra-cache-dir PATH`: override the default
+  `~/.cache/straight_detect/ghidra` SHA-256 cache.
+- `--ghidra-install-dir PATH`: explicitly select the Ghidra installation.
+- `--ghidra-timeout SECONDS`: analysis, MCP startup, and tool-call timeout;
+  default `900`.
 - Target anonymization is mandatory. `--no-anonymize-targets` is rejected because
   static-only runs must use temporary anonymous copies with no execute bit.
 - Codex always runs with the read-only sandbox. A writable `--sandbox` value is
@@ -599,6 +614,79 @@ copies and always starts Codex with the read-only sandbox.
 
 For dataset4ppt stripped experiments, default to
 `patch_presence_stripped_unbounded.md`.
+
+## Native Ghidra MCP Mode
+
+Ghidra mode is supported only with `--binarywise`: every `codex exec` process
+gets a dedicated stdio MCP process bound to the single anonymous binary for
+that testcase. The MCP server exposes exactly:
+
+```text
+ghidra_locate_function
+ghidra_function_summary
+ghidra_cfg_slice
+ghidra_path_probe
+ghidra_call_args
+ghidra_decompile_slice
+```
+
+The MCP interface accepts no binary path, script, project path, or expression.
+The host prepares a SHA-256 cache entry after anonymization and optional
+`eu-unstrip`, using a per-hash file lock. A ready cache is reused only when its
+schema, binary hash, status, Ghidra version, and PyGhidra version all match;
+failed or incomplete entries are rebuilt safely. A cache-root JVM capacity lock
+serializes expensive Ghidra initialization on memory-constrained hosts while
+the surrounding Codex tasks remain concurrent.
+
+Ghidra installation discovery order is:
+
+1. `--ghidra-install-dir`.
+2. `GHIDRA_INSTALL_DIR`.
+3. `/home/zhangxb/tools/ghidra_11.4.2_PUBLIC` when present.
+4. PyGhidra automatic discovery.
+
+For a Ghidra-enabled testcase the wrapper explicitly disables the user's other
+configured MCP servers and injects only `straight_detect_ghidra`, with an
+enabled-tool allowlist containing the six tools above. The fixed-target,
+read-only tools are pre-approved for non-interactive `codex exec`; this does not
+change shell approval or sandbox policy. `auto` registers the server as
+non-required and falls back to the existing static workflow on
+preparation failure. `on` registers it as required and writes a testcase-level
+`status=error` without starting the model if preparation fails. Neither mode
+changes the read-only Codex sandbox or exposes the cache, Ghidra project, source
+tree, or groundtruth to the model.
+
+The prompt treats raw instruction, CFG, and P-code observations as primary.
+Decompiler output is explicitly advisory and cannot by itself justify a
+determinate patch-presence result.
+
+Ghidra smoke-test example:
+
+```bash
+python3 codex_patch_presence_batch.py \
+  --project-json /home/USER/extdisk/dataset4ppt/openssl/exports/openssl_behavior.json \
+  --testset-json /home/USER/extdisk/dataset4ppt/openssl/exports/testset.json \
+  --target-dir /home/USER/extdisk/dataset4ppt/openssl/binaries/target/openssl_stripped \
+  --groundtruth-json /home/USER/extdisk/dataset4ppt/openssl/exports/groundtruth_with_not_affected.json \
+  --compiler gcc \
+  --opt O2 \
+  --output /tmp/openssl_ghidra_smoke_results.json \
+  --raw-dir /tmp/openssl_ghidra_smoke_raw \
+  --prompt-template /home/USER/ClawSpace/agent/straight_detect/prompts/patch_presence_stripped_unbounded.md \
+  --binarywise \
+  --model-profile codex_default \
+  --codex-json-events \
+  --ghidra on \
+  --ghidra-timeout 900 \
+  --jobs 1 \
+  --limit 1 \
+  --timeout 3600
+```
+
+Run the required six-case smoke test by changing to `--jobs 6 --limit 6` only
+after the single-case result is valid and its Ghidra/query/timing artifacts are
+complete. Run the same single case once with `--ghidra off` to verify the
+legacy stripped-binary workflow.
 
 ## Output Layout
 
@@ -634,6 +722,8 @@ A typical Codex run has:
   CVE-...__binary.timing.json
   CVE-...__binary.timing.md
   CVE-...__binary.anonymized_targets.json
+  CVE-...__binary.ghidra.json
+  CVE-...__binary.ghidra_queries.jsonl
 ```
 
 `batch_manifest.json` records the invocation, normalized input/output paths,
@@ -693,6 +783,10 @@ Raw files:
 - `.timing.md`: human-readable timing table.
 - `.anonymized_targets.json`: mapping from anonymous filenames like
   `target_001` back to original binary names.
+- `.ghidra.json`: selected mode, dependency/version checks, cache id, cache
+  reuse, readiness, and a sanitized failure reason when unavailable.
+- `.ghidra_queries.jsonl`: bounded per-tool call ledger containing tool name,
+  arguments, elapsed time, success, and observation id.
 
 Timing files are most useful when `--codex-json-events` is enabled. Without it,
 the wrapper can still record wall time, but detailed turns, token usage, and

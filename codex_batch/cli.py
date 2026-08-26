@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .ghidra_manager import DEFAULT_GHIDRA_CACHE_DIR
+
 
 def parse_args(script_dir: Path) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -111,6 +113,33 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true", help="Write prompts but do not call codex.")
     parser.add_argument("--codex-bin", default="codex")
+    parser.add_argument(
+        "--ghidra",
+        choices=["off", "auto", "on"],
+        default="off",
+        help=(
+            "Optional native Ghidra MCP tools. off disables them; auto falls back "
+            "to the normal static workflow on failure; on makes Ghidra failure a testcase error."
+        ),
+    )
+    parser.add_argument(
+        "--ghidra-cache-dir",
+        type=Path,
+        default=DEFAULT_GHIDRA_CACHE_DIR,
+        help="SHA256-keyed Ghidra cache directory.",
+    )
+    parser.add_argument(
+        "--ghidra-install-dir",
+        type=Path,
+        default=None,
+        help="Optional Ghidra installation directory; otherwise use GHIDRA_INSTALL_DIR or auto-discovery.",
+    )
+    parser.add_argument(
+        "--ghidra-timeout",
+        type=int,
+        default=900,
+        help="Ghidra analysis, MCP startup, and per-tool timeout in seconds.",
+    )
     profile_group = parser.add_mutually_exclusive_group()
     profile_group.add_argument(
         "--model-profile",

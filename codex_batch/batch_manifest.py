@@ -4,10 +4,12 @@ import argparse
 import os
 import sys
 import time
+import json
 from pathlib import Path
 from typing import Any
 
 from .providers import resolve_profile, resolved_reasoning_effort
+from .ghidra_manager import GHIDRA_CACHE_SCHEMA, GHIDRA_TOOL_NAMES, SOURCE_PROVENANCE
 
 
 CODEX_CONFIG_PATH = Path.home() / ".codex" / "config.toml"
@@ -32,6 +34,16 @@ def create_batch_manifest(
         "driver": str(driver),
         "eval_groundtruth_json": path_text(paths["groundtruth_json"]),
         "jobs": max(1, args.jobs),
+        "ghidra": {
+            "mode": args.ghidra,
+            "cache_dir": str(args.ghidra_cache_dir),
+            "install_dir": str(args.ghidra_install_dir) if args.ghidra_install_dir is not None else None,
+            "timeout_sec": args.ghidra_timeout,
+            "cache_schema": GHIDRA_CACHE_SCHEMA,
+            "tool_names": list(GHIDRA_TOOL_NAMES),
+            "source_provenance": SOURCE_PROVENANCE,
+            "summary": empty_ghidra_summary(),
+        },
         "metadata_json": path_text(paths["project_json"]),
         "metadata_mode": args.metadata,
         "model_config": describe_model_config(args),
@@ -62,10 +74,13 @@ def finalize_batch_manifest(
     raw_tasks: list[tuple[str, list[str], str]],
     status: str,
     error: str | None = None,
+    raw_dir: Path | None = None,
 ) -> None:
     manifest["completed_cases"] = completed_task_count(merged, raw_tasks)
     manifest["finished_at_epoch"] = time.time()
     manifest["status"] = status
+    if raw_dir is not None and isinstance(manifest.get("ghidra"), dict):
+        manifest["ghidra"]["summary"] = summarize_ghidra_artifacts(raw_dir)
     if error:
         manifest["error"] = error
 
@@ -173,3 +188,44 @@ def string_value(value: object) -> str | None:
 
 def path_text(path: Path | None) -> str | None:
     return str(path) if path is not None else None
+
+
+def empty_ghidra_summary() -> dict[str, Any]:
+    return {
+        "disabled": 0,
+        "preflight_ready": 0,
+        "ready": 0,
+        "failed": 0,
+        "reused": 0,
+        "tool_query_counts": {},
+    }
+
+
+def summarize_ghidra_artifacts(raw_dir: Path) -> dict[str, Any]:
+    summary = empty_ghidra_summary()
+    for state_path in raw_dir.glob("*.ghidra.json"):
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        status = state.get("status")
+        if status in summary:
+            summary[status] += 1
+        if state.get("reused_cache"):
+            summary["reused"] += 1
+    counts: dict[str, int] = {}
+    for query_path in raw_dir.glob("*.ghidra_queries.jsonl"):
+        try:
+            lines = query_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                query = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            tool = query.get("tool")
+            if isinstance(tool, str) and tool:
+                counts[tool] = counts.get(tool, 0) + 1
+    summary["tool_query_counts"] = dict(sorted(counts.items()))
+    return summary
