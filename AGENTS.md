@@ -65,6 +65,10 @@ its own to discover the remaining files instead of asking the user. From the
 dataset directory, resolve the following automatically:
 
 - Target binary directory: `<dataset>/binaries/target/<project>_stripped`.
+- Optional separated debug directory: `<dataset>/binaries/target/<project>_debug`.
+  Pass it as `--debug-dir` to merge each selected executable with its matching
+  `<target-file>.debug` companion using `eu-unstrip` in the per-run temporary
+  directory. Without `--debug-dir`, detection remains a stripped-binary run.
 - Behavior JSON: `<dataset>/exports/<project>_behavior.json`. This is the
   required `--project-json` input for detection runs.
 - Testset JSON: `<dataset>/exports/testset.json` or a subset such as
@@ -135,10 +139,10 @@ current checkout. When moving to a new machine, inspect or create this file
 first.
 
 If Codex is already configured on the local machine, `codex_default` is the
-recommended default profile for smoke tests. It lets `codex exec` inherit the
-machine's existing Codex CLI model/provider/auth settings, so it is usually the
-lowest-friction way to verify that the dataset, wrapper, prompts, and output
-paths work before testing custom providers.
+recommended default profile for smoke tests. With no `model` field, it lets
+`codex exec` inherit the machine's existing Codex CLI model/provider/auth
+settings, so it is usually the lowest-friction way to verify that the dataset,
+wrapper, prompts, and output paths work before testing custom providers.
 
 When a user asks about model settings or says to use the default configuration,
 first inspect the current local Codex default model/provider/reasoning settings.
@@ -170,14 +174,18 @@ Profile fields:
   `volcengine-agent-plan` for the Volcengine agent-plan route.
 - `base_url`: endpoint URL for non-`codex` providers.
 - `wire_api`: usually `responses`.
-- `model`: model name passed to `codex exec --model`.
+- `model`: optional model name passed to `codex exec --model`. For a `codex`
+  profile, omit it to inherit `~/.codex/config.toml`; set it to override that
+  file for this batch only. It is required for non-`codex` providers.
 - `api_key_env`: environment variable containing the API key.
 - `requires_openai_auth`: `true` when the endpoint expects Codex/OpenAI auth
   instead of an explicit `env_key`.
+- `model_supports_reasoning_summaries`: omit to use Codex defaults, or set to
+  `true`/`false` to force reasoning metadata on/off for a provider.
 - `codex_provider_name`: optional provider name injected into Codex config.
 - `reasoning.mode`: `inherit`, `on`, or `off`.
 - `reasoning.effort`: required when `mode` is `on`; one of `low`, `medium`,
-  `high`, `xhigh`.
+  `high`, `xhigh`, `max`.
 
 To add a model, add a new object under `profiles`, optionally add a short name
 under `aliases`, then run with:
@@ -194,6 +202,14 @@ Example profile:
 ```json
 {
   "profiles": {
+    "codex_gpt56_high": {
+      "provider": "codex",
+      "model": "gpt-5.6-sol",
+      "reasoning": {
+        "mode": "on",
+        "effort": "high"
+      }
+    },
     "cliproxy_gpt55_medium": {
       "provider": "openai",
       "api_key_env": ["PPTAGENT_API_KEY"],
@@ -562,8 +578,10 @@ Useful flags:
 - `--jobs N`: concurrent `codex exec` tasks.
 - `--resume`: skip completed entries already in `--output`.
 - `--retry-errors`: with `--resume`, rerun entries with status `error`.
-- `--no-anonymize-targets`: expose original filenames to the model. Avoid this
-  unless debugging; default anonymization is preferred.
+- Target anonymization is mandatory. `--no-anonymize-targets` is rejected because
+  static-only runs must use temporary anonymous copies with no execute bit.
+- Codex always runs with the read-only sandbox. A writable `--sandbox` value is
+  rejected.
 
 ## Prompt Selection
 
@@ -573,6 +591,11 @@ Useful flags:
   this for `*_stripped` target directories.
 - `prompts/patch_presence_deployed.md`: deployed-package prompt with
   `not_affected` reasoning.
+
+Every prompt also receives `prompts/static_only_policy.md`. The policy forbids
+target execution, GDB, compiler-generated comparison code, and process-launching
+Python APIs. The runner supplies anonymous, read-only, non-executable target
+copies and always starts Codex with the read-only sandbox.
 
 For dataset4ppt stripped experiments, default to
 `patch_presence_stripped_unbounded.md`.
@@ -602,6 +625,7 @@ A typical Codex run has:
 <run>_results.json
 <run>_results.json.metrics.json
 <run>_raw/
+  batch_manifest.json
   single_cve_schema.json
   CVE-...__binary.prompt.txt
   CVE-...__binary.stdout
@@ -611,6 +635,11 @@ A typical Codex run has:
   CVE-...__binary.timing.md
   CVE-...__binary.anonymized_targets.json
 ```
+
+`batch_manifest.json` records the invocation, normalized input/output paths,
+task counts, timestamps, and the resolved model configuration. For the default
+Codex profile it reads the local `~/.codex/config.toml`; it never records API
+keys or other secrets.
 
 Merged result JSON shape:
 

@@ -7,6 +7,9 @@ from typing import Any
 from .paths import resolve_requested_binary
 
 
+STATIC_ONLY_POLICY_PATH = Path(__file__).resolve().parent.parent / "prompts" / "static_only_policy.md"
+
+
 def build_prompt(
     template_path: Path,
     cve: str,
@@ -36,7 +39,9 @@ def build_prompt(
         "SAFE_OBJDUMP_HELPER": safe_objdump_helper,
         "TASK_PAYLOAD_JSON": json.dumps(payload, indent=2, ensure_ascii=False),
     }
-    return render_template(template_path.read_text(encoding="utf-8"), variables)
+    rendered = render_template(template_path.read_text(encoding="utf-8"), variables).rstrip()
+    policy = STATIC_ONLY_POLICY_PATH.read_text(encoding="utf-8").strip()
+    return f"{rendered}\n\n{policy}\n"
 
 
 def render_template(template: str, variables: dict[str, str]) -> str:

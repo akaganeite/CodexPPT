@@ -9,10 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from .anonymize import prepare_anonymous_targets, remap_result_to_original
+from .batch_manifest import create_batch_manifest, finalize_batch_manifest
 from .evaluation import evaluate_results
 from .io import is_relative_to, load_json, write_json
 from .paths import derive_project_paths
-from .prompt import build_prompt
+from .prompt import STATIC_ONLY_POLICY_PATH, build_prompt
+from .providers import resolve_profile, validate_profile_environment
 from .results import error_result, extract_json_object, validate_cve_result
 from .run_state import (
     load_existing_results,
@@ -25,11 +27,20 @@ from .schema import write_result_schema
 from .testset import normalize_testset
 
 
+SHIM_METADATA_KEYS = {
+    "function_anchors",
+    "reduced_function_code",
+    "root_cause_analysis",
+    "patch_intent_analysis",
+}
+
+
 def resolve_run_paths(args: argparse.Namespace, script_dir: Path) -> dict[str, Path | None]:
     derive_project_paths(args)
     project_json = args.project_json.resolve()
     testset_json = args.testset_json.resolve()
     target_dir = args.target_dir.resolve()
+    debug_dir = args.debug_dir.resolve() if args.debug_dir is not None else None
     output = args.output.resolve()
     raw_dir = (args.raw_dir or output.parent / (output.stem + "_codex_runs")).resolve()
     default_cd = args.project_dir if args.project_dir is not None else target_dir
@@ -41,6 +52,7 @@ def resolve_run_paths(args: argparse.Namespace, script_dir: Path) -> dict[str, P
     )
 
     args.target_dir = target_dir
+    args.debug_dir = debug_dir
     args.cd = cd
     args.prompt_template = args.prompt_template.resolve()
     args.safe_objdump_dir = script_dir / "utils"
@@ -69,8 +81,16 @@ def validate_inputs(args: argparse.Namespace, paths: dict[str, Path | None]) -> 
 
     if not target_dir.is_dir():
         raise ValueError(f"target directory does not exist or is not a directory: {target_dir}")
+    if args.sandbox != "read-only":
+        raise ValueError("static-only workflow requires --sandbox read-only")
+    if args.no_anonymize_targets:
+        raise ValueError("static-only workflow always anonymizes target binaries; remove --no-anonymize-targets")
+    if args.debug_dir is not None and not args.debug_dir.is_dir():
+        raise ValueError(f"debug directory does not exist or is not a directory: {args.debug_dir}")
     if not args.prompt_template.is_file():
         raise ValueError(f"prompt template does not exist: {args.prompt_template}")
+    if not STATIC_ONLY_POLICY_PATH.is_file():
+        raise ValueError(f"static-only policy does not exist: {STATIC_ONLY_POLICY_PATH}")
 
 
 def safe_objdump_helper_for_prompt(cd: Path, script_dir: Path) -> str:
@@ -127,7 +147,7 @@ def process_cve(
     run_safe_objdump_dir = args.safe_objdump_dir
     run_safe_objdump_helper = safe_objdump_helper_for_prompt(run_cd, script_dir)
     run_binary_resolution = None
-    if not args.no_anonymize_targets:
+    if not args.no_anonymize_targets or args.debug_dir is not None:
         anonymous_targets = prepare_anonymous_targets(
             cve,
             binaries,
@@ -135,6 +155,8 @@ def process_cve(
             args.compiler,
             args.opt,
             args.safe_objdump_dir,
+            debug_dir=args.debug_dir,
+            anonymize=True,
         )
         run_binaries = anonymous_targets.requested_binaries
         run_target_dir = anonymous_targets.target_dir
@@ -143,10 +165,11 @@ def process_cve(
         run_safe_objdump_helper = anonymous_targets.safe_objdump_helper
         run_binary_resolution = anonymous_targets.binary_resolution
 
+    prompt_metadata = metadata_for_prompt(metadata[cve], args.metadata)
     prompt = build_prompt(
         args.prompt_template,
         cve,
-        metadata[cve],
+        prompt_metadata,
         run_binaries,
         run_target_dir,
         args.compiler,
@@ -215,8 +238,19 @@ def anonymized_mapping_payload(targets: Any) -> dict[str, Any]:
         "anonymous_to_original": targets.anonymous_to_original,
         "original_to_anonymous": targets.original_to_anonymous,
         "original_to_actual": targets.actual_mapping,
+        "debug_sources": targets.debug_mapping,
         "safe_objdump_helper": targets.safe_objdump_helper,
     }
+
+
+def metadata_for_prompt(metadata: Any, mode: str) -> Any:
+    if mode == "full":
+        return metadata
+    if mode != "shim":
+        raise ValueError(f"unsupported metadata mode: {mode}")
+    if not isinstance(metadata, dict):
+        return metadata
+    return {key: value for key, value in metadata.items() if key not in SHIM_METADATA_KEYS}
 
 
 def write_metrics(paths: dict[str, Path | None], merged: dict[str, Any]) -> None:
@@ -242,6 +276,7 @@ def write_metrics(paths: dict[str, Path | None], merged: dict[str, Any]) -> None
 def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
     paths = resolve_run_paths(args, script_dir)
     validate_inputs(args, paths)
+    validate_profile_environment(resolve_profile(args))
 
     metadata = load_json(require_path(paths["project_json"]))
     testset = normalize_testset(load_json(require_path(paths["testset_json"])))
@@ -269,41 +304,58 @@ def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
             label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
             print(f"skip {label} (already in output)")
 
-    total = len(pending)
-    counter = itertools.count(1)
-    jobs = max(1, args.jobs)
-    with ThreadPoolExecutor(max_workers=jobs) as executor:
-        futures = [
-            executor.submit(
-                process_cve,
-                cve,
-                total,
-                counter,
-                metadata,
-                testset,
-                merged,
-                merged_lock,
-                paths,
-                args,
-                script_dir,
-                requested_binaries=binaries,
-                run_id=run_id,
-            )
-            for cve, binaries, run_id in pending
-        ]
-        try:
-            for future in as_completed(futures):
-                future.result()
-        except KeyboardInterrupt:
-            executor.shutdown(wait=True, cancel_futures=True)
-            raise
+    manifest_path = raw_dir / "batch_manifest.json"
+    manifest = create_batch_manifest(args, paths, script_dir, metadata, raw_tasks, pending, merged)
+    write_json(manifest_path, manifest)
 
-    if args.dry_run:
-        print(f"dry-run complete; prompts written under {raw_dir}")
-    else:
-        print(f"merged results written to {output}")
-        print(f"raw per-CVE files written under {raw_dir}")
-        write_metrics(paths, merged)
+    run_status = "completed"
+    run_error = None
+    try:
+        total = len(pending)
+        counter = itertools.count(1)
+        jobs = max(1, args.jobs)
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
+            futures = [
+                executor.submit(
+                    process_cve,
+                    cve,
+                    total,
+                    counter,
+                    metadata,
+                    testset,
+                    merged,
+                    merged_lock,
+                    paths,
+                    args,
+                    script_dir,
+                    requested_binaries=binaries,
+                    run_id=run_id,
+                )
+                for cve, binaries, run_id in pending
+            ]
+            try:
+                for future in as_completed(futures):
+                    future.result()
+            except KeyboardInterrupt:
+                executor.shutdown(wait=True, cancel_futures=True)
+                raise
+
+        if args.dry_run:
+            print(f"dry-run complete; prompts written under {raw_dir}")
+        else:
+            print(f"merged results written to {output}")
+            print(f"raw per-CVE files written under {raw_dir}")
+            write_metrics(paths, merged)
+    except KeyboardInterrupt:
+        run_status = "interrupted"
+        raise
+    except Exception as exc:
+        run_status = "failed"
+        run_error = str(exc)
+        raise
+    finally:
+        finalize_batch_manifest(manifest, merged, raw_tasks, run_status, run_error)
+        write_json(manifest_path, manifest)
     return 0
 
 

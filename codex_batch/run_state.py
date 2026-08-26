@@ -54,6 +54,10 @@ def should_skip(args: Any, merged: dict[str, Any], cve: str, binaries: list[str]
         merged[cve], binaries, "error"
     ):
         return False
+    if getattr(args, "retry_inconclusive", False) and result_has_status_for_binaries(
+        merged[cve], binaries, "inconclusive"
+    ):
+        return False
     return True
 
 

@@ -46,8 +46,28 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--project-json", type=Path)
+    parser.add_argument(
+        "--metadata",
+        choices=["full", "shim"],
+        default="shim",
+        help=(
+            "Metadata payload mode passed to codex. full keeps the project JSON "
+            "entry unchanged. shim removes function_anchors, reduced_function_code, "
+            "root_cause_analysis, and patch_intent_analysis."
+        ),
+    )
     parser.add_argument("--testset-json", type=Path)
     parser.add_argument("--target-dir", type=Path)
+    parser.add_argument(
+        "--debug-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional directory containing separated <target-file>.debug companions. "
+            "When set, each selected target is merged with its companion using "
+            "eu-unstrip before Codex inspects it."
+        ),
+    )
     parser.add_argument("--output", type=Path)
     parser.add_argument(
         "--groundtruth-json",
@@ -84,6 +104,11 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
         action="store_true",
         help="With --resume, rerun CVEs whose existing output contains at least one status=error.",
     )
+    parser.add_argument(
+        "--retry-inconclusive",
+        action="store_true",
+        help="With --resume, rerun CVEs whose existing output contains at least one status=inconclusive.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Write prompts but do not call codex.")
     parser.add_argument("--codex-bin", default="codex")
     profile_group = parser.add_mutually_exclusive_group()
@@ -105,7 +130,7 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     )
     parser.add_argument(
         "--reasoning-effort",
-        choices=["low", "medium", "high", "xhigh"],
+        choices=["low", "medium", "high", "xhigh", "max"],
         default=None,
         help="Override Codex model reasoning effort for each codex exec run.",
     )
@@ -113,8 +138,9 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument(
         "--sandbox",
-        default="workspace-write",
+        default="read-only",
         choices=["read-only", "workspace-write", "danger-full-access"],
+        help="Compatibility option; this workflow requires read-only.",
     )
     parser.add_argument(
         "--cd",
@@ -130,7 +156,7 @@ def parse_args(script_dir: Path) -> argparse.Namespace:
     parser.add_argument(
         "--no-anonymize-targets",
         action="store_true",
-        help="Expose original target filenames to codex exec instead of per-CVE anonymous temp copies.",
+        help="Deprecated and rejected: static-only runs always use anonymous target copies.",
     )
     parser.add_argument(
         "--jobs",
