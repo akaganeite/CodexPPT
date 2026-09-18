@@ -12,4 +12,7 @@ testset/
 binutils/gcc/
 binutils/gcc_strip_debug_keep_symbols/
 metadata/
+
+# Machine-local model/provider configuration. Start from model_config.json.template.
+model_config.json
 metadata/**/*.json
