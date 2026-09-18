@@ -9,10 +9,18 @@ from pathlib import Path
 from typing import Any
 
 from .anonymize import prepare_anonymous_targets, remap_result_to_original
+from .batch_manifest import create_batch_manifest, finalize_batch_manifest
 from .evaluation import evaluate_results
+from .ghidra_manager import (
+    GhidraState,
+    ghidra_failure_is_fatal,
+    list_codex_mcp_server_names,
+    prepare_ghidra,
+)
 from .io import is_relative_to, load_json, write_json
 from .paths import derive_project_paths
-from .prompt import build_prompt
+from .prompt import STATIC_ONLY_POLICY_PATH, build_prompt
+from .providers import resolve_profile, validate_profile_environment
 from .results import error_result, extract_json_object, validate_cve_result
 from .run_state import (
     load_existing_results,
@@ -25,11 +33,20 @@ from .schema import write_result_schema
 from .testset import normalize_testset
 
 
+SHIM_METADATA_KEYS = {
+    "function_anchors",
+    "reduced_function_code",
+    "root_cause_analysis",
+    "patch_intent_analysis",
+}
+
+
 def resolve_run_paths(args: argparse.Namespace, script_dir: Path) -> dict[str, Path | None]:
     derive_project_paths(args)
     project_json = args.project_json.resolve()
     testset_json = args.testset_json.resolve()
     target_dir = args.target_dir.resolve()
+    debug_dir = args.debug_dir.resolve() if args.debug_dir is not None else None
     output = args.output.resolve()
     raw_dir = (args.raw_dir or output.parent / (output.stem + "_codex_runs")).resolve()
     default_cd = args.project_dir if args.project_dir is not None else target_dir
@@ -41,6 +58,7 @@ def resolve_run_paths(args: argparse.Namespace, script_dir: Path) -> dict[str, P
     )
 
     args.target_dir = target_dir
+    args.debug_dir = debug_dir
     args.cd = cd
     args.prompt_template = args.prompt_template.resolve()
     args.safe_objdump_dir = script_dir / "utils"
@@ -69,8 +87,20 @@ def validate_inputs(args: argparse.Namespace, paths: dict[str, Path | None]) -> 
 
     if not target_dir.is_dir():
         raise ValueError(f"target directory does not exist or is not a directory: {target_dir}")
+    if args.sandbox != "read-only":
+        raise ValueError("static-only workflow requires --sandbox read-only")
+    if args.no_anonymize_targets:
+        raise ValueError("static-only workflow always anonymizes target binaries; remove --no-anonymize-targets")
+    if args.debug_dir is not None and not args.debug_dir.is_dir():
+        raise ValueError(f"debug directory does not exist or is not a directory: {args.debug_dir}")
     if not args.prompt_template.is_file():
         raise ValueError(f"prompt template does not exist: {args.prompt_template}")
+    if not STATIC_ONLY_POLICY_PATH.is_file():
+        raise ValueError(f"static-only policy does not exist: {STATIC_ONLY_POLICY_PATH}")
+    if args.ghidra != "off" and not args.binarywise:
+        raise ValueError("Ghidra integration requires --binarywise so each MCP server binds exactly one binary")
+    if args.ghidra_timeout <= 0:
+        raise ValueError("--ghidra-timeout must be positive")
 
 
 def safe_objdump_helper_for_prompt(cd: Path, script_dir: Path) -> str:
@@ -127,7 +157,7 @@ def process_cve(
     run_safe_objdump_dir = args.safe_objdump_dir
     run_safe_objdump_helper = safe_objdump_helper_for_prompt(run_cd, script_dir)
     run_binary_resolution = None
-    if not args.no_anonymize_targets:
+    if not args.no_anonymize_targets or args.debug_dir is not None:
         anonymous_targets = prepare_anonymous_targets(
             cve,
             binaries,
@@ -135,6 +165,8 @@ def process_cve(
             args.compiler,
             args.opt,
             args.safe_objdump_dir,
+            debug_dir=args.debug_dir,
+            anonymize=True,
         )
         run_binaries = anonymous_targets.requested_binaries
         run_target_dir = anonymous_targets.target_dir
@@ -143,16 +175,54 @@ def process_cve(
         run_safe_objdump_helper = anonymous_targets.safe_objdump_helper
         run_binary_resolution = anonymous_targets.binary_resolution
 
+    ghidra_state_path = raw_dir / f"{run_id}.ghidra.json"
+    ghidra_query_log = raw_dir / f"{run_id}.ghidra_queries.jsonl"
+    ghidra_query_log.touch(exist_ok=True)
+    ghidra_state = GhidraState(requested="off")
+    if len(run_binaries) == 1:
+        resolved_name = (
+            run_binary_resolution.get(run_binaries[0], run_binaries[0])
+            if run_binary_resolution is not None
+            else run_binaries[0]
+        )
+        ghidra_state = prepare_ghidra(
+            mode=args.ghidra,
+            binary=run_target_dir / resolved_name,
+            cache_dir=args.ghidra_cache_dir,
+            install_dir=args.ghidra_install_dir,
+            timeout_sec=args.ghidra_timeout,
+            state_path=ghidra_state_path,
+            dry_run=args.dry_run,
+        )
+
+    if ghidra_failure_is_fatal(args.ghidra, args.dry_run, ghidra_state):
+        if anonymous_targets is not None:
+            write_json(raw_dir / f"{run_id}.anonymized_targets.json", anonymized_mapping_payload(anonymous_targets))
+            anonymous_targets.cleanup()
+        with lock:
+            merged.setdefault(cve, {}).update(
+                error_result(
+                    cve,
+                    binaries,
+                    "Required Ghidra analysis failed before Codex was started.",
+                    ghidra_state.error or "required Ghidra analysis was unavailable",
+                )
+            )
+            write_json(output, merged)
+        return
+
+    prompt_metadata = metadata_for_prompt(metadata[cve], args.metadata)
     prompt = build_prompt(
         args.prompt_template,
         cve,
-        metadata[cve],
+        prompt_metadata,
         run_binaries,
         run_target_dir,
         args.compiler,
         args.opt,
         run_safe_objdump_helper,
         run_binary_resolution,
+        ghidra_enabled=ghidra_state.enabled or ghidra_state.status == "preflight_ready",
     )
 
     label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
@@ -176,6 +246,10 @@ def process_cve(
             cd=run_cd,
             target_dir=run_target_dir,
             safe_objdump_dir=run_safe_objdump_dir,
+            ghidra_state=ghidra_state,
+            ghidra_query_log=ghidra_query_log,
+            disabled_mcp_servers=args.disabled_mcp_servers,
+            script_dir=script_dir,
         )
         if rc != 0:
             detail = stderr_text.strip() or final_text.strip()
@@ -215,8 +289,19 @@ def anonymized_mapping_payload(targets: Any) -> dict[str, Any]:
         "anonymous_to_original": targets.anonymous_to_original,
         "original_to_anonymous": targets.original_to_anonymous,
         "original_to_actual": targets.actual_mapping,
+        "debug_sources": targets.debug_mapping,
         "safe_objdump_helper": targets.safe_objdump_helper,
     }
+
+
+def metadata_for_prompt(metadata: Any, mode: str) -> Any:
+    if mode == "full":
+        return metadata
+    if mode != "shim":
+        raise ValueError(f"unsupported metadata mode: {mode}")
+    if not isinstance(metadata, dict):
+        return metadata
+    return {key: value for key, value in metadata.items() if key not in SHIM_METADATA_KEYS}
 
 
 def write_metrics(paths: dict[str, Path | None], merged: dict[str, Any]) -> None:
@@ -242,6 +327,13 @@ def write_metrics(paths: dict[str, Path | None], merged: dict[str, Any]) -> None
 def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
     paths = resolve_run_paths(args, script_dir)
     validate_inputs(args, paths)
+    validate_profile_environment(resolve_profile(args))
+    args.ghidra_cache_dir = args.ghidra_cache_dir.expanduser().resolve()
+    if args.ghidra_install_dir is not None:
+        args.ghidra_install_dir = args.ghidra_install_dir.expanduser().resolve()
+    args.disabled_mcp_servers = (
+        list_codex_mcp_server_names(args.codex_bin) if args.ghidra != "off" else []
+    )
 
     metadata = load_json(require_path(paths["project_json"]))
     testset = normalize_testset(load_json(require_path(paths["testset_json"])))
@@ -269,41 +361,58 @@ def run_batch(args: argparse.Namespace, script_dir: Path) -> int:
             label = f"{cve} ({len(binaries)} binaries)" if len(binaries) != 1 else f"{cve} {binaries[0]}"
             print(f"skip {label} (already in output)")
 
-    total = len(pending)
-    counter = itertools.count(1)
-    jobs = max(1, args.jobs)
-    with ThreadPoolExecutor(max_workers=jobs) as executor:
-        futures = [
-            executor.submit(
-                process_cve,
-                cve,
-                total,
-                counter,
-                metadata,
-                testset,
-                merged,
-                merged_lock,
-                paths,
-                args,
-                script_dir,
-                requested_binaries=binaries,
-                run_id=run_id,
-            )
-            for cve, binaries, run_id in pending
-        ]
-        try:
-            for future in as_completed(futures):
-                future.result()
-        except KeyboardInterrupt:
-            executor.shutdown(wait=True, cancel_futures=True)
-            raise
+    manifest_path = raw_dir / "batch_manifest.json"
+    manifest = create_batch_manifest(args, paths, script_dir, metadata, raw_tasks, pending, merged)
+    write_json(manifest_path, manifest)
 
-    if args.dry_run:
-        print(f"dry-run complete; prompts written under {raw_dir}")
-    else:
-        print(f"merged results written to {output}")
-        print(f"raw per-CVE files written under {raw_dir}")
-        write_metrics(paths, merged)
+    run_status = "completed"
+    run_error = None
+    try:
+        total = len(pending)
+        counter = itertools.count(1)
+        jobs = max(1, args.jobs)
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
+            futures = [
+                executor.submit(
+                    process_cve,
+                    cve,
+                    total,
+                    counter,
+                    metadata,
+                    testset,
+                    merged,
+                    merged_lock,
+                    paths,
+                    args,
+                    script_dir,
+                    requested_binaries=binaries,
+                    run_id=run_id,
+                )
+                for cve, binaries, run_id in pending
+            ]
+            try:
+                for future in as_completed(futures):
+                    future.result()
+            except KeyboardInterrupt:
+                executor.shutdown(wait=True, cancel_futures=True)
+                raise
+
+        if args.dry_run:
+            print(f"dry-run complete; prompts written under {raw_dir}")
+        else:
+            print(f"merged results written to {output}")
+            print(f"raw per-CVE files written under {raw_dir}")
+            write_metrics(paths, merged)
+    except KeyboardInterrupt:
+        run_status = "interrupted"
+        raise
+    except Exception as exc:
+        run_status = "failed"
+        run_error = str(exc)
+        raise
+    finally:
+        finalize_batch_manifest(manifest, merged, raw_tasks, run_status, run_error, raw_dir)
+        write_json(manifest_path, manifest)
     return 0
 
 

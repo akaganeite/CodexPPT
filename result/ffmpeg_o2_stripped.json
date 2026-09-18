@@ -1,0 +1,524 @@
+{
+  "CVE-2020-12284": {
+    "ffmpeg-4.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.1-ffmpeg exists and is an ELF64 x86-64 stripped PIE executable.",
+        "Local strings show the trace_headers bitstream filter and CBS modules are compiled, but only cbs.c, cbs_av1.c, cbs_av1_syntax_template.c, cbs_h2645.c, cbs_mpeg2.c, cbs_mpeg2_syntax_template.c, and cbs_vp9.c appear; no cbs_jpeg.c/cbs_jpeg identifier appears.",
+        "The unique cbs_jpeg_split_fragment anchor strings \"Invalid JPEG image\", \"truncated at %02x marker\", and \"truncated at %02x marker segment\" are absent from the binary.",
+        "JPEG/MJPEG decoder-related strings are present, but they are unrelated decoder paths such as \"could not find SOS marker in bitstream\" and do not show the Coded Bitstream JPEG parser required by this CVE."
+      ],
+      "reasoning": "The vulnerable mechanism is specific to FFmpeg's CBS JPEG splitter handling JPEG_MARKER_SOS in cbs_jpeg_split_fragment. Local binary evidence shows CBS support is present for other codecs and trace_headers is present, but the CBS JPEG implementation and its unique error strings are not compiled into this binary. Therefore the required vulnerable feature/backend is not applicable, so this is a build/configuration not_affected decision rather than a patch-presence claim.",
+      "status": "not_affected"
+    },
+    "ffmpeg-4.3.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "The vulnerable mechanism is specific to cbs_jpeg_split_fragment/SOS handling in the JPEG coded-bitstream backend.",
+        "The binary's own trace_headers help reports supported codecs only as: av1, h264, hevc, mpeg2video, vp9; mjpeg/jpeg is not supported by trace_headers.",
+        "Local strings show coded-bitstream modules for cbs.c, cbs_av1.c, cbs_h2645.c, cbs_mpeg2.c, and cbs_vp9.c, but no cbs_jpeg/cbs_jpeg.c evidence.",
+        "The unique cbs_jpeg error anchor string \"Invalid JPEG image: truncated at %02x marker.\" is absent."
+      ],
+      "reasoning": "CVE-2020-12284 applies to the JPEG coded-bitstream parser path that handles SOS segments. Local binary evidence shows the relevant cbs_jpeg backend is not compiled/applicable in this requested binary: trace_headers lacks mjpeg/jpeg support and cbs_jpeg anchors are absent, while other CBS backends are present. This is a build/configuration inapplicability decision, not evidence of the patch itself.",
+      "status": "not_affected"
+    }
+  },
+  "CVE-2020-20446": {
+    "ffmpeg-4.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.2-ffmpeg exists and is an ELF64 x86-64 PIE executable; AAC encoder/3GPP psychoacoustic model code is compiled in, including the rodata string \"3GPP TS 26.403-inspired model\" referenced from the model table.",
+        "The 3GPP AAC psychoacoustic model table at .data.rel.ro around 0xea0240 contains code pointers into the relevant implementation, including 0x9a5870, 0x9a6f80, and cleanup at 0x14de50.",
+        "In the per-channel analysis code around 0x9a5e00, the function loads model private data from [rdi+0x48], scales the channel index by 0x247c, and adds it to [model_priv+0xe20], matching the pctx->ch[channel] access pattern.",
+        "At 0x9a6d71-0x9a6d85 the code loads 1.0f from rodata into xmm0 and immediately executes divss xmm0,DWORD PTR [rsp+0x8], then tests an unrelated integer loop bound; there is no preceding zero comparison or branch guarding the denominator.",
+        "The observed sequence corresponds to unconditional norm_fac reciprocal calculation, not the patched behavior that sets the result to 0 when norm_fac is zero."
+      ],
+      "reasoning": "The vulnerable mechanism is an unconditional floating-point division by norm_fac when it may be zero. The binary contains the affected AAC 3GPP psychoacoustic analysis code, so it is applicable. Local disassembly shows the vulnerable-side behavior: 1.0f is divided by the saved denominator without a zero check or branch. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-5.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-5.1-ffmpeg exists as a stripped ELF64 x86-64 PIE executable with AAC/3GPP psychoacoustic model strings compiled in.",
+        "Relocation/data evidence links the local string \"3GPP TS 26.403-inspired model\" at 0xe30a6c to a model descriptor near 0x102bf40 with code pointers into the AAC psychoacoustic implementation, including wrapper 0xab7bd0 calling candidate analyze routine 0xab6a90.",
+        "Candidate routine 0xab6a90 indexes per-channel model state via ctx field loads and channel-scaled offset, and zero-initializes a 512-byte stack region using `lea [rsp+0xa0]`, `ecx=0x40`, `rep stos QWORD`, matching the 128-float spread_en anchor.",
+        "Zero value is explicitly stored at [rsp+0x4] early in 0xab6a90 (`pxor xmm4,xmm4`; `movss [rsp+0x4],xmm4`).",
+        "At 0xab79ef the candidate routine loads the accumulated divisor-like float from [rsp+0x8], compares it with the zero slot [rsp+0x4] using `ucomiss`, and branches to the reciprocal block only on unordered/not-equal (`jp/jne 0xab7b2b`).",
+        "The reciprocal block at 0xab7b2b loads 1.0f from rodata address 0xb77918 (`0000803f`), performs `divss xmm0,DWORD PTR [rsp+0x8]`, stores it back, and rejoins; if the compared value is zero, control falls through without division, leaving the value zero."
+      ],
+      "reasoning": "The vulnerable mechanism is an unconditional `1.0f / norm_fac` when norm_fac may be zero. The located 3GPP AAC psychoacoustic analyze routine contains the patched behavior: it compares the norm_fac-like stack float against a known zero value and only executes the 1.0f reciprocal when nonzero, otherwise skipping the division. This satisfies the patch intent and primary behavior-change checklist.",
+      "status": "present"
+    }
+  },
+  "CVE-2020-20450": {
+    "ffmpeg-4.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF 64-bit x86-64 stripped PIE executable; MXF-related strings are compiled in, including \"error parsing mpeg2 frame\", \"could not get dnxhd profile\", \"could not get prores profile\", and \"h264 profile not supported\".",
+        "DNXHD-like path near 0x384f7a explicitly stores NULL to stream context field `[r12+0x50]` before scanning the codec UID table, then on a match stores the table UID pointer at 0x384fbe; this matches the vulnerable pre-patch `sc->codec_ul = NULL` mechanism.",
+        "ProRes-like path near 0x385059 explicitly stores NULL to `[rcx+0x50]` before profile checks and only stores a UID pointer on supported profile paths, matching the vulnerable pre-patch behavior removed by the patch.",
+        "H.264-like path near 0x38539a explicitly stores NULL to `[r11+0x50]`, writes matched table pointers directly to `[...+0x50]` at 0x385411, and the failure check at 0x385460 tests `sc->codec_ul` itself before logging \"h264 profile not supported\"; this is the vulnerable-side behavior rather than patched local `codec_ul` guarding.",
+        "MPEG2-related path tests `[r10+0x50]` at 0x385598 and branches to the common unsupported-codec error path when it is NULL, consistent with the old `return !!sc->codec_ul` behavior rather than the patched local-pointer early return before assignment."
+      ],
+      "reasoning": "The patch's security property is to avoid ever setting `sc->codec_ul` to NULL for unsupported MXF codec profiles. Local disassembly shows multiple MXF parser paths still explicitly zeroing the stream context codec UID field and then using that same field as the success/failure condition. That is decisive vulnerable-side behavior for the requested binary.",
+      "status": "absent"
+    },
+    "ffmpeg-5.0-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "`targets/ffmpeg-5.0-ffmpeg` exists and is a stripped ELF64 PIE; MXF muxer strings are present, including `h264 profile not supported`, `error parsing mpeg2 frame`, `could not get dnxhd profile`, and `could not get prores profile`.",
+        "H.264 parser code at `0x43c5a5-0x43c6c8` uses `r9` as a local codec UID pointer: initialized with `xor %r9d,%r9d`, populated from table entries, checked at `0x43c8e0` with `test %r9,%r9`, and only stored to `sc->codec_ul` at `0x43c678` when non-NULL. The NULL path logs `h264 profile not supported` without storing zero to `sc->codec_ul`.",
+        "DNXHD code at `0x43c1c7-0x43c21c` scans the DNXHD table with loop bound `0x14`; on match it stores the table UID pointer to `0x20(%rbp)`, while the no-match path at `0x43c23f` logs `could not get dnxhd profile` without an observed `sc->codec_ul = NULL` store.",
+        "ProRes code at `0x43bd32-0x43bd76` rejects unsupported profiles by logging `could not get prores profile`; valid profiles branch to `0x43c741-0x43c75d`, which stores a table UID pointer to `sc->codec_ul`. No unsupported-profile zero store to `sc->codec_ul` is present in this path.",
+        "MPEG-2 code at `0x43bf65-0x43bfa3` skips codec UID lookup for the D10 muxer comparison, otherwise resolves codec UID by codec parameters; valid matches store UID pointers via `0x43c8a6`, and unsupported paths branch away without assigning NULL to `sc->codec_ul`."
+      ],
+      "reasoning": "The vulnerable mechanism is assigning `sc->codec_ul = NULL` for unsupported MXF codec profiles, later allowing a NULL dereference. The binary contains the affected MXF muxer code, but the located optimized code follows the patched behavior: unsupported profiles return/log without clearing `sc->codec_ul`, and H.264/MPEG-2 use a local UID pointer with a NULL guard before assignment. This satisfies the patch-presence checklist.",
+      "status": "present"
+    }
+  },
+  "CVE-2020-20451": {
+    "ffmpeg-4.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.2-ffmpeg exists and is a stripped ELF64 x86-64 PIE executable.",
+        "Relevant open_files-like function located at 0x15b9b0: loops over groups, initializes a stack OptionsContext, calls 0x16a7c0 with &o and group pointer, then on success performs an indirect callback via call rax at 0x15bac4.",
+        "The call at 0x16a7c0 is anchored by parse-option strings including 'Parsing a group of options: %s %s.' and 'Successfully parsed a group of options.', matching parse_optgroup.",
+        "After parse_optgroup returns, 0x15ba9b tests eax and 0x15ba9d jumps on negative to 0x15bc5d, which logs 'Error parsing options for %s file %s.' and jumps directly to the common return path at 0x15bc24.",
+        "The normal post-callback path calls cleanup/free helper 0xa26760 repeatedly from 0x15bb37 through 0x15bbdd before returning, but the parse_optgroup error path 0x15bc5d-0x15bc72 contains no cleanup call before return."
+      ],
+      "reasoning": "The vulnerable mechanism is a missing uninit_options cleanup when parse_optgroup fails. Local disassembly shows the parse_optgroup negative-return branch logs the error and returns without entering the cleanup sequence that is present after the callback, which is the vulnerable-side behavior. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-4.3.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.3.2-ffmpeg exists as a stripped ELF64 x86-64 PIE executable; no local architecture/configuration evidence makes the option-parsing code inapplicable.",
+        "open_files-like function found at 0x1725d0: loops over groups via [rdi+0x10]/[rdi+0x8], initializes a stack OptionsContext at rsp+0x10, calls parse_optgroup-like routine 0x183020, then conditionally calls an indirect open_file callback through saved third argument.",
+        "After parse_optgroup-like call at 0x1726fc, the negative-return branch at 0x172703 leads to parse-error logging using string 'Error parsing options for %s file %s.' at 0xab8e28, then executes call 0x16c2d0 at 0x17272c before loading saved return value and returning.",
+        "The same 0x16c2d0 routine is called on the normal post-open_file cleanup path at 0x172651 with rdi=rbp (the OptionsContext pointer), and its body frees multiple OptionsContext-owned fields via free-like calls, matching uninit_options behavior."
+      ],
+      "reasoning": "The vulnerable mechanism is a missing uninit_options call after parse_optgroup failure. In this binary, the parse_optgroup failure branch contains a cleanup call to the same uninit_options-like routine used on the normal path before the function returns, which matches the patched behavior.",
+      "status": "present"
+    }
+  },
+  "CVE-2020-20898": {
+    "ffmpeg-4.2.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 x86-64 PIE under target_dir.",
+        "Convolution/edge filter strings are present locally: \"convolution\", \"sobel\", \"prewitt\", \"roberts\".",
+        "16-bit edge-filter dispatch is compiled in: setup code compares bit depth against 8 and, for >8, assigns local 16-bit filter functions for sobel/prewitt/roberts.",
+        "At 0x1cb160 loop uses 16-bit loads with stride 2, e.g. movzx WORD PTR [r14+rax*2], [r13+rax*2], [r12+rax*2], then computes Sobel-style weighted integer sums using neg/add/lea.",
+        "At 0x1cb1fb and 0x1cb20d the squared terms are integer imul instructions before a single cvtsi2ss at 0x1cb212; floating sqrt/scale occurs only after the integer square/add.",
+        "At 0x1cb260 Roberts-style 16-bit loop similarly uses movzx WORD loads, integer sub, integer imul of each sum at 0x1cb2a1 and 0x1cb2a7, then cvtsi2ss at 0x1cb2ac.",
+        "At 0x1cb2f0/0x1cb340 Prewitt-style 16-bit loop uses 16-bit stride-2 loads and integer add/sub accumulation, integer imul at 0x1cb386 and 0x1cb398, then cvtsi2ss at 0x1cb39d."
+      ],
+      "reasoning": "The patch's security property is to make suma/sumb floating-point before further arithmetic so weighted 16-bit accumulations cannot overflow signed int. The local 16-bit filter loops are applicable and still perform the weighted sums and squaring in integer registers, converting to float only after the potentially overflowing integer operations. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-4.3.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.3.2-ffmpeg exists: stripped ELF64 x86-64 PIE executable; convolution feature strings are present, including @convolution, prewitt, roberts, and sobel.",
+        "16-bit Sobel-like loop at 0x1e9e10 uses 16-bit loads with 2*x addressing (movzwl (...,%rax,2)), integer GPR arithmetic for weighted sums including add edx,edx and lea (...,%r10,2), then converts the completed integer sums with cvtsi2ss at 0x1e9e9b and 0x1e9ec1.",
+        "16-bit Roberts-like loop at 0x1e9f20 uses 16-bit loads with 2*x addressing, subtracts in integer registers, then converts completed integer differences with cvtsi2ss at 0x1e9f60 and 0x1e9f6b before sqrtss.",
+        "16-bit Prewitt-like loop at 0x1e9fc0 uses 16-bit loads with 2*x addressing and integer add/sub accumulation, then converts completed integer sums with cvtsi2ss at 0x1ea04b and 0x1ea06d before sqrtss.",
+        "The loops clamp against the peak argument after sqrtss and scaling, confirming these are the 16-bit convolution edge-filter paths rather than uint8-only paths."
+      ],
+      "reasoning": "The vulnerable mechanism is accumulation of weighted 16-bit samples in 32-bit signed integer intermediates before floating-point square root. The patch requires suma/sumb arithmetic to be performed as float, which would show floating-point conversion before or during sum accumulation. Local disassembly instead shows the 16-bit filter sums are fully accumulated in integer registers and only then converted to float, matching the vulnerable-side behavior. The binary is not inapplicable because the convolution feature and 16-bit paths are present.",
+      "status": "absent"
+    }
+  },
+  "CVE-2020-21688": {
+    "ffmpeg-4.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.2-ffmpeg exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "MOV muxer code is present: strings include \"Using MS style video codec tag, the file may be unplayable!\" at 0xa95348 and \"Using MS style audio codec tag, the file may be unplayable!\" at 0xa95388, with RIP-relative references from the MOV tag-resolution region.",
+        "RTP hint support is applicable: strings include \"rtphint\", \"Add RTP hint tracks\", and multiple literal \"rtp \" occurrences.",
+        "In the inlined mov_get_codec_tag logic, 0x34e49d loads track->par, 0x34e4a2 loads codec_tag into ebp from 0x8(%rdx), then 0x34e808 tests ebp for zero and 0x34e81b branches directly to 0x34e8cd when strict_std_compliance is negative.",
+        "At 0x34e8cd the code stores ebp unchanged to track tag storage (mov %ebp,0x58(%r12)); there is no preceding cmp/cmove/assignment clearing ebp for 0x20707472 ('rtp ') in this tag-resolution path."
+      ],
+      "reasoning": "The patch requires mov_get_codec_tag to detect tag == MKTAG('r','t','p',' ') and set tag to 0 before normal tag handling. The local binary instead preserves a nonzero codec_tag and can store it unchanged as the resulting MOV track tag. Since the relevant MOV/RTP-hint code is compiled in and the patched guard is absent from the anchored tag-resolution path, the binary shows vulnerable-side behavior.",
+      "status": "absent"
+    },
+    "ffmpeg-5.0-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "MOV/MP4 muxer code is compiled in: strings include `mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v`, `libavformat/movenc.c`, and the unique mov_get_codec_tag anchor `Using MS style video codec tag, the file may be unplayable!`.",
+        "In the candidate MOV codec-tag logic near the warning-string xref, the initial tag in `ebp` is checked with `test ebp,ebp` at 0x403690, then compared to little-endian `'rtp '` using `cmp ebp,0x20707472` at 0x403698.",
+        "Both tag==0 and tag=='rtp ' branch to 0x4037f0, where the code loads codec_id and executes `xor ebp,ebp` at 0x4037f3, clearing the tag before later fallback/return handling.",
+        "The non-cleared path stores the resulting tag with `mov DWORD PTR [r12+0x58],ebp` at 0x403706; because the `'rtp '` case is routed through `xor ebp,ebp`, local code evidence shows it is not returned unchanged."
+      ],
+      "reasoning": "The vulnerable mechanism is mov_get_codec_tag returning an externally supplied `'rtp '` codec tag unchanged. This binary contains the applicable MOV muxer code, and the disassembly shows the patched behavior: a specific guard compares the codec tag against `'rtp '` and clears the tag before the normal codec-tag fallback path. That satisfies the patch-presence checklist.",
+      "status": "present"
+    }
+  },
+  "CVE-2020-23906": {
+    "ffmpeg-4.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: stripped ELF64 x86-64 PIE executable; architecture/build does not make the MM demuxer issue inapplicable.",
+        "Exact MM demuxer anchor string \"unknown chunk type 0x%x\" is present at 0xa9145a and is referenced from code at 0x33abe2 inside the located read_packet-like function starting at 0x33ab50.",
+        "In the located function, the audio packet path at 0x33ac08 calls a packet-read helper with s->pb/pkt/length, then at 0x33ac24 writes 1 to pkt+0x24, matching unconditional stream_index 1 assignment.",
+        "No preceding comparison of AVFormatContext nb_streams against 2 is present before the audio packet path; the function prologue only loads s->priv_data from [rdi+0x18] and s->pb from [rdi+0x20].",
+        "The located function's error returns use 0xfffffffb and 0xfffffff4; it does not contain the patched AVERROR_INVALIDDATA immediate 0xbebbb1b7 on the stream-count guard path."
+      ],
+      "reasoning": "The vulnerable mechanism is returning an audio packet with stream_index 1 without first validating that at least two streams exist. Local disassembly of the MM read_packet anchor shows the vulnerable-side behavior: av_get_packet-style read followed by storing stream_index 1, with no s->nb_streams < 2 guard returning AVERROR_INVALIDDATA. Therefore the requested binary lacks the patch.",
+      "status": "absent"
+    },
+    "ffmpeg-5.0-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 PIE executable.",
+        "The MM demuxer read_packet code was located by the exact rodata string \"unknown chunk type 0x%x\" at 0xba909b, referenced at 0x3ed642 in the same function.",
+        "In that function, the audio-chunk path compares the chunk type to 0x15, then executes `cmp DWORD PTR [r13+0x2c],0x1` followed by `jbe 0x3ed74a` before packet reading.",
+        "The branch target 0x3ed74a loads `eax=0xbebbb1b7`, the two's-complement encoding of AVERROR_INVALIDDATA (-1094995529).",
+        "Only after the stream-count guard does the code load `s->pb` from `[r13+0x20]`, pass `pkt` in `rsi`, pass length in `edx`, call the packet-read helper at 0x494ac0, and set `pkt->stream_index` to 1 at `[rbx+0x24]`."
+      ],
+      "reasoning": "The vulnerable mechanism is returning an audio packet with stream_index 1 without verifying that stream 1 exists. Local disassembly shows the patched behavior: on the audio packet path, the binary checks the AVFormatContext stream count field for at least two streams and returns AVERROR_INVALIDDATA before reading/returning the packet when the check fails.",
+      "status": "present"
+    }
+  },
+  "CVE-2020-24020": {
+    "ffmpeg-4.2.3-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as a stripped ELF64 x86-64 PIE, and local strings/function-pointer setup show the FFmpeg DNN native backend is compiled in.",
+        "In the native DNN path around 0x2c5350, allocation size is computed with 32-bit dimension arithmetic: `imul edi,r14d`, `imul edi,ebp`, then `movsxd rdi,edi`, `shl rdi,0x2`, followed by an allocation call at 0x2c53c7.",
+        "A related native model allocation path around 0x2c5fef similarly multiplies dimensions in a 32-bit register, sign-extends the result, shifts by 2, and allocates; nearby checks only reject non-positive individual dimensions, not product overflow.",
+        "The observed DNN allocation paths do not show the patched behavior: no 64-bit product accumulation, no comparison against 0x7fffffff, no return-zero overflow path, and no caller `<= 0` guard before allocation."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked 32-bit multiplication of tensor dimensions before heap allocation. Local binary evidence shows the native DNN backend still computes allocation lengths through vulnerable 32-bit `imul` chains and allocates from the potentially wrapped result. The expected patched overflow guard and caller abort behavior were not present in the identified native DNN allocation paths, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-5.0-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-5.0-ffmpeg exists as a stripped ELF64 x86-64 PIE executable; native DNN backend code is compiled in, shown by rodata strings for libavfilter/dnn/dnn_backend_native_layer_conv2d.c and dnn_backend_native_layer_pad.c.",
+        "Patch-specific overflow diagnostic string is present in rodata at 0xb91120: \"The output data length overflow.\"",
+        "Function at 0x362f10 implements patched length calculation: initializes eax=4, loops over four 32-bit dims until rdi reaches rdi+0x10, sign-extends each dim, multiplies in 64-bit (imul rax,rdx), compares against 0x80000000, and returns zero on overflow at 0x362f40.",
+        "Multiple DNN layer callers store the result of call 0x362f10 to operand length, test eax,eax, branch on jle before realloc: conv-like caller at 0x364f91-0x364fb8, depth2space-like caller at 0x3664c8-0x3664ed, math-like callers at 0x366a71-0x366a94 and 0x366c60-0x366c80, maximum-like caller at 0x367260-0x367279, and pad-like caller at 0x36749c-0x3674c3.",
+        "The error paths reached by jle load the overflow diagnostic string and return an error code before the realloc call, e.g. 0x36522e returns 1 for conv-like code and 0x3674b2 jumps to 0x367e28 before allocation."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked 32-bit multiplication of four dimensions causing an undersized allocation. This binary contains the applicable native DNN layer code and also contains a separate patched calculate_operand_data_length implementation using a 64-bit accumulator, a four-dimension loop, an overflow comparison equivalent to > INT32_MAX, and return 0 on overflow. The relevant DNN layer callers use this patched function and check <=0 before av_realloc, matching the patch intent and behavior_changes.",
+      "status": "present"
+    }
+  },
+  "CVE-2021-3566": {
+    "ffmpeg-3.4.7-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-3.4.7-ffmpeg exists as a stripped ELF64 x86-64 PIE executable.",
+        "The tty demuxer is compiled in: rodata contains \"tty\" at VA 0x9a8f2e, \"Tele-typewriter\" at 0x9a8f32, and \"ans,art,asc,diz,ice,nfo,txt,vt\" at 0x9a8f60.",
+        "The tty AVInputFormat-like structure at VA 0xd96860 points to name 0x9a8f2e, long_name 0x9a8f32, extensions 0x9a8f60, then has a zero pointer at offset 0x48 followed by code pointers 0x358090 and 0x357fe0 at offsets 0x50 and 0x58.",
+        "The function pointer at 0x358090 behaves like a tty read_header implementation, accessing AVFormatContext/private data fields, allocating/initializing context state, and not performing the patched read_probe loop over AVProbeData bytes.",
+        "No code reference to the extension string 0x9a8f60 was found; it appears only as static demuxer metadata, not as an av_match_ext/read_probe argument."
+      ],
+      "reasoning": "The vulnerable mechanism is the tty demuxer being available without a probe gate. The patched behavior requires a read_probe slot that counts ANSI-like bytes and gates on the hardcoded extension list. Local binary evidence shows the tty demuxer is present, but its probe-function slot is null while the following slots are normal read_header/read_packet handlers. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-4.3.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Requested binary exists under target_dir: stripped ELF64 PIE x86-64 executable.",
+        "TTY demuxer anchors are present in local binary: string \"tty\" at VA 0xb2cc93, \"Tele-typewriter\" at VA 0xb2cc97, and extension list \"ans,art,asc,diz,ice,nfo,txt,vt\" at VA 0xb2ccd0.",
+        "The AVInputFormat-like data structure references the tty strings and extension list, and contains a function pointer to VA 0x4296c0 in the probe-function slot area.",
+        "Function at VA 0x4296c0 reads AVProbeData-like fields p->buf_size at +0x10 and p->buf at +0x8, scans bytes, and checks ANSI-like constants ESC 0x1b, LF 0x0a, CR 0x0d, and printable ASCII range via subtract/compare logic.",
+        "The same function enforces a count threshold with cmp $0x190 (400), computes a score using the byte count divided by buf_size, and calls VA 0x3535d0 with p->filename and the extension-list address 0xb2ccd0.",
+        "Call target VA 0x3535d0 performs extension matching behavior: it calls strrchr for '.' and compares the suffix against the supplied comma-separated extension list."
+      ],
+      "reasoning": "The root cause is absence of a tty read_probe, allowing arbitrary files to be treated as TTY. Local binary evidence shows the tty demuxer has a read_probe-like function compiled in and wired into its static format structure. That function validates ANSI-like byte content, gates on a >400 count threshold for larger buffers, and requires a filename extension match against the hardcoded tty extension list. This demonstrates the patched security behavior rather than the vulnerable no-probe behavior.",
+      "status": "present"
+    }
+  },
+  "CVE-2021-38114": {
+    "ffmpeg-4.4-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 PIE x86-64 executable.",
+        "DNxHD decoder code is present: strings include 'unsupported cid %u', 'bit depth mismatches %d %d', and 'Profile cid %u.'.",
+        "The dnxhd_init_vlc-like block at 0x54a937 frees three VLC structures via calls to 0x4d4550, then calls init_vlc-like function 0x4d39a0 three times with DNxHD constants: 0x101, bitdepth-dependent 12/14, and 0x3e.",
+        "After each init_vlc-like call at 0x54a9ac, 0x54a9ff, and 0x54aa3d, the return value in eax is not tested for negative status; execution proceeds to the next setup step or stores the cid at [rbx+0x40].",
+        "String scan found no 'init_vlc failed' error message in the binary."
+      ],
+      "reasoning": "The vulnerable mechanism is missing return-value checks for init_vlc. Local disassembly shows the relevant DNxHD VLC initialization code is compiled in and uses the vulnerable-side behavior: three init_vlc calls are made without checking or propagating negative returns, and the patched error log string is absent. Therefore the patch is absent for this binary.",
+      "status": "absent"
+    },
+    "ffmpeg-5.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: stripped ELF64 x86-64 PIE executable.",
+        "DNxHD decoder code is present: strings include 'unsupported cid %u', 'bit depth mismatches %d %d', 'Profile cid %u.', and patch-only 'init_vlc failed'.",
+        "Focused disassembly around the DNxHD CID/VLC block shows three init_vlc-like calls to 0x84b6c0 using constants 0x101, bitdepth-derived 0x0c/0x0e, and 0x3e at 0x5944ed, 0x59454c, and 0x594596.",
+        "Each call is immediately followed by 'test eax,eax' and 'js 0x594bf0', proving negative init_vlc returns are checked.",
+        "The shared failure path at 0x594bf0 saves eax, loads the 'init_vlc failed' string at 0xc32f15, calls the logging routine, reloads the saved value into r8d, and jumps to an epilogue that returns r8d in eax."
+      ],
+      "reasoning": "The vulnerable mechanism was unchecked init_vlc failure. This binary contains the applicable DNxHD VLC initialization code and implements the patched behavior: all three init_vlc return values are checked for negative errors, failures log 'init_vlc failed', and the negative return code is propagated to the caller/return path instead of silently returning success.",
+      "status": "present"
+    }
+  },
+  "CVE-2021-38291": {
+    "ffmpeg-4.2.4-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "`targets/ffmpeg-4.2.4-ffmpeg` exists and is a stripped ELF64 x86-64 PIE executable with FFmpeg/libavcodec and `adpcm_ms` strings, so the relevant codec code is compiled in.",
+        "At `0x8120a0`, a wrapper loads fields from the first pointer argument at offsets including `0x18`, `0x1c`, `0x38`, `0x58`, `0x160`, `0x164/0x39c`, `0x16c`, `0x174`, `0x270`, pushes four stack arguments, and calls `0x8117d0`, matching the 10-argument `get_audio_frame_duration` call from `AVCodecContext`.",
+        "Immediately after that call, the wrapper executes `xor %edx,%edx; test %eax,%eax; cmovs %edx,%eax; add $0x28,%rsp; ret`, which returns 0 when the helper result is negative and otherwise returns the helper result.",
+        "At `0x812100`, a second wrapper loads analogous fields from different offsets (`0x04`, `0x08`, `0x10`, `0x20`, `0x28`, `0x70/0x94`, `0x74`, `0x78`, `0x7c`), calls the same helper `0x8117d0`, and uses the same `xor/test/cmovs` zero-clamp before returning, matching `av_get_audio_frame_duration2`.",
+        "The helper at `0x8117d0` contains the expected duration computation logic with codec-id comparisons and arithmetic/division paths, including paths that can compute signed values before returning to the wrappers."
+      ],
+      "reasoning": "The vulnerable mechanism was direct propagation of a negative result from `get_audio_frame_duration`. Both requested wrapper patterns are present in the binary and both clamp a negative `%eax` return value to zero immediately after the helper call. This is the concrete patched behavior required by the patch intent, so the patch is present.",
+      "status": "present"
+    },
+    "ffmpeg-5.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 x86-64 PIE executable under target_dir.",
+        "Local strings include libavcodec/utils.c and ADPCM codec names including adpcm_ms, so the affected libavcodec audio-duration code is compiled in.",
+        "Wrapper at 0x8120a0 loads many fields from one structure pointer (e.g. [rdi+0x18], [rdi+0x1c], [rdi+0x38], [rdi+0x58], [rdi+0x160], [rdi+0x164/0x39c], [rdi+0x16c], [rdi+0x174], [rdi+0x270]) plus frame_bytes, calls internal function 0x8117d0, then executes xor edx,edx; test eax,eax; cmovs eax,edx before return.",
+        "Second wrapper at 0x812100 loads analogous fields from a different structure layout (e.g. [rdi+0x4], [rdi+0x8], [rdi+0x10], [rdi+0x20], [rdi+0x28], [rdi+0x70/0x94], [rdi+0x74], [rdi+0x78], [rdi+0x7c]) plus frame_bytes, calls the same internal function 0x8117d0, then executes xor edx,edx; test eax,eax; cmovs eax,edx before return.",
+        "The post-call cmovs sequence implements FFMAX(0, duration): negative eax is replaced with 0, non-negative eax is returned."
+      ],
+      "reasoning": "The vulnerable mechanism was direct propagation of negative get_audio_frame_duration results. Both requested wrapper shapes are present locally and both clamp the internal call result to zero on sign, matching the patched behavior rather than raw return.",
+      "status": "present"
+    }
+  },
+  "CVE-2022-1475": {
+    "ffmpeg-4.3.3-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 PIE stripped executable.",
+        "Local G.729 support is compiled in: strings include g729, G.729 raw format demuxer, G.729, acelp.kelvin, and Sipro ACELP.KELVIN.",
+        "An AVCodecParser-like table at VA 0xfb1560 contains codec ids 0x15035/0x15816 and parse function pointer 0x92b3a0.",
+        "At 0x92b3cf the parse code compares bit_rate at [rsi+0x38] with 0x1f40 (8000); at 0x92b3e2 it compares codec_id at [rsi+0x18] with 0x15816; at 0x92b3ec it computes block_size as 8 + bitrate/codec adjustment.",
+        "At 0x92b3f0 the computed block_size is multiplied directly by channels from [rsi+0x194] via imul ebx,DWORD PTR [rsi+0x194].",
+        "No preceding cmp of channels against 2 and no conditional zeroing of block_size before the imul is present in this function window; the zero-block-size bypass test occurs only after the multiplication at 0x92b400."
+      ],
+      "reasoning": "The vulnerable mechanism is the unchecked multiplication of computed G.729 block_size by avctx->channels. The patched behavior would check channels > 2 before multiplication and set block_size to 0, causing the unchanged-buffer bypass. The located G.729 parser code performs the multiplication unconditionally and only tests for zero afterward, matching the vulnerable-side behavior.",
+      "status": "absent"
+    },
+    "ffmpeg-5.1.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as stripped ELF64 PIE executable under target_dir.",
+        "Located parser-like function at 0x9db5f0 with G.729 anchors: compares avctx bit_rate at 0x38 against 0x1f40 (8000) and computes initial block size as 8 or 10 at 0x9db61f-0x9db638.",
+        "Same function checks an unusual codec_id constant at avctx+0x18 and increments block_size on that path at 0x9db62d-0x9db63b and 0x9db710-0x9db719.",
+        "Patched channel guard is present: loads avctx channels from 0x39c, compares with 2 at 0x9db641-0x9db647, and for channels > 2 stores 0 to block_size at 0x9db64c-0x9db652 before any multiplication.",
+        "For valid channels <= 2, code multiplies channels by block_size at 0x9db670, preserving normal behavior; if block_size is zero, it writes the input buffer pointer and size to output at 0x9db660-0x9db6d5 and returns unchanged."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked multiplication of computed G.729 block_size by avctx->channels. Local disassembly shows the security behavior added by the patch: channels > 2 is detected before multiplication, block_size is zeroed, and the zero-block-size path returns the packet unchanged. The vulnerable-side unconditional multiplication is not present for channels > 2.",
+      "status": "present"
+    }
+  },
+  "CVE-2022-2566": {
+    "ffmpeg-5.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-5.1-ffmpeg exists and is an ELF64 x86-64 stripped PIE executable.",
+        "MOV/MP4 HEVC feature is compiled in: MOV atom table and strings include ctts/sgpd/sbgp/hvcC/HEVC.",
+        "Located build_open_gop_key_points-like code at 0x41dc40: HEVC codec guard compares codec_id field against 0xad at 0x41dc86 and sync_group_count at 0x548 is tested at 0x41dc93.",
+        "Vulnerable ctts accumulation is present: loop at 0x41dcc0 does add (%rax),%edx and stores total to sample_offsets_count 0x570 at 0x41dccb, followed by allocation at 0x41dce5-0x41dcef, with no INT_MAX-minus guard before the add.",
+        "Vulnerable matched sync-group accumulation is present: 0x41ddb9 loads sg->count and 0x41ddbb adds it directly into open_key_samples_count 0x580, followed by allocation at 0x41ddd6-0x41dde7, with no overflow guard.",
+        "Vulnerable sample_id accumulation is present: 0x41de20 and 0x41de6d add sg->count into r8d/sample_id without a preceding INT_MAX-minus check or AVERROR_PATCHWELCOME branch."
+      ],
+      "reasoning": "The applicable MOV/HEVC code is present, but the three behavior-change checks from the patch are absent in the located function. The binary shows the pre-patch direct additions that can wrap before allocation/population, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-6.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped 64-bit x86-64 PIE ELF under target_dir.",
+        "MOV/HEVC code path is compiled in: candidate function near 0x447390 compares codec_id field `[rax+0x4]` with `0xad` and checks sync_group_count at `sc+0x548`.",
+        "First patched behavior present: loop at 0x4473c8-0x4473fe uses `0x7fffffff - current sample_offsets_count` before adding each ctts count to `sc+0x570`; overflow branches out before the add/allocation path.",
+        "Second patched behavior present: matched sync-group loop at 0x447c48-0x447c80 uses `0x7fffffff - sc+0x580` before adding the matched group count to open_key_samples_count.",
+        "Third patched behavior present: sample_id loop at 0x447d93-0x447dad computes `0x7fffffff - sample_id`, compares it with `sg->count`, and branches out before `sample_id += sg->count` on overflow."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked accumulation of attacker-controlled MOV/HEVC counts before allocations and sample_id advancement. The located binary code contains the HEVC/sync-group guarded function and all three INT_MAX-before-add checks specified by the patch behavior checklist, so the patched behavior is present rather than the vulnerable unchecked additions.",
+      "status": "present"
+    }
+  },
+  "CVE-2022-48434": {
+    "ffmpeg-3.4.11-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 stripped PIE under target_dir.",
+        "Relevant code/features are compiled in: strings include libavcodec/pthread_frame.c, av_packet_ref() failed in submit_packet(), Multiple ff_thread_finish_setup() calls, and hwaccel backends including d3d11va/dxva2/vaapi/vdpau.",
+        "submit_packet anchor at 0x5abe60/0x5ac0a4 calls update_context_from_thread with third argument zero, then immediately calls functions matching av_packet_unref/av_packet_ref at 0x5ac0cb and 0x5ac0d8; no intervening assert or three FFSWAP-style transfers from FrameThreadContext stash are present.",
+        "update_context_from_thread anchor at 0x5ab990 contains vulnerable-side direct context copying; under the for_user path it copies src->internal+0x70 to dst->internal+0x70 at 0x5abb3b-0x5abb48, matching the removed hwaccel_priv_data copy behavior.",
+        "frame worker/threading code around 0x5ac850 shows decode callback and synchronization/state handling but lacks the patched post-decode sequence of three NULL stores to avctx hwaccel fields."
+      ],
+      "reasoning": "The vulnerable mechanism applies because frame-thread and hwaccel support are present. The local code follows the old ownership model: submit_packet still relies on update_context_from_thread without the patched stash transfer, and update_context_from_thread still directly copies hwaccel-related internal state. The patched stash/clear behavior required by the behavior_changes checklist is not visible, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-6.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-6.1-ffmpeg exists and is an ELF64 x86-64 PIE; frame-thread and hwaccel code is compiled in, with strings including libavcodec/pthread_frame.c, hwaccel strings, and av_packet_ref() failed in submit_packet().",
+        "ff_thread_finish_setup behavior is present around 0x7bb754-0x7bb786: it asserts FrameThreadContext stash is empty via !p->parent->stash_hwaccel, then stores avctx->hwaccel, avctx->hwaccel_context, and avctx->internal->hwaccel_priv_data into fctx stash offsets 0xd0/0xd8/0xe0 before the setup-finished cond broadcast.",
+        "submit_packet patched transfer is present around 0x7bb11a-0x7bb418: it checks p->avctx->hwaccel is NULL, then swaps fctx stash offsets 0xd0/0xd8/0xe0 into p->avctx offsets 0x218/0x220/internal+0x60 before continuing packet submission.",
+        "frame_worker_thread patched cleanup is present around 0x7bbb18-0x7bbb32: after decode/finish-setup paths it writes NULL to avctx->hwaccel at 0x218, avctx->hwaccel_context at 0x220, and internal hwaccel_priv_data at internal+0x60.",
+        "ff_frame_thread_free patched final ownership transfer is present around 0x7bbddc-0x7bbe40: it asserts !avctx->hwaccel, then moves/swaps fctx stash offsets 0xd0/0xd8/0xe0 into the user AVCodecContext hwaccel fields."
+      ],
+      "reasoning": "The vulnerable mechanism was stale non-refcounted hwaccel pointers copied across frame worker contexts without a single owner. This binary contains the patched ownership protocol: stash state in FrameThreadContext during setup, transfer stash into the next worker in submit_packet, clear worker hwaccel pointers after decoding, and finally move stashed state back to the user context during free. These are the primary behavior_changes from the patch, so the patch is present.",
+      "status": "present"
+    }
+  },
+  "CVE-2023-50007": {
+    "ffmpeg-6.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: stripped ELF64 x86-64 PIE executable.",
+        "afwtdn is compiled in: strings include `libavfilter/af_afwtdn.c`, `afwtdn`, and `Denoise audio stream using Wavelets.`",
+        "Candidate filter_frame at 0x34dcb0 allocates audio buffers, handles NULL/short input, decrements context field `[rbx+0x58]` by `s->nb_samples - in->nb_samples`, performs per-channel `memmove` with `shl rdx,0x3` / `r15*8`, and ends by calling an internal frame-output routine at 0x1e1240.",
+        "Vulnerable-side EOF padding behavior is present at 0x34df90-0x34e006: when `[rbx+0x58]` is negative and input pointer on stack is NULL, it executes `add DWORD PTR [rax+0x70], edx` then zeros `[rbx+0x58]`; there is no compare/cmov/branch clamping the sum to zero before storing out->nb_samples.",
+        "Candidate activate at 0x34e060 consumes exact samples via internal call 0x1e18b0 with identical esi/edx from `[rbx+0x38]`, checks `AVERROR_EOF` as immediate `0xdfb9b0bb`, then loops while `[rbx+0x58] != 0` calling filter_frame with NULL at 0x34e0f0-0x34e106, matching the old EOF handler rather than the patched one-call-at-a-time eof flag behavior."
+      ],
+      "reasoning": "The vulnerable mechanism is the unchecked addition of a negative padding count into out->nb_samples at EOF. Local disassembly shows that exact raw addition and the old EOF draining loop, while the patched FFMAX(0, sum) clamp and eof flag sequencing are absent. The afwtdn feature is compiled into this binary, so this is a patch-absence finding rather than not_affected.",
+      "status": "absent"
+    },
+    "ffmpeg-7.0.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 PIE, stripped; afwtdn strings are present, so the vulnerable filter feature is compiled in.",
+        "afwtdn filter descriptor references the activate/filter_frame code region; activate candidate at 0x35c990 calls filter_frame at 0x35c5d0.",
+        "Patched activate behavior present: at 0x35c9d7 it tests eof flag [rbx+0x30] and skips normal consume when set; at 0x35ca13 it compares status to AVERROR_EOF 0xdfb9b0bb and at 0x35ca60 sets [rbx+0x30]=1; at 0x35ca67-0x35cabd it tests padd_samples [rbx+0x5c] and makes one filter_frame(inlink,NULL) call when nonzero.",
+        "Patched clamp behavior present in filter_frame: at 0x35c910-0x35c929, for negative padd_samples and NULL input, it adds [rbx+0x5c] into out->nb_samples [rax+0x70], tests the result, uses cmovs with zero, and stores the clamped nonnegative value.",
+        "The old vulnerable unchecked out->nb_samples += s->padd_samples behavior is not what this local code implements on the EOF negative-padding path."
+      ],
+      "reasoning": "The local binary contains afwtdn and both patch checklist behaviors are visible in disassembly. The key security property, clamping the EOF padding-adjusted output sample count to zero when the sum is negative, is implemented via test/cmovs before storing out->nb_samples. The EOF draining logic also uses an eof flag and one NULL-frame drain per activation instead of an internal loop.",
+      "status": "present"
+    }
+  },
+  "CVE-2024-31582": {
+    "ffmpeg-6.1-ffmpeg": {
+      "confidence": "medium",
+      "evidence": [
+        "ffmpeg-6.1-ffmpeg exists as a stripped ELF64 x86-64 PIE executable.",
+        "codecview filter strings/options are present, including codecview/mv_type/block partitioning text, so the relevant feature is compiled in.",
+        "Codecview registration data references text functions around 0x21d8a0/0x21df00/0x21f560.",
+        "In the codecview frame path around 0x21dbd1-0x21dcb5, rectangle-like buffer writes remain: memset@plt calls at 0x21dc3f and 0x21dcb5 and byte stores at 0x21dc76/0x21dc7f.",
+        "Those observed writes compute row addresses using stride first, e.g. imul of a y-like value by frame stride at 0x21dc04 before adding the plane base and x offset, so they do not directly match the vulnerable buf[x] without sy*stride mechanism.",
+        "I did not find decisive local evidence that draw_block_rectangle was compiled as the patched no-op/removed behavior described by the supplied reduced function code."
+      ],
+      "reasoning": "The binary is applicable because codecview is present. However, the observed codecview buffer writes are stride-aware rather than the exact vulnerable unstrided sx..sx+w byte-store loop, while they also do not prove the supplied patch behavior of a no-op draw_block_rectangle. Since local evidence proves neither the patched no-op nor the vulnerable-side unstrided loop, the result is inconclusive.",
+      "status": "inconclusive"
+    },
+    "ffmpeg-7.0.2-ffmpeg": {
+      "confidence": "medium",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "codecview is compiled in: string 'codecview' at 0xc5ae38 is referenced from the filter descriptor area around 0x114d7e0; its input pad points to codecview frame-processing code at 0x2286d0.",
+        "In the codecview block drawing path, writes are stride-aware: at 0x228a24-0x228a28 the code multiplies the block y coordinate by the frame stride and adds the frame data pointer; at 0x228a4e-0x228a54 it calls memset on data + y*stride + x; at 0x228a78-0x228a88 the vertical-edge loop advances rows by the stride before byte stores.",
+        "No standalone vulnerable helper pattern was found for the GCC -O2 form of draw_block_rectangle: sx+w bound, stack color argument, buf+sx addressing, and a tail call/memset without sy*stride."
+      ],
+      "reasoning": "The vulnerable mechanism is a rectangle helper that writes to buf[x] using sx only, ignoring sy and stride. The local codecview code is present, so the feature is applicable, but the observed block drawing uses data + y*stride + x and stride-based row advancement rather than the vulnerable buf+sx-only addressing. The expected vulnerable helper pattern is also absent, consistent with the patched no-op helper being optimized away or otherwise not emitted.",
+      "status": "present"
+    }
+  },
+  "CVE-2024-36617": {
+    "ffmpeg-5.1.4-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "`targets/ffmpeg-5.1.4-ffmpeg` exists and is an ELF64 x86-64 stripped PIE executable.",
+        "CAF decoder code is present: strings include `pakt` and `error reading packet table`; the error string is referenced from code at 0x3aebc8.",
+        "The pakt parsing block at 0x3ae3e2 reads packet count and frame fields, then reaches the packet-table end check at 0x3ae47f-0x3ae487: it computes current position minus saved ccount and branches to the error path only when that exceeds size.",
+        "Immediately after that single check, 0x3ae48d-0x3ae49a loads saved ccount, adds size with `add rsi,r13`, and calls the seek helper for `ccount + size`.",
+        "No local overflow guard appears in this block before the addition: there is no `INT64_MAX - ccount` computation or compare against size between the `tell - ccount > size` check and the seek."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked signed 64-bit addition of ccount and size before seeking. The intended patch adds a second guard, `size > INT64_MAX - ccount`, before performing that addition. The located CAF pakt code retains the vulnerable-side behavior: it checks only `avio_tell - ccount > size`, then directly adds ccount and size for the seek target. Therefore the requested binary lacks the patch.",
+      "status": "absent"
+    },
+    "ffmpeg-7.0.2-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists at targets/ffmpeg-7.0.2-ffmpeg and is an ELF64 x86-64 stripped PIE executable.",
+        "CAF decoder evidence is present: strings include \"pakt\", \"Apple CAF (Core Audio Format)\", and the unique error string \"error reading packet table\" at 0xc94de2.",
+        "The error string is referenced at 0x3e3869, which jumps to the shared av_log/error-return path at 0x3e349c.",
+        "In the packet-table parsing block, after avio_tell-like call result is compared as avio_tell(pb)-ccount > size, the binary performs the patched overflow guard: movabs 0x7fffffffffffffff,%rax; sub %rcx,%rax; cmp %rax,%r13; jg 0x3e3869.",
+        "Only after both guards pass, the binary adds ccount and size for the seek target: mov 0x38(%rsp),%rsi; add %r13,%rsi; call seek-like function."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked signed 64-bit addition ccount + size before avio_seek. Local disassembly of the CAF packet table path shows the added security check size > INT64_MAX - ccount branching to the \"error reading packet table\" error path before the addition and seek. That is the patched behavior described by the patch hunk.",
+      "status": "present"
+    }
+  },
+  "CVE-2024-7055": {
+    "ffmpeg-4.3.7-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-4.3.7-ffmpeg exists and is an ELF64 x86-64 stripped executable.",
+        "Local strings show PNM/PFM support is compiled in: libavcodec/pnm.c plus gbrpf32be/gbrpf32le and grayf32be/grayf32le pixel-format strings.",
+        "Disassembly of the PFM GBRPF32 path at 0x67a84f loads width and height from AVCodecContext offsets, then performs 32-bit multiplication: `41 0f af c7` / `imul eax,r15d`.",
+        "The size check then multiplies the already-truncated 32-bit result by 12 using 32-bit EAX operations: `lea eax,[rax+rax*2]`, `shl eax,0x2`, followed by `cdqe` sign-extension and comparison against `bytestream_end - bytestream` at 0x67a870.",
+        "The invalid-data branch target 0x67ad39 is reached only after this 32-bit product comparison, matching the vulnerable old expression `width * height * 12` rather than the patched 64-bit `12LL` calculation."
+      ],
+      "reasoning": "The vulnerable mechanism is specifically 32-bit overflow in the PFM RGB float input-size check. The binary contains the applicable PNM/PFM GBRPF32 decoder path, and its bounds check computes width*height*12 in 32-bit registers before sign-extending for the pointer-difference comparison. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-8.0-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-8.0-ffmpeg exists as an ELF64 x86-64 stripped PIE.",
+        "PNM/PFM decoder code is present: strings include `PFM (Portable FloatMap) image`, `value %d larger than maxval %d`, `gbrpf32be`, and `grayf32be`.",
+        "The ASCII PNM digit parser is present near 0x805250-0x8052aa, including skipping non-digits via subtract 0x30 / compare <= 9 and the maxval error string reference at 0x8052b3.",
+        "The PFM GBRPF32 non-half bounds check at 0x8048f0-0x804922 computes `width * height` with 32-bit `imul edx, ebp` at 0x804905, then sign-extends with `movsxd rdx, edx` at 0x804914 and multiplies by 12 via `lea rdx,[rdx+rdx*2]` plus `shl rdx,0x2` before comparing against remaining bytes.",
+        "The half-float branch is separately selected by `test r9d,r9d` / `jne 0x8053ea`, confirming the inspected 12-byte path is the non-half GBRPF32 path targeted by the patch."
+      ],
+      "reasoning": "The vulnerable mechanism is applicable because the binary includes PNM/PFM GBRPF32 decoding. Local disassembly shows the required-size check still performs the width-by-height multiplication in 32-bit arithmetic before widening and multiplying by 12, so the intended patched behavior of forcing 64-bit arithmetic for the full product is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-1373": {
+    "ffmpeg-5.1.6-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "targets/ffmpeg-5.1.6-ffmpeg exists and is a stripped ELF64 x86-64 PIE executable.",
+        "mov_read_trak-like code was located via the anchor string \"Skipped opening external track\" at rodata/file offset 0xbdaab8, referenced by code at 0x4215a8 in the same function region.",
+        "The same function region contains the MP3 codec-id check `cmp eax,0x15001` at 0x4214e5 and an `av_reduce`-style call with `INT_MAX` loaded as `mov r8d,0x7fffffff` at 0x42167e before call 0xb4a140, matching the reduced-function anchors.",
+        "The tts_data dereference for r_frame_rate is guarded by the tts_count field: at 0x4213b8 the code loads `DWORD PTR [rbx+0x20]`, compares it to 1 and 2, and only the matching branches load the tts_data pointer from `[rbx+0x28]` at 0x421720/0x421658 before using `[rax+0x4]` as the duration argument to av_reduce.",
+        "For tts_count 0, the branch at 0x4213be/0x4213c7 falls through away from the tts_data load, so the vulnerable behavior of dereferencing tts_data based only on stts_count is not present."
+      ],
+      "reasoning": "The vulnerable mechanism is a missing tts_count validation before tts_data[0] is dereferenced. Local disassembly of the anchored MOV parser function shows the duration dereference is reachable only after a nonzero/specific tts_count check on the count field paired with the tts_data pointer. This implements the patched security property that tts_data is accessed only when tts_count indicates valid entries.",
+      "status": "present"
+    },
+    "ffmpeg-8.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 PIE, stripped.",
+        "Unique mov_read_trak anchor strings found in binary: \"advanced_editlist does not work with fragmented MP4. disabling.\" at 0xd3a170 and \"Skipped opening external track:\" at 0xd3a228, with code references around 0x477489 and 0x4774ec.",
+        "In the same function region, disassembly at 0x4772a1-0x4772b5 tests sc->stts_count at [r12+0x38], initializes ebx to 0, then only if nonzero tests sc->tts_count at [r12+0x28] and uses setne bl, implementing stts_constant = stts_count && tts_count.",
+        "Later code tests ebx at 0x47732c before the av_reduce-style call at 0x477529, where it loads sc->tts_data pointer from [r12+0x30] and reads duration at [rax+0x4]."
+      ],
+      "reasoning": "The vulnerable mechanism is stts_constant being true from stts_count alone, allowing tts_data[0] dereference when tts_count is zero. Local disassembly in the anchored mov_read_trak region shows the patched behavior: stts_constant is set only when both stts_count and tts_count are nonzero before the later tts_data[0].duration use. This is direct binary evidence of the intended guard.",
+      "status": "present"
+    }
+  },
+  "CVE-2025-1816": {
+    "ffmpeg-7.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-7.1-ffmpeg exists as a stripped ELF64 x86-64 PIE executable.",
+        "IAMF audio_element_obu evidence is compiled in: strings include \"Unknown audio_element_type referenced in an audio element. Ignoring\", \"Audio Element parameter count %u is invalid for Scene representations\", and \"Underread in audio_element_obu. %d bytes left at the end\".",
+        "The patched Channel validation string \"Audio Element parameter count %u is invalid for Channel representations\" is absent from strings.",
+        "In the audio_element_obu control flow, after reading num_parameters at 0x52a0bc, the code tests num_parameters, then tests audio_element_type at stack offset 0x18 and branches to the existing Scene error at 0x52a3ef only when num_parameters != 0 and audio_element_type != 0.",
+        "For audio_element_type == 0, the same control flow falls through into the parameter parsing loop at 0x52a0d6/0x52a12e with no preceding compare of num_parameters against 2."
+      ],
+      "reasoning": "The vulnerable mechanism is unbounded num_parameters for Channel audio elements. Local binary evidence shows IAMF parsing is present and the existing Scene representation rejection is present, but the new Channel-specific num_parameters > 2 rejection is not present. The channel case proceeds into the parameter loop without the patched early AVERROR_INVALIDDATA path, so the patch is absent.",
+      "status": "absent"
+    },
+    "ffmpeg-8.1-ffmpeg": {
+      "confidence": "high",
+      "evidence": [
+        "ffmpeg-8.1-ffmpeg exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "Patched string is present in .rodata at 0xd61a00: \"Audio Element parameter count %u is invalid for Channel representations\".",
+        "The same function region stores audio_element_type from a byte shifted right by 5: at 0x556660-0x55666f it calls a byte-read routine, shifts eax by 5 into ecx, stores ecx at [rsp], and checks the original byte against 0x3f for the unknown-type path.",
+        "At 0x5571b2-0x5571c3 the code reads num_parameters, compares eax with 2, and when num_parameters > 2 tests [rsp] audio_element_type; if zero, it jumps to 0x5574de.",
+        "At 0x5574de the code loads the Channel-representation error string and jumps to the shared av_log/error-return path at 0x55618e. The adjacent Scene validation path at 0x5571c9-0x5571d2 loads the Scene string at 0x5574f4."
+      ],
+      "reasoning": "Local binary control flow implements the patched behavior: after reading num_parameters, it rejects num_parameters > 2 specifically when audio_element_type == 0 before entering subsequent parameter handling. This matches the patch intent and behavior checklist, so the patch is present.",
+      "status": "present"
+    }
+  }
+}

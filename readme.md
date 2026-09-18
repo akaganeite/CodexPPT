@@ -1,219 +1,131 @@
-# straight_detect - Binary Patch-Presence Detection
+# CODEX4PPT
 
-`straight_detect` runs an LLM agent through `codex exec` to perform
-**patch-presence detection** on binaries. For each CVE/binary pair, the agent
-decides whether the relevant patch is `present`, `absent`, `not_affected`,
-`inconclusive`, or `not_found`.
+`CODEX4PPT` is a batch runner for binary patch-presence detection. It
+launches `codex exec` tasks over target binaries and asks an LLM agent to decide
+whether the patch-relevant security behavior for each CVE/binary testcase is:
 
-The agent performs the actual binary reasoning. This repository provides the
-Python wrapper that builds prompts, schedules batch jobs, anonymizes target
-binaries, parses and validates JSON answers, and computes metrics against
-ground truth.
+- `present`
+- `absent`
+- `not_affected`
+- `inconclusive`
+- `not_found`
+- `error`
 
-The main entry point is `codex_patch_presence_batch.py`, a thin wrapper around
-the `codex_batch/` package. See `CLAUDE.md` for implementation-level notes.
+The repository code does not perform the binary reasoning directly. Its job is
+to prepare the agent environment, pass patch-focused metadata into prompts,
+invoke `codex exec`, capture raw logs, parse the model's JSON answer, merge
+per-task results, and compute evaluation metrics.
 
-## Detection Rules
+## Repository Components
 
-These rules are embedded in the prompt and are enforced as part of the agent
-contract:
+- `codex_patch_presence_batch.py`: main CLI entry point.
+- `codex_batch/`: batch orchestration, target anonymization, prompt rendering,
+  result parsing, model/profile handling, and metric computation.
+- `codex_batch/ghidra_manager.py`: SHA-256 cache preparation, dependency
+  checks, locking, and per-run Codex MCP isolation.
+- `codex_batch/ghidra_mcp.py` and `codex_batch/ghidra_tools.py`: a local stdio
+  MCP server exposing six bounded read-only Ghidra tools for one anonymous
+  target binary.
+- `prompts/`: prompt templates for different binary settings.
+- `utils/safe_objdump.py`: bounded helper exposed to the agent for local binary
+  inspection.
+- `metadata/`: offline scripts for constructing patch-focused metadata used by
+  detection prompts.
+- `AGENTS.md`: operational handoff guide for running experiments on another
+  machine.
+- `CLAUDE.md`: implementation notes and developer-facing architecture details.
 
-- Do not use network access.
-- Do not use version strings, release banners, package labels, or embedded
-  `curl x.y.z`-style strings as patch evidence.
-- Do not inspect source files referenced by metadata, DWARF paths, debug paths,
-  or diff paths.
-- Base every decision on local binary evidence and explicit reasoning.
-- Only use binaries under `--target-dir` plus the supplied `safe_objdump`
-  helper.
+## Detection Contract
 
-## Configuration
+The prompt contract requires the agent to base decisions on local binary
+evidence, not on release/version strings or source-file inspection. Ground truth
+is used only by the wrapper after model execution to score results; it is not
+made visible to the agent during detection.
 
-Install and configure the following before running a batch:
+## Optional native Ghidra tools
 
-- Python 3.10+.
-- A working `codex` CLI available on `PATH`, or pass its path with
-  `--codex-bin`.
-- Model/provider settings live only in `model_config.json` at this repository
-  root. The wrapper always loads that fixed path; there is no CLI flag for a
-  different config file.
-- `PPTAGENT_API_KEY` for the `cliproxy_gpt55_medium` and `pptagent_glm52`
-  profiles, and `VOLC_AGENT_PLAN_API_KEY` for `volc_glm52`.
-- Valid Codex/OpenAI credentials for `codex_default` and `dpsk_flash`.
-- Project metadata JSON, usually
-  `metadata/<project>/*_project_source_analysis.behavior.json`.
-- Dataset export-list `testset.json` and `groundtruth.json`.
-- A target binary directory passed with `--target-dir`.
+Install the pinned optional dependencies and make Ghidra available:
 
-Important path constraint: `--groundtruth-json` must be outside both
-`--target-dir` and the `--cd` directory passed to `codex exec`. The wrapper
-rejects unsafe layouts so the agent cannot read the answer key.
+```bash
+python3 -m pip install -r requirements-ghidra.txt
+export GHIDRA_INSTALL_DIR=/path/to/ghidra_11.4.2_PUBLIC
+```
 
-## Quick Start
+The install directory is resolved in this order: `--ghidra-install-dir`,
+`GHIDRA_INSTALL_DIR`, the known local Ghidra 11.4.2 installation, then
+PyGhidra's own discovery. Four CLI flags control the integration:
 
-Run commands from the repository root. This example evaluates stripped curl
-binaries with the current Codex/OpenAI configuration in binarywise mode:
+```text
+--ghidra off|auto|on
+--ghidra-cache-dir PATH
+--ghidra-install-dir PATH
+--ghidra-timeout SECONDS
+```
+
+- `off` is the default and preserves the existing objdump-based workflow.
+- `auto` tries Ghidra and falls back without the tools if preparation fails.
+- `on` treats a preparation or MCP-start failure as an error for that testcase
+  without stopping other testcases.
+
+Ghidra analyzes the anonymous, optionally unstripped file prepared for the
+individual `--binarywise` task. Cache entries live under
+`~/.cache/straight_detect/ghidra/<sha256>/`; a per-hash lock prevents duplicate
+or corrupt initialization under concurrent jobs. A cache-root JVM capacity
+lock prevents memory spikes while preserving concurrent Codex tasks. Each
+Codex process receives only the `straight_detect_ghidra` MCP server and these
+tools:
+
+```text
+ghidra_locate_function
+ghidra_function_summary
+ghidra_cfg_slice
+ghidra_path_probe
+ghidra_call_args
+ghidra_decompile_slice
+```
+
+The tools cannot accept a target path or arbitrary Ghidra script. Their output
+is bounded and path-sanitized. Decompiler text is advisory; determinate results
+must also use raw instructions, CFG, or P-code evidence. Because all six tools
+are fixed-target and read-only, the injected server pre-approves them so a
+non-interactive `codex exec` batch cannot cancel a tool call while waiting for
+user approval.
+
+Example stripped-binary run:
 
 ```bash
 python3 codex_patch_presence_batch.py \
-  --project-json metadata/curl/curl_project_source_analysis.behavior.json \
-  --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
-  --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
-  --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt O0 \
+  --project-json /data/openssl/exports/openssl_behavior.json \
+  --testset-json /data/openssl/exports/testset.json \
+  --target-dir /data/openssl/binaries/target/openssl_stripped \
+  --groundtruth-json /data/openssl/exports/groundtruth_with_not_affected.json \
   --compiler gcc \
-  --output runs/curl_stripped_o0_results.json \
-  --raw-dir runs/curl_stripped_o0_raw \
+  --opt O2 \
+  --output /tmp/openssl_ghidra_results.json \
+  --raw-dir /tmp/openssl_ghidra_raw \
   --prompt-template prompts/patch_presence_stripped_unbounded.md \
   --binarywise \
   --model-profile codex_default \
   --codex-json-events \
+  --ghidra on \
+  --jobs 1 \
+  --limit 1 \
   --timeout 3600
 ```
 
-Useful flags:
+Alongside the existing prompt, stdout/stderr, final-message, and timing files,
+each testcase writes `<run_id>.ghidra.json` and
+`<run_id>.ghidra_queries.jsonl`. `batch_manifest.json` records the selected
+mode, versions, cache schema/provenance, ready/reused/failed counts, and tool
+query counts. `--dry-run` performs only dependency/path/config preflight and
+does not launch Ghidra analysis.
 
-- `--jobs N`: run `N` concurrent `codex exec` tasks. The default is `1`.
-  Higher values improve throughput but increase rate-limit risk.
-- `--resume`: skip tasks already present in `--output`.
-- `--retry-errors`: with `--resume`, rerun tasks whose previous result contains
-  `status=error`.
-- `--dry-run`: write prompts without calling the model.
-- `--limit` and `--cve`: restrict the run to a smaller subset.
-- `--binarywise`: run one `codex exec` per CVE/binary pair instead of one
-  `codex exec` per CVE.
-- `--codex-json-events`: pass `--json` to `codex exec` while still reading the
-  final message from `--output-last-message`.
+## Results
 
-With `--jobs > 1`, the progress prefix `[i/total]` reports launch order, not
-completion order. Output write order is not deterministic, but completed tasks
-are merged by key and are safe to resume after interruption.
+Current summarized experiment results are recorded in:
 
-## Model Profiles
-
-`model_config.json` contains all model/provider configuration. If
-`--model-profile` is omitted, the wrapper uses `active_profile`; it is currently
-`cliproxy_gpt55_medium`.
-
-- `codex_default`: leave the current Codex provider configuration unchanged.
-- `dpsk_flash`: DeepSeek-compatible local endpoint, `deepseek-v4-flash`.
-- `pptagent_glm52`: PPTAgent endpoint, `glm-5.2`.
-- `cliproxy_gpt55_medium`: local CLIProxyAPI, `gpt-5.5`, medium reasoning.
-- `volc_glm52`: Volcengine Ark Responses endpoint, `glm-5.2`.
-
-`--reasoning-effort` is an optional per-run override. It takes precedence over
-the profile reasoning setting. The legacy `--provider` aliases are also loaded
-from this JSON file, but new commands should use `--model-profile`.
-
-DeepSeek-compatible example:
-
-```bash
-python3 codex_patch_presence_batch.py \
-  --project-json metadata/curl/curl_project_source_analysis.behavior.json \
-  --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
-  --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
-  --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt O0 \
-  --compiler gcc \
-  --output runs/curl_stripped_o0_dpsk_results.json \
-  --prompt-template prompts/patch_presence_stripped_unbounded.md \
-  --binarywise \
-  --model-profile dpsk_flash \
-  --codex-json-events \
-  --timeout 3600
+```text
+results.md
 ```
 
-PPTAgent example:
-
-```bash
-python3 codex_patch_presence_batch.py \
-  --project-json metadata/curl/curl_project_source_analysis.behavior.json \
-  --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
-  --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
-  --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt O0 \
-  --compiler gcc \
-  --output runs/curl_stripped_o0_pptagent_results.json \
-  --prompt-template prompts/patch_presence_stripped_unbounded.md \
-  --binarywise \
-  --model-profile pptagent_glm52 \
-  --codex-json-events \
-  --timeout 3600
-```
-
-CLIProxyAPI gpt-5.5 medium example:
-
-```bash
-python3 codex_patch_presence_batch.py \
-  --project-json metadata/curl/curl_project_source_analysis.behavior.json \
-  --testset-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/testset.json \
-  --target-dir /home/zhangxb/extdisk/dataset4ppt/curl/binaries/target/curl_stripped \
-  --groundtruth-json /home/zhangxb/extdisk/dataset4ppt/curl/exports/groundtruth_with_not_affected.json \
-  --opt O0 \
-  --compiler gcc \
-  --output runs/curl_stripped_o0_cliproxy_gpt55_results.json \
-  --prompt-template prompts/patch_presence_stripped_unbounded.md \
-  --binarywise \
-  --model-profile cliproxy_gpt55_medium \
-  --codex-json-events \
-  --timeout 3600
-```
-
-## Data Format
-
-`--testset-json` and `--groundtruth-json` only support the dataset export-list
-format. The top-level JSON value must be a list.
-
-Testset example:
-
-```json
-[
-  {
-    "CVE": "CVE-...",
-    "functions": ["target_function"],
-    "binaries": ["binary_name_1", "binary_name_2"]
-  }
-]
-```
-
-Ground-truth example:
-
-```json
-[
-  {
-    "CVE": "CVE-...",
-    "vuln": ["binary_name_1"],
-    "patch": ["binary_name_2"],
-    "not_affected": []
-  }
-]
-```
-
-Legacy top-level object formats such as `CVE -> [binary]` and
-`CVE -> {vuln, patch}` are no longer supported. The current experimental
-dataset exports are expected under
-`/home/zhangxb/extdisk/dataset4ppt/<project>/exports/`. Historical files under
-`testset/` and `groundtruth/` are kept only for reference.
-
-`--project-json` points to metadata generated by the offline metadata pipeline,
-typically `metadata/<project>/*_project_source_analysis.behavior.json`. It
-contains root-cause, patch-intent, and behavior-change information used by the
-prompt.
-
-## Outputs
-
-Each run writes:
-
-- `--output`: merged JSON results keyed by CVE or CVE/binary task.
-- `--metrics-output`: metrics JSON. Defaults to `<output>.metrics.json`.
-- `--raw-dir`: per-task prompts, stdout, stderr, and raw agent outputs.
-
-The wrapper reports Accuracy, Precision, Recall, F1, and DSR. `not_affected`
-counts as a decisive status, while `inconclusive`, `error`, and `not_found`
-reduce DSR.
-
-## Reference Results
-
-| Project | PS3 A | PS3 P | PS3 R | PS3 F1 | PS3 DSR | React A | React P | React R | React F1 | React DSR | BinXray A | BinXray P | BinXray R | BinXray F1 | BinXray DSR | PatchDiscovery A | PatchDiscovery P | PatchDiscovery R | PatchDiscovery F1 | PatchDiscovery DSR | Robin A | Robin P | Robin R | Robin F1 | Robin DSR | Ours A | Ours P | Ours R | Ours F1 | Ours DSR |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Binutils | 0.74 | 0.86 | 0.77 | 0.81 | 0.63 | 0.67 | 0.51 | 0.88 | 0.64 | 0.41 | 0.89 | 0.97 | 0.87 | 0.92 | 0.72 | 0.78 | 0.95 | 0.73 | 0.83 | 0.75 | 0.90 | 0.87 | 0.80 | 0.83 | 0.18 | 0.92 | 0.92 | 0.97 | 0.94 | 0.87 |
+That file is the place to look for reported metrics and run-summary tables.

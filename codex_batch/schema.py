@@ -12,6 +12,7 @@ def write_result_schema(path: Path) -> None:
         "properties": {
             "results": {
                 "type": "array",
+                "minItems": 1,
                 "items": {
                     "type": "object",
                     "required": ["cve", "binary", "status", "confidence", "evidence", "reasoning"],

@@ -7,6 +7,7 @@ import threading
 import time
 from pathlib import Path
 
+from .ghidra_manager import GhidraState, mcp_server_overrides
 from .io import is_relative_to
 from .providers import codex_env, provider_overrides, resolve_profile, resolved_reasoning_effort
 
@@ -21,6 +22,10 @@ def run_codex(
     cd: Path,
     target_dir: Path,
     safe_objdump_dir: Path | None,
+    ghidra_state: GhidraState | None = None,
+    ghidra_query_log: Path | None = None,
+    disabled_mcp_servers: list[str] | None = None,
+    script_dir: Path | None = None,
 ) -> tuple[int, str, str, Path]:
     """Run a single ``codex exec`` for one task.
 
@@ -62,6 +67,16 @@ def run_codex(
         cmd.extend(["--profile", args.profile])
     if args.codex_json_events:
         cmd.append("--json")
+    if ghidra_state is not None and script_dir is not None and ghidra_query_log is not None:
+        cmd.extend(
+            mcp_server_overrides(
+                ghidra_state,
+                script_dir=script_dir,
+                query_log=ghidra_query_log,
+                required=args.ghidra == "on",
+                disabled_server_names=disabled_mcp_servers or [],
+            )
+        )
     cmd.append("-")
 
     started_at = time.time()

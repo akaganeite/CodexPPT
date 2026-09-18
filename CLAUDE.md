@@ -1,15 +1,14 @@
 # CLAUDE.md
 
-This file gives implementation-level guidance to Claude Code when working in this
-repository. For the run/handoff playbook (how to launch an experiment on a new
+This file gives implementation-level guidance to Claude Code when working on
+CODEX4PPT. For the run/handoff playbook (how to launch an experiment on a new
 machine, dataset checks, troubleshooting, metrics interpretation), see
-**`AGENTS.md`**; for a short user-facing intro and example invocations, see
-**`readme.md`**. The three intentionally overlap; keep them consistent when you
-change runtime behavior.
+**`AGENTS.md`**; for a short user-facing intro, see **`readme.md`**. Keep these
+documents consistent when you change runtime behavior.
 
 ## What this repo does
 
-This is a research harness for **binary patch-presence testing**: given a CVE and a
+CODEX4PPT is a research harness for **binary patch-presence testing**: given a CVE and a
 set of target binaries, decide for each binary whether it contains the *patched*
 behavior (`present`), the *vulnerable* behavior (`absent`), is `not_affected`
 (the bug is inapplicable to this build), is `inconclusive` (evidence not
@@ -65,8 +64,9 @@ Key flags (full list in `codex_batch/cli.py`):
   `status=error` rows.
 - `--dry-run` writes prompts to `--raw-dir` without calling the model - use this to
   inspect exactly what the agent sees.
-- `--no-anonymize-targets` disables target anonymization (see below).
-- `--reasoning-effort`, `--timeout`, `--sandbox`, `--codex-json-events` tune the codex run.
+- Target anonymization is mandatory; `--no-anonymize-targets` is rejected.
+- Codex always uses the read-only sandbox; writable `--sandbox` values are rejected.
+- `--reasoning-effort`, `--timeout`, and `--codex-json-events` tune the Codex run.
 
 ### Pre-run smoke test (mandatory before a full run)
 
@@ -117,7 +117,7 @@ stays off the lock so concurrent tasks truly overlap.
    and the agent's working dir (`cd`) is set there. This prevents the agent from
    inferring the answer from filenames/version strings. After the run,
    `remap_result_to_original()` maps answers and evidence text back to the real
-   binary names. On by default; `--no-anonymize-targets` off. The anonymous->original
+   binary names. It is mandatory. The anonymous->original
    map is written to `<run_id>.anonymized_targets.json`.
 3. **`prompt.py`** - fills the `{{TASK_PAYLOAD_JSON}}` and `{{SAFE_OBJDUMP_HELPER}}`
    placeholders in a `prompts/*.md` template with the CVE metadata + binary list.

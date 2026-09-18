@@ -1,0 +1,1595 @@
+{
+  "CVE-2014-3572": {
+    "openssl-0.9.8zc-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-0.9.8zc-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE executable.",
+        "Local strings and code show SSL client key-exchange support is compiled in, including DHE/ECDHE cipher strings and ECDH/server-key-exchange error strings.",
+        "The function at 0x87130 matches ssl3_get_key_exchange behavior: it calls the SSL method message reader with state constants 0x1140/0x1141, then checks the received message type against 0x0c (ServerKeyExchange).",
+        "On the non-ServerKeyExchange path, instructions at 0x87191-0x871a4 compare message_type to 0x0c, set reuse_message at [s3+0x3cc] to 1, set eax=1, and return; no DHE/ECDHE algorithm_mkey guard or unexpected_message error is executed before this success return.",
+        "The algorithm_mkey value is only loaded after the ServerKeyExchange-present path at 0x87270-0x87286 and then dispatched through DHE/ECDHE parsing paths, which is too late to protect the missing-message case."
+      ],
+      "reasoning": "The vulnerable mechanism is accepting a missing ServerKeyExchange message for ephemeral DHE/ECDHE cipher suites. The binary contains the vulnerable-side control flow: when message_type is not ServerKeyExchange, it immediately marks the message for reuse and returns success without testing DHE/ECDHE bits. Because DHE/ECDHE support is present locally and the patched guard is absent on the early branch, the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.0.0o-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "targets/openssl-1.0.0o-openssl-gcc-O2 exists and is a stripped 64-bit x86-64 ELF PIE; strings include SSL3_GET_KEY_EXCHANGE, DHE/ECDHE cipher names, PSK strings, and unexpected message, so the relevant OpenSSL TLS client feature is compiled in.",
+        "In the ssl3_get_key_exchange candidate at 0x87a90, code calls ssl_get_message-like method, then compares s3->tmp.message_type at [ssl->s3+0x3a0] with 0x0c at 0x87aed; 0x0c is ServerKeyExchange.",
+        "On the missing-ServerKeyExchange path, 0x87af6 loads new_cipher, 0x87afd tests only byte bit 0x1 at cipher+0x19, equivalent to algorithm_mkey bit 0x100; the ServerKeyExchange parse path tests the same 0x100 bit at 0x87bfd for PSK handling.",
+        "If that PSK bit is not set, 0x87b07 writes 1 to reuse_message at [s3+0x3c4], 0x87b11 sets eax=1, and the function returns success. If PSK is set, 0x87d78 creates/updates session cert state and then joins the same reuse_message success path.",
+        "No DHE/ECDHE mask test or SSL_R_UNEXPECTED_MESSAGE error branch appears between the message_type != 0x0c branch and the reuse_message success return; the unexpected_message reason 0xf4 is used elsewhere in the full ServerKeyExchange parsing error paths, not for the missing-message DHE/ECDHE gate."
+      ],
+      "reasoning": "The vulnerable mechanism is accepting a missing ServerKeyExchange for non-PSK ephemeral suites. Local disassembly shows the missing-message branch preserves only PSK-specific handling and otherwise sets reuse_message and returns success, with no early DHE/ECDHE rejection. That matches the vulnerable-side behavior, so the CVE patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.0.1j-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.1j-openssl-gcc-O2 exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "OpenSSL SSL client key-exchange code is present: strings include s3_clnt.c, SSL3_GET_KEY_EXCHANGE, DHE/ECDHE cipher names, PSK strings, and unexpected message.",
+        "In the ssl3_get_key_exchange body, after ssl_get_message, address 0x8fdcd compares message_type to 0x0c (ServerKeyExchange); the non-ServerKeyExchange path loads new_cipher and only tests byte [new_cipher+0x19] & 0x01 at 0x8fddd, matching the preserved PSK-only handling.",
+        "For non-PSK missing ServerKeyExchange, the path at 0x8fde7 sets reuse_message, then 0x8fdf1 returns 1; no DHE/ECDHE mask check or SSL_R_UNEXPECTED_MESSAGE error occurs before that success return.",
+        "EVP_MD_CTX initialization call at 0x8fee1 is reached only after the ServerKeyExchange-present branch at 0x8fe20, not before the missing-message check."
+      ],
+      "reasoning": "The vulnerable mechanism is acceptance of a missing ServerKeyExchange for non-PSK suites, including DHE/ECDHE. The binary contains the applicable OpenSSL client code and ephemeral cipher support. Local disassembly shows the missing-message branch preserves only the old PSK check and otherwise sets reuse_message and returns success, rather than rejecting DHE/ECDHE with unexpected_message. Therefore the CVE patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0-openssl-gcc-O2 exists as a stripped ELF64 PIE and contains DHE/ECDHE/PSK cipher and TLS ServerKeyExchange handling strings, so the vulnerable feature area is compiled in.",
+        "Disassembly shows key-exchange flags loaded from the selected cipher and tested with mask 0x1a6; when those flags are set, the next handshake message type must equal 0x0c (ServerKeyExchange).",
+        "If the required ServerKeyExchange message is absent, control branches to an error path that sends fatal alert 0x0a (unexpected_message), records reason 0xf4, returns 0; only message type 0x0c advances state and returns success."
+      ],
+      "reasoning": "The vulnerable mechanism was accepting a missing ServerKeyExchange for DHE/ECDHE suites. Local control-flow evidence shows this binary rejects that case with unexpected_message while preserving feature applicability, matching the patched security behavior.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "medium",
+      "evidence": [
+        "Resolved binary exists under target_dir as a stripped ELF 64-bit x86-64 PIE executable.",
+        "Local strings show DHE/ECDHE/PSK support is compiled in, including cipher-suite/key-exchange labels such as ECDHE, DHE, kECDHE, kDHE, and kPSK, so the vulnerable feature is applicable.",
+        "Local strings also contain generic unexpected-message alert text, but that is not enough to bind the error to the missing ServerKeyExchange DHE/ECDHE path.",
+        "No exported ssl3_get_key_exchange symbol was available, and local disassembly/import/string evidence did not decisively identify either the patched DHE/ECDHE unexpected-message guard before PSK handling or the vulnerable PSK-only success path."
+      ],
+      "reasoning": "The binary includes the relevant TLS ephemeral key-exchange functionality, so not_affected is not supported. However, the stripped local binary evidence was not sufficient to prove patched behavior or vulnerable-side behavior for the specific missing ServerKeyExchange branch. Per the decision rules, insufficient decisive evidence yields inconclusive.",
+      "status": "inconclusive"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "medium",
+      "evidence": [
+        "openssl-1.1.0b-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE executable; dynamic dependencies show only libc, so OpenSSL/TLS code appears to be statically linked into the binary.",
+        "Relevant TLS key-exchange code/features are present: strings include 'SSLv3/TLS read server key exchange', 'tls_process_key_exchange', 'tls_process_ske_ecdhe', 'tls_process_ske_dhe', 'wrong curve', 'unable to find ecdh parameters', and PSK identity-hint strings.",
+        "The binary contains 'unexpected message' and 'sslv3 alert unexpected message' strings, with relocation entries pointing at those strings, but this only proves the error text exists, not that the missing-ServerKeyExchange DHE/ECDHE path uses it.",
+        "Disassembly did not isolate a decisive branch for the patch checklist: message_type != ServerKeyExchange followed by alg_k & (DHE|ECDHE) causing an unexpected_message error, nor the vulnerable-side path that skips only PSK handling then returns success."
+      ],
+      "reasoning": "The vulnerable mechanism is applicable only if TLS client DHE/ECDHE handling is compiled in, and local evidence shows those features are present, so not_affected is not supported. However, the stripped binary appears to use newer/statem or inlined TLS code, and the local evidence found was insufficient to prove either the patched rejection of omitted ServerKeyExchange for ephemeral suites or the vulnerable success path. Per the rules, this must remain inconclusive.",
+      "status": "inconclusive"
+    }
+  },
+  "CVE-2015-0205": {
+    "openssl-1.0.0o-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.0o-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable with OpenSSL SSLv3 server error strings compiled in.",
+        "Candidate ssl3_get_cert_verify code at 0x84d40 loads s->session->peer, calls local routines consistent with X509_get_pubkey and X509_certificate_type, and checks the handshake message type against 0xf.",
+        "When peer is non-null and the CertificateVerify message is missing, the code executes `test $0x10,%al; jne 0x84fe0`; only the taken path raises SSLerr(lib 0x14, func 0x88, reason 0xae). The OpenSSL error table maps func 0x88 to SSL3_GET_CERT_VERIFY and reason 0xae to \"missing verify message\".",
+        "If the 0x10 signing-capability bit is not set, execution falls through to free the public key and return success, matching the vulnerable `peer != NULL && (type & EVP_PKT_SIGN)` behavior."
+      ],
+      "reasoning": "The patch requires a missing CertificateVerify error for any non-null client certificate. Local disassembly shows the missing-verify error is still gated on certificate type bit 0x10, so non-signing/DH certificates can skip the error path. That is vulnerable-side behavior, not patched behavior.",
+      "status": "absent"
+    },
+    "openssl-1.0.1i-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.1i-openssl-gcc-O2 exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "Local strings show OpenSSL SSL/TLS server code and DH/ECDH support are compiled in, including 'SSL3_GET_CERT_VERIFY', 'missing verify message', 'no client cert received', 'SSLv3 read certificate verify A/B', and DH certificate cipher suites such as 'DH-DSS-AES128-SHA' and 'DH-RSA-AES256-SHA256'.",
+        "SSL error table entries map SSL3_GET_CERT_VERIFY to function id 0x88, 'missing verify message' to reason 0xae, and 'no client cert received' to reason 0xba.",
+        "The stripped function at 0x8b840 loads the peer certificate from [rbx+0x130]+0xb0; if peer is non-null it calls routines consistent with X509_get_pubkey and X509_certificate_type, then checks missing CertificateVerify state.",
+        "At 0x8b8fc the code executes 'test al,0x10' on the certificate type result and only branches to the missing-verify-message SSLerr path at 0x8bb68 when that signing bit is set.",
+        "The non-signing path after 'test al,0x10' falls through to cleanup/success handling at 0x8b904 instead of unconditionally raising missing verify message for any non-null peer certificate."
+      ],
+      "reasoning": "The vulnerable mechanism is the pre-patch condition requiring CertificateVerify only when peer != NULL and the certificate type has EVP_PKT_SIGN. Local disassembly shows exactly that signing-bit gate before the SSL_R_MISSING_VERIFY_MESSAGE error path. The patched behavior would branch to the missing-verify error for any non-null peer certificate without testing the signing capability bit, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.0.1j-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.1j-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable with SSL3 CertificateVerify-related strings compiled in, including \"SSLv3 read certificate verify A/B\", \"missing verify message\", and DH certificate strings such as \"unable to decode dh certs\".",
+        "In the recovered CertificateVerify handler at 0x8c8f0, after obtaining the peer certificate and certificate type, the non-CertificateVerify-message path sets reuse_message and then executes `test al,0x10` at 0x8c9ac.",
+        "Only when that signing-capability bit test is nonzero does control branch to 0x8cc18, which raises an SSL error with reason immediate 0xae before sending alert 0x0a; if the bit is clear, execution falls through toward cleanup/return success.",
+        "The patched behavior would require the missing-verify error for any non-null peer certificate without the `type & 0x10` gate."
+      ],
+      "reasoning": "The local binary shows the vulnerable-side mechanism: a presented peer certificate is not sufficient by itself to require CertificateVerify; the error path is still gated on a certificate-type signing bit. That matches the pre-patch condition `(peer != NULL) && (type & EVP_PKT_SIGN)`, not the patched `peer != NULL` condition.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as a stripped ELF64 x86-64 executable with TLS server/state-machine code and a `tls_process_cert_verify` string/table entry compiled in.",
+        "CertificateVerify processing at 0xbd9f0 loads the peer certificate from `[s+0x178]+0x98` and uses it for certificate verification logic, identifying that field as the peer certificate anchor.",
+        "The missing/transition check at 0xbd900 tests `[s+0x178]+0x98` for non-null peer certificate and, when peer is present but required verify-message state at `[s+0x90]+0xd8` is absent, branches directly to an SSL error path at 0xbd970.",
+        "In the 0xbd900 check there is no call to certificate-type logic and no bit-test equivalent to `type & EVP_PKT_SIGN` before the missing-verify error path."
+      ],
+      "reasoning": "The vulnerable mechanism is the old condition requiring CertificateVerify only for signing-capable client certificates. Local control-flow evidence shows the binary requires the missing CertificateVerify error based on peer certificate presence, without a signing-capability gate, matching the patched behavior.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 PIE executable with OpenSSL TLS/SSL code linked in; it imports only libc and contains SSL strings such as tls_process_cert_verify, tls_process_client_certificate, SSLv3/TLS read certificate verify, and certificate verify failed.",
+        "Local data tables show tls_process_cert_verify present (entry at VMA 0x2ec650 maps identifier 0x1417b000 to string 0x23a07c \"tls_process_cert_verify\"), so the relevant feature/code is compiled in.",
+        "Disassembly around the apparent function-id address 0x1417b0 shows TLS state-machine code but does not expose a decisive missing-CertificateVerify branch tied to peer certificate non-null versus peer certificate plus EVP_PKT_SIGN."
+      ],
+      "reasoning": "The vulnerable mechanism is the old ssl3_get_cert_verify behavior that only raised a missing CertificateVerify error when a peer certificate also had EVP_PKT_SIGN; the patch requires the error for any non-null peer certificate. The binary clearly contains relevant SSL/TLS certificate-verify handling, so not_affected is not supported, but stripped/O2 layout and the available string/table anchors were insufficient to prove either the patched non-null-only check or the vulnerable EVP_PKT_SIGN-gated check in local instructions.",
+      "status": "inconclusive"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "codex exec failed or returned invalid JSON: codex exec exited -9: %eax\n   bd250:\tsub    $0x1,%ecx\n   bd253:\tmovzbl %al,%eax\n   bd256:\tnot    %esi\n   bd258:\tand    %ecx,%esi\n   bd25a:\tmov    %eax,%ecx\n   bd25c:\tsub    $0x1,%eax\n   bd25f:\tnot    %ecx\n   bd261:\tsar    $0x1f,%esi\n   bd264:\tand    %ecx,%eax\n   bd266:\tlea    0x2(%r13),%rcx\n   bd26a:\tsar    $0x1f,%eax\n   bd26d:\tand    %eax,%esi\n   bd26f:\tmovslq %edx,%rax\n   bd272:\tlea    -0x31(%r13,%rax,1),%r8\n   bd277:\tnopw   0x0(%rax,%rax,1)\n\nexec\n/bin/zsh -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport struct\nb=Path('targets/target_001').read_bytes()\nbase=0x2b87e0; offbase=0x2b77e0\nfor v in range(base, base+0x200c8, 0x10):\n    a=struct.unpack_from('<Q',b,offbase+v-base)[0]\n    s=struct.unpack_from('<Q',b,offbase+v-base+8)[0]\n    if s in [0x2391a9,0x23a4a8,0x23a548,0x23846a,0x23853a,0x23877f,0x239387,0x23939e,0x2393b3,0x238c9b]:\n        print(hex(v), hex(a), hex((a>>12)&0xfffff), hex(s))\nPY\" in /tmp/codex-targets-CVE-2015-0205-xy61ldw4\n succeeded in 0ms:\n\nprocess timed out after 600s and was killed\n"
+      ],
+      "reasoning": "See raw per-CVE files in raw_dir.",
+      "status": "error"
+    }
+  },
+  "CVE-2015-0206": {
+    "openssl-1.0.0o-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.0o-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE executable with DTLS/OpenSSL code compiled in; strings include d1_pkt.c and DTLS1_BUFFER_RECORD, so the DTLS vulnerable mechanism is applicable.",
+        "The candidate dtls1_buffer_record at 0x9e0a0 allocates DTLS record data, creates a pitem, copies the SSL3 buffer/record, then calls pqueue_insert at 0x9e1c2.",
+        "On pqueue_insert failure, control goes to 0x9e220: it logs the DTLS1_BUFFER_RECORD error, calls OPENSSL_free on rdata at 0x9e23d, then tail-calls pitem_free on the pitem at 0x9e250; there is no load/test/free of rdata->rbuf.buf before freeing rdata.",
+        "The same failure path does not set eax to -1 before returning; it follows void/free-style cleanup, matching the old non-fatal behavior rather than the patched fatal return.",
+        "In the caller around 0x9e579-0x9e590, dtls1_buffer_record is called at 0x9e58b and execution continues immediately without testing eax for negative or returning -1."
+      ],
+      "reasoning": "The patch requires freeing the copied record buffer on pqueue_insert failure, returning -1, and propagating that error in callers. The local binary contains the applicable DTLS path but shows the vulnerable-side behavior: missing rbuf.buf cleanup and ignored/non-fatal dtls1_buffer_record failure.",
+      "status": "absent"
+    },
+    "openssl-1.0.1i-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.1i-openssl-gcc-O2 exists under target_dir and is a stripped ELF64 x86-64 PIE; DTLS/OpenSSL strings including d1_pkt.c and DTLS1_BUFFER_RECORD are present, so the DTLS code path is compiled in.",
+        "The dtls1_buffer_record candidate at 0xa74b0 allocates a 0x60-byte record-data object, creates a pitem-like object, copies packet/rbuf/rrec fields from the SSL object, and calls a pqueue_insert-like routine at 0x15f710.",
+        "On pqueue_insert failure, the branch at 0xa75d7 -> 0xa7630 reports SSL error function code 0xf7, then calls the OpenSSL-free-like routine on the record-data pointer at 0xa7650 and pitem-free-like routine at 0xa7660.",
+        "That failure branch has no preceding load/test/free of the copied rbuf buffer pointer from the record-data object, and it does not set a -1 return value before leaving the path."
+      ],
+      "reasoning": "The vulnerable mechanism applies because DTLS record buffering code is present. The patched behavior requires freeing rdata->rbuf.buf and treating pqueue_insert failure as fatal with -1. Local disassembly shows the pqueue_insert failure path lacks the copied buffer free and lacks the patched fatal -1 return behavior, matching vulnerable-side behavior.",
+      "status": "absent"
+    },
+    "openssl-1.0.1j-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 stripped PIE; DTLS/OpenSSL evidence is compiled in, including strings d1_pkt.c, DTLS1_BUFFER_RECORD, DTLS1_GET_RECORD, DTLS1_PROCESS_RECORD, and DTLSv1.",
+        "Matched dtls1_buffer_record-like code at 0xa8c90: allocates 0x60 bytes for record data, creates a pitem via call 0x161210, copies packet/rbuf/rrec fields, calls buffer setup at 0xa8d9c, then calls pqueue_insert-like function 0x1612d0.",
+        "On pqueue_insert failure, branch at 0xa8db7/0xa8dba goes to cleanup at 0xa8e10/0xa8e16; cleanup calls error handler, frees only rdata itself at 0xa8e2d-0xa8e30 and pitem at 0xa8e36-0xa8e40. There is no load/test/free of rdata->rbuf.buf before freeing rdata.",
+        "Caller code at 0xa917b calls 0xa8c90 and immediately continues at 0xa9180 without testing eax or propagating a negative return, matching the old unchecked caller behavior."
+      ],
+      "reasoning": "The CVE fix requires freeing the copied record buffer on dtls1_buffer_record insertion/setup failure, returning -1, and callers checking and propagating that failure. Local disassembly shows DTLS record buffering code is present, but the failure path omits freeing rdata->rbuf.buf and the caller does not check the return value, so the vulnerable-side behavior is present.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF 64-bit x86-64 PIE executable with OpenSSL/DTLS code and strings including ssl/record/rec_layer_d1.c, dtls1_buffer_record, and dtls1_process_buffered_records.",
+        "At 0x959c0, the dtls1_buffer_record-like function allocates record data, builds a pitem, copies the SSL3_BUFFER/record state, and calls the pqueue_insert-like routine at 0x95b1d.",
+        "On pqueue_insert failure, 0x95b2a tests the returned item pointer and branches to error handling when zero; the error path calls the error routine at 0x95b4b, frees rdata->rbuf.buf via rdi=[r13+0x10] at 0x95b50-0x95b5c, frees rdata at 0x95bee-0x95bf1, frees the pitem at 0x95bf6-0x95bf9, then returns 0xffffffff at 0x95bfe-0x95c0b.",
+        "The caller at 0x96ca4 calls this function, then tests eax and uses a signed-negative branch at 0x96ca9-0x96cab to an error/failure return path at 0x96d7e."
+      ],
+      "reasoning": "The local binary includes the applicable DTLS record-layer code. Its dtls1_buffer_record error path has the patched behavior: duplicate/insertion failure is fatal, the copied record buffer and record data are freed, the queue item is freed, and a negative error is returned. The caller checks for the negative return and propagates failure, satisfying the security-relevant behavior changes.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0a-openssl-gcc-O2 exists under target_dir and is a stripped ELF64 x86-64 PIE with statically included OpenSSL/DTLS strings; no architecture/configuration condition rules the DTLS mechanism out.",
+        "Local pqueue routines are present: pitem_new at 0x95340, pqueue_insert at 0x953f0, and pitem_free at 0x95390; pqueue_insert returns NULL on duplicate-key match at 0x95498-0x954a4.",
+        "Candidate dtls1_buffer_record at 0x95960 allocates/copies record data, calls pqueue_insert at 0x95abd, tests the returned pointer at 0x95ac2-0x95acd, and on NULL enters an error/cleanup path rather than returning success.",
+        "The pqueue_insert failure path frees the copied record buffer via rdata+0x10 at 0x95af0-0x95afc, then frees rdata at 0x95b8b-0x95b91, frees the pitem at 0x95b96-0x95b99, and returns -1 at 0x95b9f.",
+        "Observed callers propagate negative return: calls to 0x95960 at 0x95f45, 0x96cb4, and 0x9be10 are immediately followed by test eax/eax and js branches at 0x95f4a-0x95f4c, 0x96cb9-0x96cbb, and 0x9be15-0x9be17."
+      ],
+      "reasoning": "The vulnerable mechanism is the nonfatal duplicate-record pqueue_insert failure path leaking DTLS record data. The local binary implements the patched security behavior: pqueue_insert failure triggers buffer/rdata/item cleanup and returns -1, and callers check for negative return and branch to error handling. This is decisive local binary evidence of patched behavior, not version matching.",
+      "status": "present"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as stripped ELF64 x86-64 PIE; DTLS record-layer strings including dtls1_buffer_record and dtls1_process_buffered_records are present, so the DTLS mechanism is compiled in.",
+        "pqueue_insert-like routine at 0x953f0 returns NULL on duplicate priority; dtls1_buffer_record-like routine at 0x95960 calls it at 0x95abd and tests the returned pointer at 0x95aca.",
+        "On pqueue_insert failure, code at 0x95af0 loads rdata->rbuf.buf and calls the internal free wrapper at 0x95afc, then frees rdata at 0x95b91 and frees the pitem at 0x95b99 before returning eax=-1 at 0x95b9f.",
+        "Caller logic at 0x96c20 calls the buffer routine at 0x96cb4 and immediately checks for a negative return at 0x96cb9-0x96cbb, exiting the processing path instead of ignoring the result."
+      ],
+      "reasoning": "The vulnerable mechanism was a pqueue_insert duplicate/failure path that leaked the copied record buffer and record data and was ignored by callers. Local disassembly shows the failure path frees both rdata->rbuf.buf and rdata, frees the pitem, returns a negative error, and the caller checks that negative result. This matches the patched behavior, so the patch is present.",
+      "status": "present"
+    }
+  },
+  "CVE-2015-0209": {
+    "openssl-0.9.8-post-auto-reformat-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-0.9.8-post-auto-reformat-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable and contains EC ASN.1/d2i_ECPrivateKey local strings, so the EC private-key import code is compiled in.",
+        "The d2i_ECPrivateKey-shaped routine at 0xcca90 uses EC ASN.1 error calls with function id 0x92 and ec_asn1.c, and contains the expected EC_PRIVATEKEY decode, EC_KEY_new, BN_bin2bn, EC_POINT_new, EC_POINT_oct2point sequence.",
+        "When a is non-NULL and *a is NULL, the routine allocates ret and immediately stores it with mov QWORD PTR [rbx],r12 at 0xccc6d before later fallible operations.",
+        "On later errors, the cleanup path at 0xccc51 sets the return register state to NULL and calls the EC_KEY_free-like routine cd540 with rdi=r12, with no comparison against a or *a before freeing."
+      ],
+      "reasoning": "The vulnerable mechanism is premature *a = ret followed by freeing ret on later error. Local disassembly shows exactly that early store to *a before subsequent operations and an unconditional EC_KEY_free(ret)-style cleanup path without the patched guard ret && (a == NULL || *a != ret). Therefore the patch behavior is absent.",
+      "status": "absent"
+    },
+    "openssl-0.9.8-post-reformat-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-0.9.8-post-reformat-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE, and embedded strings include d2i_ECPrivateKey, EC PRIVATE KEY, EC_KEY_new, EC_POINT_mul, and EC_POINT_oct2point, so the EC private-key import path is compiled in.",
+        "In the d2i_ECPrivateKey-like function at 0xcca90, when output parameter a is non-NULL and *a is NULL, the code calls the EC_KEY allocator at 0xcd4a0 and immediately stores the result into *a at 0xccc6d before later group/private/public-key processing.",
+        "Multiple later error paths branch to 0xccc51, which moves ret/r12 into rdi, clears r12, and calls 0xcd540, the EC_KEY_free-like routine, without comparing a or *a against ret.",
+        "No patched cleanup guard equivalent to ret && (a == NULL || *a != ret) is present around the free path; the code frees the object even after it was stored in *a."
+      ],
+      "reasoning": "The vulnerable mechanism is premature *a = ret followed by unconditional EC_KEY_free(ret) on later errors. Local disassembly shows exactly that control flow in the compiled EC private-key decoder, and does not show the patched guarded-free behavior. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.0.2-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.2-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE with OpenSSL EC ASN.1 support strings including d2i_ECPrivateKey and ec_asn1.c.",
+        "Candidate d2i_ECPrivateKey routine at 0x102d00 uses EC_PRIVATEKEY ASN.1 parsing, EC_KEY_new equivalent at 0x1037a0, and EC_KEY_free equivalent at 0x103840.",
+        "When a is non-null and *a is null, the routine allocates ret then immediately stores it with mov QWORD PTR [rbx],r12 at 0x102edd before later group/private/public-key operations.",
+        "Error cleanup at 0x102eb9 calls EC_KEY_free(ret) unconditionally after setting ret/r12 to null, with no guard comparing a or *a against ret.",
+        "The shared cleanup at 0x102e5d frees the parsed EC_PRIVATEKEY object and returns ret, but does not perform a late *a = ret assignment."
+      ],
+      "reasoning": "The vulnerable mechanism is present: *a is assigned to a newly allocated EC_KEY before all later operations complete, and later error paths free that same ret without the patched guard ret && (a == NULL || *a != ret). This matches the vulnerable-side behavior rather than the patched cleanup behavior.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "`targets/openssl-1.1.0-openssl-gcc-O2` exists and is a stripped ELF64 x86-64 PIE; `.rodata` contains `d2i_ECPrivateKey`, `EC PRIVATE KEY`, and `crypto/ec/ec_asn1.c`, anchoring the EC private-key decoder code in the binary.",
+        "In the located decoder wrapper at `0x1188d0`, both existing-key and newly allocated-key paths call the decode/populate helper (`0x1181c0`) before storing the result to the caller output: success reaches `0x11890d: mov %r12,(%rbx)` and then returns.",
+        "No store to `*a` is present before the helper call that performs the later EC private-key operations; failures before success branch to cleanup blocks at `0x1189a0`/`0x118a10`, not to an earlier output assignment.",
+        "Cleanup implements the patched free guard: at `0x1189c1` it compares `ret`/`r12` with `*a` (`cmp %r12,(%rbx)`), skips freeing when equal (`je 0x118a38`), and only otherwise calls the EC_KEY free routine at `0x1197f0`. Null-output/new-object failure also reaches the free call without having stored `ret` into `*a`."
+      ],
+      "reasoning": "The vulnerable mechanism is premature `*a = ret` followed by unconditional freeing on later error. Local disassembly shows the assignment to `*a` occurs only after successful completion of the decode/populate helper, and the cleanup path frees `ret` only when no caller output already references it. That matches the patch behavior changes and rules out the vulnerable-side behavior.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0a-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable with OpenSSL EC code and d2i_ECPrivateKey error metadata present.",
+        "The d2i_ECPrivateKey body was located via EC error function code 0x92 and EC source string references around 0x118500-0x118719.",
+        "Success path stores ret to the output pointer only after later EC private-key operations: 0x1185ce tests a/rbx, then 0x1185d3 executes mov [rbx], r12 before returning ret.",
+        "Unified error cleanup implements the patched free guard: 0x118660 tests a/rbx, 0x118665 compares [rbx] with ret/r12, skips free when equal, otherwise 0x11866a-0x11866d calls the EC_KEY_free-like routine on ret.",
+        "This matches the patch behavior change from unconditional ret free to freeing only when a is NULL or *a != ret."
+      ],
+      "reasoning": "The vulnerable mechanism is premature *a = ret followed by freeing ret on later error. Local disassembly shows the output assignment deferred to the success path and cleanup guarded by checking whether *a already references ret before freeing, which is the patched behavior.",
+      "status": "present"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists and is ELF64 x86-64 PIE; OpenSSL EC ASN.1 feature is compiled in, with strings including crypto/ec/ec_asn1.c, EC_PRIVATEKEY, EC PRIVATE KEY, and d2i_ECPrivateKey.",
+        "In the located EC private-key import routine at 0x118a20, successful paths store ret to the caller output only after parsing succeeds: 0x118a5d writes mov [rbx], r12 before returning ret.",
+        "Error paths after parse failure do not perform an early output assignment; for new/existing key failure they go to 0x118af0/0x118b60 and then cleanup.",
+        "Cleanup implements the patched free guard: 0x118b11 compares [rbx] (the caller output *a) with r12 (ret), 0x118b14 skips freeing when equal, while 0x118b16-0x118b1c frees ret via the EC_KEY-free-like routine only when different; when a is NULL, 0x118b86 jumps directly to the free path."
+      ],
+      "reasoning": "The vulnerable mechanism is premature *a = ret followed by unconditional EC_KEY_free(ret) on later error. Local disassembly shows the affected EC private-key import code is present, but the output pointer assignment is delayed to success paths and the error cleanup checks whether *a already equals ret before freeing, matching the patch behavior changes.",
+      "status": "present"
+    }
+  },
+  "CVE-2015-0288": {
+    "openssl-0.9.8-post-auto-reformat-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "codex exec failed or returned invalid JSON: codex exec exited -9: evidence\":[\"Binary exists under target_dir and is a stripped ELF64 PIE executable with OpenSSL command functionality linked in.\",\"A locally generated DER certificate modified only in the SubjectPublicKeyInfo algorithm OID still parsed successfully: `x509 -inform DER -in cert_badspki.der -noout -subject` exited 0 and printed the subject.\",\"The same malformed-public-key certificate on the `x509 -x509toreq -signkey ...` path exited 139 after printing request generation messages, showing a segmentation fault instead of graceful error handling.\"],\"reasoning\":\"The vulnerable mechanism is an unchecked NULL return from public-key extraction before building the request. The crafted certificate makes public-key extraction fail while keeping certificate parsing valid; the x509-to-request path crashes, which is the vulnerable-side behavior. A patched binary would check the NULL public key and return an error rather than dereferencing or passing it onward.\",\"status\":\"absent\"}]}\ntokens used\n155,305\n"
+      ],
+      "reasoning": "See raw per-CVE files in raw_dir.",
+      "status": "error"
+    },
+    "openssl-0.9.8-post-reformat-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "codex exec failed or returned invalid JSON: codex exec exited -9:   14090b:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n257383:  140a11:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n257456:  140b21:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n257745:  140f3e:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n258171:  1414b5:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n263472:  14630f:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n263584:  1464ba:\tcall   e08b0 <__cxa_finalize@plt+0x9f158>\n\ncodex\n{\"results\":[{\"binary\":\"target_001\",\"confidence\":\"medium\",\"cve\":\"CVE-2015-0288\",\"evidence\":[\"The x509 app code has multiple nearby request and certificate helper calls, and the stripping/inlining makes names ambiguous. I am doing one more focused pass over the exact function candidates that allocate/free the ASN.1 request object and manipulate a public key pointer.\"],\"reasoning\":\"The final classification needs the immediate post-X509_get_pubkey null-test, not just evidence that request-conversion code exists.\",\"status\":\"inconclusive\"}]}\n\nprocess timed out after 600s and was killed\n"
+      ],
+      "reasoning": "See raw per-CVE files in raw_dir.",
+      "status": "error"
+    },
+    "openssl-1.0.2-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as a stripped ELF64 x86-64 PIE executable.",
+        "OpenSSL X509 request code is compiled in: strings include x509_req.c and X509_to_X509_REQ.",
+        "Disassembly at 0x14dc00 matches X509_to_X509_REQ control flow: create request, set subject, then process the certificate public key.",
+        "At 0x14dc7b-0x14dc96, the return from call 0x14d360 is moved directly into rsi for call 0x152090 and then into rdi for call 0x1283f0, with no intervening test rax,rax or null branch.",
+        "The only check after public-key handling is test ebx,ebx at 0x14dc9b on the set-pubkey return value, which occurs after the potentially NULL public key has already been used."
+      ],
+      "reasoning": "The patch requires a NULL check immediately after X509_get_pubkey and before X509_REQ_set_pubkey/EVP_PKEY_free. Local disassembly shows the vulnerable-side sequence: the public-key return value is passed directly to the set-pubkey and free-like calls without a NULL guard. No applicability condition in the metadata rules this code out for this binary.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable.",
+        "The binary contains X.509 request functionality: strings include X509_to_X509_REQ, x509toreq, and 'Generating certificate request'.",
+        "The x509toreq code path calls an internal routine at 0x19b350 with certificate, request key, and digest-like arguments, matching X509_to_X509_REQ usage.",
+        "Inside that routine, after the public-key extraction call at 0x19b3c5, the return value is moved to rsi and checked with 'test rax,rax' at 0x19b3cd followed by 'je 0x19b3f8' at 0x19b3d0.",
+        "Only when the returned key is non-NULL does execution continue to the subsequent request-public-key setter call at 0x19b3d5; the NULL path jumps to cleanup/free at 0x19b3f8 and returns NULL."
+      ],
+      "reasoning": "The vulnerable mechanism is using the X509_get_pubkey result without a NULL check before X509_REQ_set_pubkey/cleanup. Local disassembly of the matching X509_to_X509_REQ implementation shows an explicit NULL test immediately after public-key extraction and before the setter call, with a branch to the error cleanup path. This matches the patched behavior checklist.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 PIE executable, stripped.",
+        "OpenSSL X509 request code is compiled in: strings include `X509_to_X509_REQ` and `crypto/x509/x509_req.c`.",
+        "Disassembly around 0x19b670 matches `X509_to_X509_REQ`: it allocates a request, sets subject name, then handles public key setup, with X509 error-reporting arguments using library 0xb, function code 0x7e, and file string `crypto/x509/x509_req.c`.",
+        "At 0x19b6e2 the function calls the public-key extraction routine at 0x1996a0; at 0x19b6ed it immediately executes `test %rax,%rax`; at 0x19b6f0 it branches to the error path at 0x19b718 if NULL.",
+        "Only after that NULL check does the code pass the returned pointer as `%rsi` into the request public-key setter call at 0x1a3ad0."
+      ],
+      "reasoning": "The vulnerable mechanism is using the return from X509_get_pubkey without checking for NULL before X509_REQ_set_pubkey/cleanup. The local binary contains the applicable X509_to_X509_REQ code and shows the patched control flow: the public-key return value is checked for NULL and NULL branches to the error path before the value is used. That satisfies the patch behavior checklist.",
+      "status": "present"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0b-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE executable.",
+        "OpenSSL X.509 request code is compiled in: strings include X509_to_X509_REQ and crypto/x509/x509_req.c.",
+        "The X509_to_X509_REQ implementation is consistent with the function at 0x19b670, called by x509-to-request app code at 0x923e7.",
+        "In that function, after the certificate public-key extraction call at 0x19b6e5, the returned pointer in RAX is copied to RSI and checked with test %rax,%rax; je 0x19b718 before any set-pubkey use.",
+        "The jump target 0x19b718 frees the partially-created request via call 0x1a6d70, clears the return value, and returns NULL; only the non-NULL path reaches call 0x1a3ad0 with request in RDI and public key in RSI."
+      ],
+      "reasoning": "The vulnerable mechanism is use of the X509_get_pubkey result without validating it. Local disassembly shows the patched behavior: the extracted public key pointer is explicitly NULL-checked immediately before the X509_REQ_set_pubkey-like call, and NULL takes the error cleanup path returning NULL. The vulnerable unchecked flow is not present in the located implementation.",
+      "status": "present"
+    }
+  },
+  "CVE-2015-1788": {
+    "openssl-0.9.8zf-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-0.9.8zf-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable, and local strings show OpenSSL EC/GF2m support compiled in, including binary-field curve strings and bn_gf2m.c references.",
+        "In the BN_GF2m_mod_inv-shaped routine around 0x135820, the loop reloads u->top at 0x135953 and branches to the common failure path when it is zero, rather than continuing.",
+        "The same routine only takes the success break when u is exactly one: it tests d[0] odd at 0x1358e6, compares d[0] == 1 at 0x1358eb, then requires top == 1 at 0x1358f1-0x1358f4.",
+        "After u = u + v, the called GF2m add helper at 0x134750 normalizes the result top, with zero normalization visible around 0x1347d8-0x1347fb and 0x134828, so a zero/reducible intermediate reaches the error path."
+      ],
+      "reasoning": "The vulnerable mechanism is an inverse loop that continues when the intermediate polynomial becomes zero/non-one. This binary contains the GF2m inverse implementation and shows local control flow that rejects a zero intermediate via the common error path while only accepting exact one as success, matching the intended patched behavior.",
+      "status": "present"
+    },
+    "openssl-1.0.0r-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "codex exec failed or returned invalid JSON: codex exec exited -9:   c-40  c-32  c-24  c-16  c-8   \n41359:000000000015cf90 rsp+16   c-56  c-48  c-40  c-32  c-24  c-16  c-8   \n41360:000000000015cf92 rsp+8    c-56  c-48  c-40  c-32  c-24  c-16  c-8   \n41361:000000000015cf98 rsp+80   c-56  c-48  c-40  c-32  c-24  c-16  c-8   \n41363:0002da18 0000000000000048 0002da1c FDE cie=00000000 pc=000000000015cfc0..000000000015d173\n41365:000000000015cfc0 rsp+8    u     u     u     u     u     u     c-8   \n41366:000000000015cfc6 rsp+16   u     u     u     u     u     c-16  c-8   \n41367:000000000015cfcb rsp+24   u     u     u     u     c-24  c-16  c-8   \n41368:000000000015cfd0 rsp+32   u     u     u     c-32  c-24  c-16  c-8   \n41369:000000000015cfd2 rsp+40   u     u     c-40  c-32  c-24  c-16  c-8   \n41370:000000000015cfd3 rsp+48   u     c-48  c-40  c-32  c-24  c-16  c-8   \n41371:000000000015cfd7 rsp+56   c-56  c-48  c-40  c-32  c-24  c-16  c-8   \n41372:000000000015cfdb rsp+80   c-56  c-48  c-40  c-32  c-24  c-16  c-8   \n\n\nprocess timed out after 600s and was killed\n"
+      ],
+      "reasoning": "See raw per-CVE files in raw_dir.",
+      "status": "error"
+    },
+    "openssl-1.0.1m-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.1m-openssl-gcc-O2 exists and is an ELF64 x86-64 PIE executable with OpenSSL GF(2^m) support strings including bn_gf2m.c and BN_GF2m_mod_* names, so the vulnerable feature is compiled in.",
+        "In the identified BN_GF2m_mod_inv-like loop at 0x1954f0, the code tests ubits in r8d, tests udp[0] low bit, and for ubits <= 64 branches to 0x195660.",
+        "At 0x195660 the only terminal check is cmp rdi,0x1 followed by jne 0x195510; rdi holds udp[0]. Thus udp[0] == 1 exits successfully, but udp[0] == 0 falls through to continued loop logic instead of an error path.",
+        "No local instruction evidence appears for the patched behavior: an explicit udp[0] == 0 check branching to the function error/cleanup path before the udp[0] == 1 break."
+      ],
+      "reasoning": "The patch requires rejecting reducible polynomials by treating ubits <= BN_BITS2 and udp[0] == 0 as an error. The local binary implements the old condition, where ubits <= 64 only checks udp[0] == 1 and otherwise continues, matching the vulnerable infinite-loop mechanism.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0-openssl-gcc-O2 exists and is an ELF64 x86-64 PIE executable.",
+        "GF2m/EC binary-field code is compiled in: strings include BN_GF2m_mod, BN_GF2m_mod_exp, BN_GF2m_mod_mul, BN_GF2m_mod_sqr, BN_GF2m_mod_sqrt, EC_GROUP_get_curve_GF2m, and crypto/bn/bn_gf2m.c.",
+        "In the BN_GF2m_mod_inv-like routine at 0x219c90, the loop checks ubits in r10d and udp[0] in rdi: 0x219eab tests ubits, 0x219eb4 tests udp[0] oddness, and 0x21a028 enters the right-shift path while ubits is nonzero and udp[0] is even.",
+        "Patched zero/error behavior is present: when ubits is zero, control goes to 0x21a000, which tests udp[0]; if udp[0] is zero it falls through to the error path at 0x219d18, while nonzero branches to the <=64/==1 handling at 0x219fc8.",
+        "The <= BN_BITS2 break behavior remains: 0x219ebe compares ubits to 0x40, 0x219fc8 compares udp[0] to 1, and only udp[0] == 1 proceeds to the success/break path."
+      ],
+      "reasoning": "The vulnerable mechanism is the GF2m modular inverse loop continuing when the intermediate u becomes reducible/zero instead of 1. Local disassembly shows the patched behavior: after the shift loop, the optimized zero case for ubits == 0 and udp[0] == 0 goes to the function error path, while udp[0] == 1 still breaks/succeeds. GF2m support is present in this binary, so this is a patch-presence decision rather than not_affected.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 x86-64 PIE executable.",
+        "GF2m/EC binary-field support is compiled in: strings include BN_GF2m_mod*, ec_GF2m_* routines, sect* binary-field curves, and OPENSSL_BN_ASM_GF2m.",
+        "In the located GF2m inverse loop region, the ubits <= 64 path at 0x219ebe jumps to 0x219fc8, where it performs only cmp $0x1,%rdi followed by jne 0x219ec8.",
+        "For udp[0] != 1, including udp[0] == 0, control returns to the loop/update path at 0x219ec8 instead of branching to the error/cleanup path."
+      ],
+      "reasoning": "The patch requires a separate udp[0] == 0 error branch when ubits <= BN_BITS2. Local disassembly shows the old vulnerable behavior: only udp[0] == 1 exits successfully, while udp[0] == 0 continues looping. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0b-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable; OpenSSL GF(2^m) support is compiled in, with BN_GF2m and binary-curve strings present, so the feature is applicable.",
+        "Located a BN_GF2m_mod_inv-shaped routine around 0x219c90-0x21a128: it allocates BN_CTX temporaries, copies/mods operands, expands/pads limb arrays, shifts while the low limb is even, XORs u/v and b/c arrays, and recomputes bit length.",
+        "Patched zero guard is present: at 0x219eab the code tests ubits (r10d) and branches to 0x21a000 when zero; 0x21a000 tests udp[0] (rdi), and when udp[0] is zero it jumps to the common error return at 0x219d18.",
+        "The one-value break remains separate: 0x219ebe compares ubits to 0x40, 0x219fc8 compares udp[0] to 1, and non-1 values branch back to the continue path at 0x219ec8."
+      ],
+      "reasoning": "The vulnerable mechanism is an infinite loop when ubits is within one BN word but udp[0] is zero instead of one. The binary contains an explicit udp[0] == 0 error path before the existing udp[0] == 1 break path, matching the patch intent and behavior changes.",
+      "status": "present"
+    }
+  },
+  "CVE-2015-1789": {
+    "openssl-1.0.0r-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 PIE executable; no architecture/configuration condition rules out OpenSSL X509_cmp_time applicability.",
+        "Likely X509_cmp_time code at 0x11c0a0 loads ASN1_TIME length/type/data from [rdi], [rdi+4], [rdi+8] and dispatches on type 0x17.",
+        "UTCTime path at 0x11c200 uses old range check: length minus 0xb compared to 0x6, accepting lengths 11..17, matching vulnerable old check rather than patched min/max with remaining tracking.",
+        "GeneralizedTime path at 0x11c0cf only requires length > 12, matching old i < 13 behavior and lacking patched max length and remaining counter.",
+        "Fractional seconds handling at 0x11c2d0-0x11c300 advances through all digit bytes in a loop with no three-digit limit and no remaining-length bound.",
+        "Terminator/offset handling around 0x11c110-0x11c188 checks 'Z' or +/- and reads offset bytes at [rax+1]..[rax+4] without patched remaining == 1 or remaining == 5 checks."
+      ],
+      "reasoning": "The local disassembly shows the vulnerable X509_cmp_time mechanism: initial broad length checks followed by pointer advancement and unbounded fractional-second consumption without a remaining byte counter. The patched behavior checklist is absent, while the old vulnerable-side behavior is directly present.",
+      "status": "absent"
+    },
+    "openssl-1.0.1m-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: stripped ELF64 PIE x86-64 executable.",
+        "Relevant stripped function located at 0x1346c0: reads ASN1_TIME fields from [rdi] length, [rdi+4] type, [rdi+8] data; branches on type 0x17 and is called from certificate time comparison paths.",
+        "UTCTime path at 0x134820 implements old length range by subtracting 0x0b and accepting <= 0x6, i.e. lengths 11..17, matching the vulnerable-side check rather than precise remaining tracking.",
+        "GeneralizedTime path at 0x1346ef only rejects length <= 12 before copying/advancing, matching the old `i < 13` behavior and lacking patched max-length/remaining checks.",
+        "Fractional seconds handling at 0x1348f0-0x134922 loops over digit bytes until a non-digit with no three-digit cap and no remaining counter check, matching the vulnerable unbounded fractional-seconds scan.",
+        "Terminator/offset handling reads `Z`, `+`, `-`, and offset bytes directly at 0x134730-0x13478c without patched checks for remaining == 1 or remaining == 5 and digit validation before reads."
+      ],
+      "reasoning": "The local binary contains the vulnerable X509_cmp_time mechanism: initial coarse length checks, pointer advancement without a remaining byte counter, and an unbounded fractional-seconds digit loop. The patched behavior_changes checklist is not present in the identified function, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.0.2a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 stripped executable.",
+        "The X509_cmp_time-like routine contains the old UTC length range check: at 0x14f410 it subtracts 0xb from the ASN1_TIME length and at 0x14f413 compares the result to 0x6, accepting lengths 11..17.",
+        "The same routine accepts a 'Z' terminator without a remaining-length equality check: byte compare to 0x5a at 0x14f34e branches directly to offset-zero handling at 0x14f4d0.",
+        "Offset parsing reads str[1] through str[4] at 0x14f362, 0x14f36e, 0x14f377, and 0x14f37c without first proving remaining == 5 or validating all offset bytes as digits.",
+        "Fractional seconds handling at 0x14f4e0..0x14f510 loops over digits by incrementing the pointer and reading the next byte, with no remaining counter and no three-digit limit."
+      ],
+      "reasoning": "The vulnerable mechanism is present: parsing advances through ASN1_TIME data using only initial coarse length checks and then reads terminator, offset, and fractional-second bytes without the patched remaining-length guards. The patched behavior_changes, including remaining tracking, remaining == 1/5 checks, and a maximum of three fractional digits, are absent in the local disassembly.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 stripped PIE executable.",
+        "Disassembly at 0x19dc80 parses ASN1_TIME-like objects: reads type from [rdi+0x4], length from [rdi], and data pointer from [rdi+0x8].",
+        "UTCTime path at 0x19dca7/0x19ddd0 checks type 0x17 and accepts length only 11..17 before copying the initial 10 bytes.",
+        "GeneralizedTime path at 0x19dcb0 checks length only 13..23 before copying the initial 12 bytes.",
+        "Seconds parsing at 0x19de00 rejects when only one byte remains, subtracts 2 from the remaining count, and rejects if no bytes remain after seconds.",
+        "Fractional seconds handling at 0x19dea0-0x19dee1 is bounded to at most three digit iterations and still tracks remaining bytes.",
+        "Terminator/offset handling at 0x19de38 requires remaining == 1 for 'Z'; offset handling at 0x19dd37 requires remaining == 5 and validates all four offset digits at 0x19dd40-0x19dd7d."
+      ],
+      "reasoning": "The located time-comparison parser implements the patched remaining-length validation: precise min/max checks, guarded seconds parsing, bounded fractional seconds, and strict remaining-length checks for 'Z' or numeric offsets. This matches the security property and behavior_changes for CVE-2015-1789, so the patch is present.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as a stripped ELF64 PIE and contains compiled ASN1_TIME/X509 time comparison code; no applicability condition rules it out.",
+        "At 0x19dfa0 the parser loads ASN1_TIME fields from the local layout: length from [rdi], type from [rdi+0x4], data from [rdi+0x8].",
+        "UTCTime path checks type 0x17 and accepts length only in the 11..17 range via length-11 <= 6 before consuming 10 bytes; GeneralizedTime accepts length only in the 13..23 range via length-13 <= 10 before consuming 12 bytes.",
+        "The function tracks remaining length in eax after base-date consumption, rejects missing seconds/trailer cases, and after a 'Z' requires remaining == 1.",
+        "The offset path requires remaining == 5 and validates all four offset bytes as digits before using them.",
+        "The fractional-second path consumes at most three digits using a consumed-count check (cmp ecx,0x2 / jle loop), then requires remaining data for the final Z or offset; this is not the old unbounded digit loop."
+      ],
+      "reasoning": "The local disassembly shows the patched remaining-length validation model: precise min/max length checks, remaining decrements after date/seconds/fractional parts, max-three fractional digits, and strict final Z/offset length and digit validation. That matches the patch intent and rules out the vulnerable unbounded parser behavior.",
+      "status": "present"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0b-openssl-gcc-O2 exists under target_dir and is a stripped ELF64 PIE executable with OpenSSL/X509/ASN1 code compiled in, so the vulnerable mechanism is applicable.",
+        "At 0x19dfa0 the ASN1_TIME parser loads ctm->length from [rdi] into eax, ctm->type from [rdi+4], and ctm->data from [rdi+8], matching X509_cmp_time structure.",
+        "Patched precise length gates are present: generalized time uses len-0xd <= 0xa at 0x19dfd0-0x19dfd6, accepting 13..23 bytes; UTCTIME uses len-0xb <= 0x6 at 0x19e0f0-0x19e0f6, accepting 11..17 bytes.",
+        "The parser subtracts consumed prefix lengths from the length counter: generalized path subtracts 12 at 0x19dffb and advances data by 12 at 0x19dffe; UTCTIME subtracts 10 at 0x19e0ff and advances by 10 at 0x19e102.",
+        "Patched final terminator/offset checks are present: 'Z' requires remaining == 1 at 0x19e158-0x19e15e; offsets require remaining == 5 at 0x19e057-0x19e05a and validate all four offset digits at 0x19e060-0x19e09d.",
+        "Fractional seconds are bounded: the loop at 0x19e1df-0x19e1ff advances only while digits are seen and breaks after three consumed fractional digits via cmp ecx,0x2 / jle; it also rejects when no remaining byte is left before the required terminator at 0x19e201-0x19e20e."
+      ],
+      "reasoning": "The binary contains the X509_cmp_time-like ASN1_TIME comparison parser and its local control flow implements the patched security property: length is tracked as remaining bytes, consumed lengths are decremented, fractional seconds are capped, and exact remaining lengths are enforced for Z and timezone offsets. This is patched behavior, not the vulnerable unbounded fractional-second scan.",
+      "status": "present"
+    }
+  },
+  "CVE-2015-1790": {
+    "openssl-1.0.0r-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 x86-64 PIE executable.",
+        "PKCS7 code is compiled in: strings include PKCS7_dataDecode, pk7_doit.c, invalid signed data type, no content, and no recipient matches certificate.",
+        "PKCS7_dataDecode-like code at 0x136660 uses PKCS7 error function id 0x70 with pk7_doit.c, matching the target function context.",
+        "In the common content setup path, 0x136982 checks saved in_bio at [rsp+0x10] for NULL; when NULL it jumps to 0x136d27, where rax is loaded from [rsp+0x28] and immediately dereferenced via mov esi,DWORD PTR [rax], i.e. data_body->length without a data_body NULL check.",
+        "The signed-content path at 0x136970 calls a detached-content helper and can jump to the in_bio-use path based on that result, matching the old PKCS7_is_detached(p7) || in_bio condition rather than the patched in_bio-only condition."
+      ],
+      "reasoning": "The patch should reject data_body == NULL && in_bio == NULL before any data_body dereference and should stop using PKCS7_is_detached as part of the later in_bio selection. Local disassembly instead shows the vulnerable-side dereference of data_body->length after only checking in_bio, plus the old detached-content condition behavior. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-1.0.1m-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.1m-openssl-gcc-O2 exists and is a stripped ELF64 PIE; PKCS7_dataDecode and pk7_doit.c strings are present, and disassembly shows PKCS7 error calls with lib 0x21/function 0x70 anchored to PKCS7_dataDecode.",
+        "In the anchored PKCS7_dataDecode routine, an EncryptedContent/data_body pointer is stored to stack slot [rsp+0x28] (for example around 0x14f248-0x14f253).",
+        "Later, when in_bio stack slot [rsp+0x10] is NULL, control jumps to 0x14f4d7, loads rax from [rsp+0x28], then immediately dereferences it with mov esi,DWORD PTR [rax] at 0x14f4dc without a prior NULL check.",
+        "The later BIO selection still contains a detached-style helper branch at 0x14f599-0x14f5b3 that can jump to the in_bio path at 0x14f13e, matching the old PKCS7_is_detached(p7) || in_bio condition rather than the patched in_bio-only condition."
+      ],
+      "reasoning": "The vulnerable mechanism is an unchecked data_body->length dereference when no alternate input BIO is supplied. Local disassembly shows that exact vulnerable-side behavior and also retains the old detached/in_bio selection logic, while the patch-required data_body == NULL && in_bio == NULL NO_CONTENT guard is not present before the dereference.",
+      "status": "absent"
+    },
+    "openssl-1.0.2a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.0.2a-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE with PKCS7 strings compiled in, including PKCS7_dataDecode, pk7_doit.c, and no content.",
+        "The matching 4-argument PKCS7_dataDecode routine starts at 0x16bd80: it saves rdx as in_bio at [rsp+0x10] and uses PKCS7 error calls with library 0x21/function 0x70.",
+        "At 0x16c0a2 the routine checks only in_bio ([rsp+0x10]); when it is NULL, control jumps to 0x16c447 where rax is loaded from [rsp+0x28] (data_body) and immediately dereferenced with mov esi,DWORD PTR [rax] for data_body->length.",
+        "No preceding universal guard for data_body == NULL && in_bio == NULL leading to PKCS7_R_NO_CONTENT is present on this path.",
+        "For signed content, 0x16c509 calls the detached-content check and branches directly to the in_bio-use path at 0x16c0ae when detached, matching the old PKCS7_is_detached(p7) || in_bio behavior rather than the patched in_bio-only condition."
+      ],
+      "reasoning": "The vulnerable mechanism is an unchecked data_body->length dereference when no alternate input BIO is supplied. Local disassembly of the PKCS7_dataDecode routine shows that vulnerable-side dereference path and the old detached-content condition, while the patch's required data_body NULL plus in_bio NULL NO_CONTENT guard is absent. The PKCS7 code is compiled into this binary, so this is a patch-absence finding rather than not_affected.",
+      "status": "absent"
+    },
+    "openssl-1.1.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE executable with PKCS7/PKCS7_dataDecode strings compiled in, so the PKCS7 code path is applicable.",
+        "In the PKCS7_dataDecode body around 0x15eaf0, in_bio is saved at stack slot [rsp+0x10] and data_body at [rsp+0x18].",
+        "Relevant paths at 0x15ecdc and 0x15edce load data_body, OR it with in_bio, and jump to 0x15eec8 only when both are zero.",
+        "The 0x15eec8 path emits a PKCS7 error using the PKCS7_dataDecode function/reason constants, including reason 0x7a corresponding to the local 'no content' error string, then goes to cleanup before data_body dereference.",
+        "Later content selection at 0x15eef6 checks only in_bio; non-NULL in_bio is used at 0x15ef02, while NULL in_bio falls through to data_body->length access at 0x15efa8, after the prior NULL-content guard."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing data_body->length when data_body is NULL and no alternate in_bio was supplied. The binary contains the patched guard data_body == NULL && in_bio == NULL routing to a no-content error before the length access, and the later use-in_bio decision depends only on in_bio. This matches both requested patch behavior changes, so the patch is present.",
+      "status": "present"
+    },
+    "openssl-1.1.0a-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Resolved binary exists under target_dir and is a stripped ELF64 PIE executable; PKCS#7 code is compiled in, with strings for \"PKCS7 routines\", \"crypto/pkcs7/pk7_doit.c\", \"PKCS7_dataDecode\", \"no content\", and related PKCS7 errors.",
+        "In the PKCS7_dataDecode-localized function around 0x15eda0, the third argument is saved at stack offset [rsp+0x10], consistent with in_bio, and data_body is held at [rsp+0x18] after the content-type branches.",
+        "At 0x15ef8c-0x15ef96 the code loads data_body from [rsp+0x18], ORs it with saved in_bio [rsp+0x10], and jumps to an error path when both are zero.",
+        "The both-null error path at 0x15f178 calls the OpenSSL error routine with PKCS7 library/function context and reason 0x7a, matching the \"no content\" guard added by the patch.",
+        "Later content-source selection checks saved in_bio directly at 0x15f1a6-0x15f1b7 and uses it when non-NULL; the observed condition is based on in_bio, not on a detached-content predicate."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing data_body->length when data_body is NULL and no alternate input BIO exists. Local disassembly shows the patched guard data_body == NULL && in_bio == NULL leading to the PKCS7 no-content error before the later data_body path, and the later source selection uses in_bio directly. PKCS#7 support is present, so this is a patch-presence decision rather than not_affected.",
+      "status": "present"
+    },
+    "openssl-1.1.0b-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-1.1.0b-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE with OpenSSL PKCS7 code statically linked; strings include PKCS7_dataDecode, no content, crypto/pkcs7/pk7_doit.c, and BIO_new_mem_buf.",
+        "The PKCS7_dataDecode body is localized at 0x15eda0: it saves the third argument rdx at [rsp+0x10], matching in_bio, and PKCS7 error calls in this body use lib 0x21 and function id 0x70.",
+        "Patched guard is present: at 0x15ef8c it loads data_body from [rsp+0x18], ORs it with in_bio at [rsp+0x10], and if both are NULL jumps to 0x15f178, which sets reason edx=0x7a (PKCS7_R_NO_CONTENT) and then calls the PKCS7 error routine via the common path at 0x15ee43.",
+        "The vulnerable dereference path is gated: at 0x15f1a6 it tests only in_bio ([rsp+0x10]); if in_bio is NULL it reaches 0x15f258, where data_body is dereferenced for its length, but this occurs after the prior data_body || in_bio guard."
+      ],
+      "reasoning": "The binary contains the patched security behavior: PKCS7_dataDecode rejects the data_body == NULL and in_bio == NULL case with PKCS7_R_NO_CONTENT before any data_body->length access. The later selection of alternate input depends on in_bio being non-NULL, matching the patch's removal of the detached-content condition from that branch.",
+      "status": "present"
+    }
+  },
+  "CVE-2025-11187": {
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-libcrypto-gcc-O2 exists and is an ELF64 x86-64 stripped shared object.",
+        "Local disassembly shows PBMAC1 support and PKCS#12 MAC verification code: PKCS12_verify_mac handles PBMAC1 OID and calls the internal PBMAC1/PBKDF2-HMAC path at 0x2d8160.",
+        "In the PBMAC1/PBKDF2-HMAC path, after calling PBMAC1_get1_pbkdf2_param at 0x2d82ca, the code unconditionally loads 0x10(%rax) and calls ASN1_INTEGER_get at 0x2d82df, matching direct use of pbkdf2_param->keylength.",
+        "The same path directly dereferences the salt structure with mov 0x0(%r13),%rax followed by mov 0x8(%rax),%rax at 0x2d82f5-0x2d82fd, with no preceding NULL check and no comparison of salt->type to V_ASN1_OCTET_STRING.",
+        "The derived key length from ASN1_INTEGER_get is stored at 0x34(%rsp) and later pushed as the final PKCS5_PBKDF2_HMAC output length argument at 0x2d8365-0x2d8375, with no check that it is >0 and <=64 before the call."
+      ],
+      "reasoning": "The vulnerable mechanism is direct use of untrusted PBKDF2 keylength and salt choice from PBMAC1 PKCS#12 parameters. The binary includes the applicable PBMAC1 PKCS#12 code path, and the local control flow matches the pre-patch behavior: unconditional keylength extraction, direct salt value dereference, and attacker-controlled keylen passed to PKCS5_PBKDF2_HMAC without the patched salt type and key length range guards. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 stripped OpenSSL shared object with PKCS12/PBMAC1/PBKDF2 functionality present.",
+        "PBMAC1/PBKDF2 MAC path calls PBMAC1_get1_pbkdf2_param at 0x2d86cc and then validates salt: load [r15], test for NULL at 0x2d872d-0x2d8733, compare salt type to 0x4 at 0x2d8739, branch to error on mismatch at 0x2d873c.",
+        "Keylength is validated: load [r15+0x10], reject NULL at 0x2d8746-0x2d8752, call ASN1_INTEGER_get at 0x2d8758, then enforce 1..64 using lea keylen-1 and cmp 0x3f at 0x2d8764-0x2d876f, branching to error on out-of-range.",
+        "The bounded keylength is then used as the PKCS5_PBKDF2_HMAC output length before deriving into the stack buffer at 0x2d8793-0x2d87ab."
+      ],
+      "reasoning": "The vulnerable mechanism is unvalidated PBKDF2 salt type and attacker-controlled keylength. Local disassembly shows the patched behavior: salt must be non-NULL and ASN.1 OCTET STRING, keylength must be present and within EVP_MAX_MD_SIZE (64), and invalid cases go to error before PKCS5_PBKDF2_HMAC. The PKCS#12 PBMAC1 code is compiled in, so this is a patch-presence decision rather than not_affected.",
+      "status": "present"
+    },
+    "openssl-3.4.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object with PKCS#12/PBMAC1 code compiled in, including PBMAC1_get1_pbkdf2_param, PKCS12_verify_mac, PKCS12_set_pbmac1_pbkdf2, and PKCS5_PBKDF2_HMAC symbols/strings.",
+        "In the PBMAC1 PBKDF2 MAC path at 0x2d8e6d-0x2d8e82, the code loads the salt pointer, tests it for NULL, compares the ASN.1 type field to 0x4, and branches to an error path before loading salt->value.octet_string if either check fails.",
+        "At 0x2d8e86-0x2d8eb5, the code loads the keylength pointer, branches to error if it is NULL, calls ASN1_INTEGER_get only when present, then uses lea keylen-1 and cmp 0x3f with ja to reject keylen <= 0 or keylen > 64 before calling PKCS5_PBKDF2_HMAC.",
+        "The rejection path at 0x2d9270 raises/sets an error, frees EVP_MD and PBKDF2PARAM state, clears the success return register, and returns without deriving the key."
+      ],
+      "reasoning": "The vulnerable mechanism was unchecked use of PBKDF2 salt and keylength from PBMAC1 PKCS#12 parameters. Local disassembly shows the patched security properties directly: salt must be present and type V_ASN1_OCTET_STRING before dereference, and keylength must be present and in the 1..64 range before being passed to PKCS5_PBKDF2_HMAC. This is decisive patched behavior, and the PBMAC1/PKCS#12 feature is present in the binary.",
+      "status": "present"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as an ELF64 x86-64 shared object and contains PKCS#12/PBMAC1/PBKDF2 code, including PBMAC1_get1_pbkdf2_param, PKCS12_verify_mac, PKCS12_set_mac, ASN1_INTEGER_get, and PKCS5_PBKDF2_HMAC.",
+        "In the PBMAC1 derivation path at 0x30dc4a, the code calls PBMAC1_get1_pbkdf2_param and only checks the returned PBKDF2PARAM pointer for NULL; at 0x30dc5b it immediately loads [rax+0x10] and calls ASN1_INTEGER_get at 0x30dc5f, with no prior keylength NULL check or <=0/>64 range check.",
+        "The derived key length from ASN1_INTEGER_get is saved at 0x30dc6d/0x30dc71 and later pushed as the keylen argument to PKCS5_PBKDF2_HMAC at 0x30dce5-0x30dcf5.",
+        "Salt is used directly: 0x30dc75 loads PBKDF2PARAM->salt, 0x30dc79 loads [salt+0x8] as the octet_string value, and 0x30dce0/0x30dcf3 pass its data and length to PKCS5_PBKDF2_HMAC, with no preceding salt NULL check or ASN.1 type comparison to OCTET STRING."
+      ],
+      "reasoning": "The vulnerable mechanism is compiled into this binary and is applicable. The local disassembly shows the pre-patch behavior: direct salt->value.octet_string access and unvalidated ASN1_INTEGER_get keylength flowing into PKCS5_PBKDF2_HMAC. The patched behavior would reject missing/non-OCTET salt and keylen <=0 or > EVP_MAX_MD_SIZE before this call; those guards are absent in the relevant control flow.",
+      "status": "absent"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.6.0-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with PKCS12/PBMAC1/PBKDF2 code compiled in: strings include PBMAC1_PBKDF2_HMAC and exported symbols include PBMAC1_get1_pbkdf2_param, PKCS12_verify_mac, PKCS12_gen_mac, PKCS5_PBKDF2_HMAC, and ASN1_INTEGER_get.",
+        "In the PBMAC1 path at 0x30ea2a-0x30ea5d, the code calls PBMAC1_get1_pbkdf2_param, then immediately loads pbkdf2_param+0x10 and calls ASN1_INTEGER_get at 0x30ea3b-0x30ea3f with no preceding NULL check for keylength.",
+        "The same block loads pbkdf2_param->salt via 0x0(%r13) and then directly loads 0x8(%rax) at 0x30ea55-0x30ea5d, consistent with taking salt->value.octet_string without checking salt non-NULL or type == V_ASN1_OCTET_STRING.",
+        "The derived key length from ASN1_INTEGER_get is stored at 0x30ea4d/0x30ea51 and later passed to PKCS5_PBKDF2_HMAC at 0x30ead5; there is no observed keylen <= 0 or keylen > 0x40/EVP_MAX_MD_SIZE rejection before the call."
+      ],
+      "reasoning": "The vulnerable mechanism applies because PKCS#12 PBMAC1 support is present. Local disassembly shows the vulnerable-side behavior: unvalidated salt choice dereference and unconditionally read, unbounded keylength flowing into PKCS5_PBKDF2_HMAC. The patched behavior would add salt type/null validation and keylength range checks before this use, but those checks are absent in the relevant PBMAC1 path.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-15467": {
+    "openssl-3.0.19-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.0.19-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object and includes CMS/AuthEnvelopedData plus AES/ARIA/Camellia GCM strings, so the affected CMS/AEAD feature area is compiled in.",
+        "The local ASN.1 octet-string helper at 0xda9d0 copies at most the caller-supplied max length: it compares max in eax against actual ASN1_STRING length in ebx, uses cmovg to select the smaller length into rdx, then calls memcpy.",
+        "The AEAD ASN.1 parameter call site at 0x1d9fbc sets ecx=0x10, rdx=rsp+0x10 (stack IV buffer), rsi=rsp+0x8, and calls 0xda9d0 once, matching the patched single bounded read into iv with EVP_MAX_IV_LENGTH.",
+        "Immediately after the call, instructions 0x1d9fc1-0x1d9fc7 compute eax-1 and compare against 0xf, branching to error when the returned length is <=0 or >16; this implements the patched range check.",
+        "No vulnerable two-step pattern is present at this call site: there is no initial NULL-buffer length probe followed by a second call using the returned unchecked length."
+      ],
+      "reasoning": "The vulnerable mechanism was an unchecked ASN.1 IV length used for a second copy into a fixed 16-byte stack buffer. The binary contains the applicable CMS/AEAD code path, and its relevant call site uses the patched behavior: a single helper call with the stack IV buffer and maximum length 16, followed by a range check rejecting lengths outside 1..16. This is direct local binary evidence that the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.0.20-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.0.20-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object and contains CMS plus AEAD/GCM/CCM strings, so the CMS/AEAD code path is compiled in.",
+        "At 0x1da000, the local function matching evp_cipher_get_asn1_aead_params uses one call at 0x1da03c to the ASN.1 int/octet-string helper with rdi=type, rsi=&tl, rdx=stack iv at rsp+0x10, and ecx=0x10 (EVP_MAX_IV_LENGTH).",
+        "Immediately after the helper returns, 0x1da041-0x1da047 computes eax-1, compares it with 0xf, and branches to an error return at 0x1da118 when the returned length is not in 1..16, covering i <= 0 and i > EVP_MAX_IV_LENGTH.",
+        "The accepted path copies from the bounded stack iv buffer into the asn1_params-like output and stores the returned length at output+0x10; no vulnerable NULL length-probe followed by a second unchecked helper call is present in this function."
+      ],
+      "reasoning": "The vulnerable mechanism was a two-call ASN.1 IV read where the first call obtained an unchecked length and the second copied that length into a fixed stack buffer. The binary shows the patched behavior: a single helper call with the destination buffer and maximum length 16, followed by an explicit returned-length rejection for values outside 1..16 before copying to the output structure.",
+      "status": "present"
+    },
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 shared object, stripped.",
+        "Local strings/symbols show CMS/AuthEnvelopedData and AES-GCM support, so the vulnerable CMS AEAD parameter path is applicable.",
+        "At 0x1cdde5-0x1cddf2 the AEAD ASN.1 helper is first called with ecx=0x10 and edx=0, i.e. a length-probe call with NULL output buffer.",
+        "After only `test eax,eax` / `jle` at 0x1cddfa-0x1cddfc, the returned length is reused as ecx at 0x1cde03 for a second call at 0x1cde0e with rdx pointing to a stack buffer at rsp+0x10.",
+        "After the second call, the code copies r12d bytes with memcpy at 0x1cde13-0x1cde1c and stores r12d as the IV length at 0x1cde21; no `i > 0x10` rejection is present between the calls."
+      ],
+      "reasoning": "The binary shows the vulnerable two-call mechanism: first retrieve the ASN.1 IV length, check only for <= 0, then copy using that unchecked length into a fixed stack buffer. The patched single bounded call with an explicit upper-bound rejection is not present.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.4-libcrypto-gcc-O2 exists as an ELF64 x86-64 shared object, stripped, with OpenSSL CMS and AEAD/GCM functionality present in local symbols/strings, so the vulnerable CMS AEAD path is applicable.",
+        "The internal ASN.1 int-octet helper at 0x10fdc0 copies at most the caller-provided max but returns the actual octet length.",
+        "Caller at 0x1f7390 first calls the helper with output buffer NULL and max 0x10, stores the returned length, and only checks i <= 0 before continuing.",
+        "The same caller then passes the returned length as the max into a second helper call copying into a stack buffer at rsp+0x10, followed by memcpy to the destination using that returned length and storing it at destination+0x10.",
+        "No caller-side i > 0x10 rejection is present in this sequence; this matches the vulnerable two-call unchecked-length behavior rather than the patched single bounded call."
+      ],
+      "reasoning": "The supplied patch intent requires one bounded read into the IV buffer with EVP_MAX_IV_LENGTH and explicit rejection of lengths greater than EVP_MAX_IV_LENGTH. The binary instead contains the old two-call pattern where the second call uses the ASN.1-reported length as the copy bound for a 16-byte stack buffer, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object with CMS and AEAD/GCM support strings present, so the CMS AEAD parsing path is applicable.",
+        "Local helper at 0x112ad0 implements ossl_asn1_type_get_octetstring_int semantics: when an output buffer is provided it copies min(maxlen, actual_length) but returns the actual octet-string length.",
+        "Caller at 0x1fbbb0 matches evp_cipher_get_asn1_aead_params shape: checks type/asn1_params non-null, first calls 0x112ad0 with rdx=0 and ecx=0x10, stores returned length, checks only eax <= 0, then calls 0x112ad0 again with rdx pointing to stack buffer at rsp+0x10 and ecx set to the returned length.",
+        "No compare of returned length against 0x10 appears between the first call and second copy; after the second call it memcpy's returned-length bytes into asn1_params and stores iv_len."
+      ],
+      "reasoning": "The vulnerable mechanism is present: the code uses the old two-call pattern and only rejects non-positive lengths, then uses the unchecked returned IV length as the second call's copy limit into a fixed 16-byte stack IV buffer. The patched behavior would be a single bounded call with iv and max 0x10 plus an explicit i > 0x10 rejection, which is not present in this local binary evidence.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-15468": {
+    "openssl-3.4.3-libssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-libssl-gcc-O2 exists as a stripped ELF64 x86-64 shared object.",
+        "QUIC support is compiled in: OSSL_QUIC_client_method and OSSL_QUIC_client_thread_method are exported, and ssl/quic strings are present.",
+        "SSL_CIPHER_find is exported at 0x346a0 and dispatches through the SSL method table slot +0xa8.",
+        "The QUIC method table at 0xefde0/0xefee0 has slot +0xa8 pointing to 0x6d3c0.",
+        "Function 0x6d3c0 calls the cipher lookup helper at 0x2cef0, then immediately executes testb $0x4,0x42(%rax) and cmove %rdx,%rax, with no test %rax / je guard before dereferencing %rax."
+      ],
+      "reasoning": "The vulnerable mechanism applies because this binary includes QUIC and SSL_CIPHER_find. The relevant QUIC cipher lookup callback dereferences the returned cipher pointer at 0x42(%rax) without first checking whether the helper returned NULL. That matches the vulnerable-side behavior and lacks the patched NULL guard.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-libssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 stripped shared object with OpenSSL QUIC exports including OSSL_QUIC_client_method, OSSL_QUIC_client_thread_method, and OSSL_QUIC_server_method, so the QUIC-specific code path is compiled in.",
+        "SSL_CIPHER_find at 0x36190 dispatches through the SSL method vtable slot 0xa8: mov rax,[r8+0x18]; jmp [rax+0xa8].",
+        "The QUIC method tables at 0xfdce0/0xfdde0/0xfdee0 have slot 0xa8 pointing to 0x733f0.",
+        "The target function at 0x733f0 calls the cipher lookup at 0x2e810, then executes xor edx,edx; test BYTE PTR [rax+0x42],0x4; cmove rax,rdx; ret.",
+        "There is no test rax,rax or conditional branch after the lookup call and before dereferencing [rax+0x42]."
+      ],
+      "reasoning": "The vulnerable mechanism is a missing NULL check after ssl3_get_cipher_by_char before reading ciph->algorithm2. The local QUIC SSL_CIPHER_find vtable target directly dereferences the returned pointer to test the QUIC bit, with no NULL guard. This matches the vulnerable-side behavior, not the patched behavior that would return NULL before the dereference.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-libssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.5-libssl-gcc-O2 exists as a stripped ELF64 x86-64 shared object.",
+        "QUIC support is compiled in: exported QUIC method symbols are present, and OSSL_QUIC_client_method/OSSL_QUIC_server_method return method tables in .data.rel.ro.",
+        "SSL_CIPHER_find at 0x36190 dispatches through the SSL method table slot at offset 0xa8; the QUIC client/server method tables have that slot pointing to 0x73400.",
+        "The function at 0x73400 calls the cipher lookup at 0x2e810, then immediately executes test %rax,%rax; je 0x7341c before any dereference.",
+        "Only after the NULL check does it execute testb $0x4,0x42(%rax), followed by cmove of zero to return NULL when the QUIC bit is absent."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing the SSL_CIPHER pointer returned by ssl3_get_cipher_by_char() without first checking for NULL. In this binary, the QUIC SSL_CIPHER_find method implementation contains the patched NULL guard immediately after the cipher lookup and before reading ciph->algorithm2 at offset 0x42. That matches the intended patched behavior of returning NULL for unknown ciphers instead of crashing.",
+      "status": "present"
+    },
+    "openssl-3.5.6-libssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as a stripped ELF64 x86-64 shared object.",
+        "QUIC support is compiled in: dynamic symbols include OSSL_QUIC_client_method, OSSL_QUIC_client_thread_method, OSSL_QUIC_server_method, SSL_is_quic, and SSL_CIPHER_find.",
+        "SSL_CIPHER_find at 0x36180 dispatches through the SSL method table entry at offset 0xa8.",
+        "The QUIC method tables have relocation entries for offset +0xa8 pointing to 0x734a0, identifying the QUIC cipher lookup implementation used by SSL_CIPHER_find.",
+        "Disassembly at 0x734a0 calls 0x2e800, then immediately executes test rax,rax; je 0x734bc before any dereference of rax.",
+        "Only after the NULL check does the code test byte ptr [rax+0x42],0x4 and conditionally clear rax, matching the patched NULL guard before checking the QUIC algorithm flag."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing the cipher pointer returned by ssl3_get_cipher_by_char without checking for NULL. In this binary, the applicable QUIC SSL_CIPHER_find method is present, and its stripped implementation checks the call return in rax for NULL and returns before accessing [rax+0x42]. That is the intended patched behavior.",
+      "status": "present"
+    },
+    "openssl-3.6.0-libssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 x86-64 shared object.",
+        "QUIC support is compiled in: dynamic symbols include OSSL_QUIC_client_method, OSSL_QUIC_client_thread_method, OSSL_QUIC_server_method, and SSL_CIPHER_find.",
+        "SSL_CIPHER_find at 0x36630 dispatches through the SSL method callback slot: mov 0x18(%r8),%rax; jmp *0xa8(%rax).",
+        "QUIC method table relocations point the SSL_CIPHER_find callback slot to code at 0x73c00.",
+        "At 0x73c00, the callback calls the cipher lookup helper at 0x2ec50, then immediately executes testb $0x4,0x42(%rax) and cmove %rdx,%rax.",
+        "There is no test %rax,%rax or branch returning NULL between the lookup call and the dereference of 0x42(%rax)."
+      ],
+      "reasoning": "The CVE fix requires a NULL guard immediately after ssl3_get_cipher_by_char returns, before checking the SSL_QUIC bit in ciph->algorithm2. Local disassembly of the applicable QUIC cipher callback shows the vulnerable-side behavior: it dereferences the returned cipher pointer at offset 0x42 immediately after the lookup call with no NULL check. Therefore the patch is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-15469": {
+    "openssl-3.5.3-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as stripped ELF64 x86-64 PIE and contains OpenSSL command-line app strings including \"dgst\", \"pkeyutl\", \"Read error in %s\", and one-shot related messages, so the affected CLI paths are present.",
+        "Local helper at 0x1284d0 matches old bio_to_mem behavior: it uses a 0x400-byte stack buffer/read size, takes maxlen in %esi/%ebp, subtracts bytes read from maxlen, and breaks successfully when maxlen reaches zero.",
+        "The same helper returns the buffered length in %eax on success and returns -1 on read/write error, matching the old length-returning API rather than patched int success plus size_t *outlen.",
+        "do_fp_oneshot_sign-like caller at 0xdc490 passes 0x1000000 as maxlen to 0x1284d0, then tests returned %eax with jle and continues with movslq %eax,%rbp, so a positive truncated 16MB result is accepted.",
+        "pkeyutl path still calls 0x1284d0 with keysize*10 for signature data and with -1 for input data, checks for negative return, and has the old %d non-raw length error format string at 0x5049f8."
+      ],
+      "reasoning": "The vulnerable mechanism is silent truncation when bio_to_mem reaches a nonzero maxlen limit: old code stops reading and returns the prefix length successfully. The target binary contains that old helper and old caller contracts, including the one-shot signing 16MB maxlen call that treats positive truncated length as success. No local build evidence shows the affected CLI feature is absent or inapplicable, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 stripped PIE executable.",
+        "Applicable OpenSSL command-line feature is compiled in: strings include `dgst`, `apps/dgst.c`, `Read error in %s`, one-shot algorithm names `Ed25519` and `ML-DSA-*`, and pkeyutl strings.",
+        "In the dgst one-shot signing path around 0xdc490, the code calls helper 0x1284f0 with old ABI arguments: `rdi=&buf`, `esi=0x1000000`, and existing `rdx=in`, then treats returned `eax` as `buflen` with `test eax,eax; jle error`. Patched code would pass an outlen pointer as the second argument and test a boolean return.",
+        "In pkeyutl around 0xf70a0, signature input uses `esi=keysize*10` and calls the same helper, then checks the returned length with `test ecx,ecx; js error`; around 0xf7101 input uses `esi=0xffffffff` before calling the helper. This matches the old `bio_to_mem(out,maxlen,in)` return-length contract, not the patched `bio_to_mem(out,&outlen,maxlen,in)` contract.",
+        "The pkeyutl diagnostic string is the old form: `Error: The non-raw input data length %d is too long - max supported hashed size is %d`, not the patched `%zd` form."
+      ],
+      "reasoning": "The vulnerable mechanism is the old `bio_to_mem` contract that returns a byte count and allows callers to proceed after reading only up to the max length. Local disassembly shows both dgst and pkeyutl still call the helper with the old `(out,maxlen,in)` ABI and use the return value as a length, including the 16 MiB cap in the dgst one-shot path. That is vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Requested binary exists under target_dir and is an ELF 64-bit x86-64 PIE executable.",
+        "Local algorithm listing from the binary includes one-shot algorithms ED25519 and ED448, so the affected dgst one-shot signing path is applicable.",
+        "Runtime check with openssl-3.5.5-openssl-gcc-O2 generated an ED25519 key, created a 16,777,217-byte input, and ran `dgst -sign`; the command exited with rc=1.",
+        "The oversized one-shot sign printed `Read error in .../input.bin` and produced a zero-byte signature output, showing fatal error instead of successful 16MB truncation."
+      ],
+      "reasoning": "The vulnerable mechanism is silent success after reading only the 16MB maxlen prefix. This binary supports the relevant one-shot signing algorithms and, when asked to sign input one byte over the 16MB limit, aborts with a read error and no signature. That matches the patched behavior_change where bio_to_mem reports an error when total input exceeds maxlen and callers treat that as fatal.",
+      "status": "present"
+    },
+    "openssl-3.5.6-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir as a stripped ELF64 x86-64 PIE executable; OpenSSL app code is present, including dgst/pkeyutl strings and one-shot algorithm strings such as ML-DSA.",
+        "dgst call path at 0xdc6fa-0xdc711 uses patched four-argument helper shape: out pointer, outlen pointer, maxlen 0x1000000, and input BIO; it tests helper return against success/failure rather than using a returned byte count.",
+        "pkeyutl call path at 0xf740b-0xf7434 similarly passes out/outlen pointers and maxlen 0x1000000 to helper 0x128a00, then treats eax==0 as an error path.",
+        "Helper at 0x128a00 reads chunks of 0x1000, accumulates total length in rbx, checks overflow, and when maxlen is nonzero branches to error if accumulated length exceeds maxlen (cmp rax,r12; jbe continue; otherwise free and return eax=0).",
+        "Helper success path stores both buffer pointer and length through caller-provided pointers and returns eax=1; pkeyutl contains patched `%zd` non-raw input length diagnostic."
+      ],
+      "reasoning": "The vulnerable mechanism was silent truncation when maxlen reached 16MB. Local disassembly shows the patched helper ABI and the patched behavior: input beyond maxlen causes a 0/error return and callers abort on that return. Therefore the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.6.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: ELF 64-bit x86-64 PIE executable, stripped.",
+        "Relevant command-line app code is present: strings include `apps/dgst.c`, `Read error in %s`, `Error signing data`, and `dgst`.",
+        "Local behavioral test with `openssl-3.6.0-openssl-gcc-O2 dgst -sign` using an Ed25519 key and a 16MiB+1 byte input returned exit code 0 and produced a 64-byte signature.",
+        "Patched behavior should reject input longer than the 16MiB maxlen for one-shot signing; this binary instead succeeds on oversized input."
+      ],
+      "reasoning": "The vulnerable mechanism is silent truncation in `bio_to_mem` when a max length is reached. The intended patch changes that path to report failure when total input exceeds maxlen, causing one-shot `openssl dgst -sign` to abort. Local execution of the requested binary on the exact affected one-shot Ed25519 signing path with input larger than 16MiB succeeded and produced a signature, demonstrating the vulnerable-side behavior rather than the patched error behavior.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-4575": {
+    "openssl-3.5.0-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.0-openssl-gcc-O2 exists and is a stripped ELF64 x86-64 PIE executable with x509 command strings including addreject/addtrust and invalid reject/trust diagnostics.",
+        "The addreject block anchored by the reject diagnostic at 0x12258e checks/creates the reject stack at [rsp+0x58] and parses the option object via call 0x2a1e20, but on successful parse jumps to shared code at 0x121f17.",
+        "The shared success path at 0x121f17 loads rdi from [rsp+0x18] before calling 0x2d8dd0, so the parsed addreject object is pushed to the [rsp+0x18] stack, not the reject stack [rsp+0x58].",
+        "Later processing distinguishes [rsp+0x18] as the trust stack, iterating it and calling 0x3166b0, while [rsp+0x58] is iterated separately and passed to 0x316760 for rejection handling."
+      ],
+      "reasoning": "The vulnerable mechanism is misrouting -addreject's parsed object to the trust stack. Local disassembly shows the addreject path creates/uses the reject stack for setup but routes successful parsed objects to the shared push path that pushes into [rsp+0x18], the trust stack, matching the vulnerable-side patch hunk sk_ASN1_OBJECT_push(trust, objtmp) rather than the patched sk_ASN1_OBJECT_push(reject, objtmp).",
+      "status": "absent"
+    },
+    "openssl-3.5.1-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "x509 command feature is compiled in: strings include addtrust, addreject, Invalid trust object value, and Invalid reject object value.",
+        "The addtrust option path initializes/uses stack slot [rsp+0x28], parses opt_arg via OBJ_txt2obj-like call, and on parse failure jumps to the Invalid trust object diagnostic.",
+        "The addreject option path initializes/uses distinct stack slot [rsp+0x30], parses opt_arg via the same OBJ_txt2obj-like call, and on parse failure jumps to the Invalid reject object diagnostic.",
+        "Later processing loops over [rsp+0x28] and calls helper at 0x318550, which operates on X509 aux offset +0x150 then stack at aux+0x0, consistent with trust objects.",
+        "Later processing loops over [rsp+0x30] and calls helper at 0x318600, which operates on X509 aux offset +0x150 then stack at aux+0x8, consistent with reject objects."
+      ],
+      "reasoning": "The vulnerable mechanism is misrouting -addreject objects into the trust stack. Local disassembly shows -addreject uses its own stack slot [rsp+0x30], not the addtrust slot [rsp+0x28], and that slot is later applied through the reject-object helper path. This matches the patched behavior change.",
+      "status": "present"
+    },
+    "openssl-3.5.2-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists at target_dir/openssl-3.5.2-openssl-gcc-O2 and is a stripped ELF64 x86-64 PIE executable.",
+        "Local strings show the x509 -addreject path is compiled in: addtrust, clrreject, addreject, and the Invalid reject object diagnostic are present.",
+        "Behavior probe using openssl-3.5.2-openssl-gcc-O2 x509 -trustout -addreject emailProtection produced a TRUSTED CERTIFICATE whose text output shows: No Trusted Uses; Rejected Uses: E-mail Protection."
+      ],
+      "reasoning": "The vulnerable mechanism is misrouting -addreject objects into the trust stack. The local binary is applicable because the x509 addreject command path is present, and direct execution shows the specified purpose is written as a rejected use rather than a trusted use. This matches the patched behavior change.",
+      "status": "present"
+    },
+    "openssl-3.5.3-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped 64-bit x86-64 PIE executable.",
+        "Embedded/help strings show the affected x509 feature is compiled in: -addtrust, -addreject, -trustout, and the invalid trust/reject object diagnostics are present.",
+        "Behavior probe using openssl-3.5.3-openssl-gcc-O2 x509 -addreject serverAuth -trustout produced a trusted certificate whose text output says \"No Trusted Uses.\" and lists \"Rejected Uses: TLS Web Server Authentication\"."
+      ],
+      "reasoning": "The vulnerable mechanism is misrouting -addreject objects onto the trust stack. The observed local behavior routes the object to the reject list, matching the patched behavior change and not the vulnerable trust-list behavior.",
+      "status": "present"
+    }
+  },
+  "CVE-2025-66199": {
+    "openssl-3.3.6-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "codex exec failed or returned invalid JSON: codex exec exited -9: 55f77  tls_initialise_w\n 4d95d0 72697465 5f706163 6b657473 5f646566  rite_packets_def\n 4d95e0 61756c74 00000000 00000000 00000000  ault............\n 4d95f0 746c735f 696e745f 6e65775f 7265636f  tls_int_new_reco\n 4d9600 72645f6c 61796572 00000000 00000000  rd_layer........\n 4d9610 746c735f 7365745f 6f707469 6f6e7300  tls_set_options.\n 4d9620 746c735f 72656c65 6173655f 7265636f  tls_release_reco\n 4d9630 72640000 00000000 00000000 00000000  rd..............\n 4d9640 746c735f 72656164 5f726563 6f726400  tls_read_record.\n 4d9650 00000000 00000000 00000000 00000000  ................\n 4d9660 746c7331 335f636f 6d6d6f6e 5f706f73  tls13_common_pos\n 4d9670 745f7072 6f636573 735f7265 636f7264  t_process_record\n 4d9680 00000000 00000000 00000000 00000000  ................\n 4d9690 00000000 00000000 00000000 00000000  ................\n 4d96a0 746c735f 64656661 756c745f 706f7374  tls_default_post\n 4d96b0 5f70726f 63657373 5f726563 6f726400  _process_record.\n\n\nprocess timed out after 600s and was killed\n"
+      ],
+      "reasoning": "See raw per-CVE files in raw_dir.",
+      "status": "error"
+    },
+    "openssl-3.3.7-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.3.7-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE; dynamic dependencies show only libc, indicating OpenSSL code is linked into the executable rather than imported as a shared libcrypto/libssl symbol.",
+        "Local strings include `TLSv1.3 read server compressed certificate`, `TLSv1.3 read client compressed certificate`, `compress_certificate`, `zlib`, `brotli`, `zstd`, and `excessive message size`, so the TLS 1.3 certificate-compression feature and compression backends are compiled in.",
+        "In the compressed-certificate path around 0x18039a-0x1803bd, the code reads a 3-byte uncompressed length into r15/rdx and only checks it against the remaining compressed message length with `cmp rdx,rbx` followed by an error branch.",
+        "Control then proceeds to calls at 0x1803e4 and 0x180404, with `mov rdx,r15` immediately before the latter, before any observed compare of expected_length to an SSL_CONNECTION max_cert_list field or an excessive-message-size fatal branch.",
+        "The analogous server-side compressed-certificate path around 0x16f36d-0x16f404 shows the same parse/check/direct decompression pattern without the patched max_cert_list guard before use."
+      ],
+      "reasoning": "The patch requires rejecting `expected_length > sc->max_cert_list` before pre-decompression allocation/decompression. Local evidence shows certificate compression is applicable and the binary still accepts the peer-supplied expected_length through only packet-size checks before using it in the decompression/allocation path. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.4.3-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "codex exec failed or returned invalid JSON: codex exec exited -9: 49 8b 6c 24 08       \tmov    rbp,QWORD PTR [r12+0x8]\n  2b94cb:\t45 31 ff             \txor    r15d,r15d\n  2b94ce:\te9 2d fe ff ff       \tjmp    2b9300 <pthread_attr_setdetachstate@plt+0x210c10>\n  2b94d3:\t0f 1f 44 00 00       \tnop    DWORD PTR [rax+rax*1+0x0]\n  2b94d8:\tc6 02 00             \tmov    BYTE PTR [rdx],0x0\n  2b94db:\t44 39 44 24 08       \tcmp    DWORD PTR [rsp+0x8],r8d\n  2b94e0:\t7e ae                \tjle    2b9490 <pthread_attr_setdetachstate@plt+0x210da0>\n  2b94e2:\t49 63 c0             \tmovsxd rax,r8d\n  2b94e5:\t48 89 f2             \tmov    rdx,rsi\n  2b94e8:\t41 83 c0 01          \tadd    r8d,0x1\n  2b94ec:\t49 89 34 c7          \tmov    QWORD PTR [r15+rax*8],rsi\n  2b94f0:\te9 68 ff ff ff       \tjmp    2b945d <pthread_attr_setdetachstate@plt+0x210d6d>\n  2b94f5:\t0f 1f 00             \tnop    DWORD PTR [rax]\n  2b94f8:\t4c 89 e7             \tmov    rdi,r12\n  2b94fb:\t4d 89 f4             \tmov    r12,r14\n  2b94fe:\te8                   \t.byte 0xe8\n  2b94ff:\ted                   \tin     eax,dx\n\n"
+      ],
+      "reasoning": "See raw per-CVE files in raw_dir.",
+      "status": "error"
+    },
+    "openssl-3.5.4-openssl": {
+      "confidence": "low",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "Local strings show TLS 1.3 compressed-certificate receive support is compiled in: \"TLSv1.3 read server compressed certificate\", \"TLSv1.3 read client compressed certificate\", \"RxCertificateCompression\", and ZLIB/BROTLI/ZSTD strings are present.",
+        "The generic OpenSSL reason string \"excessive message size\" is present, but this is shared table data and is not by itself evidence that tls13_process_compressed_certificate performs the patched expected_length > max_cert_list check.",
+        "Focused disassembly/string/reference searches did not decisively identify the compressed-certificate receive function with either a pre-allocation max_cert_list comparison or the vulnerable allocation path without that comparison."
+      ],
+      "reasoning": "The binary is applicable to the vulnerable feature because TLS 1.3 certificate compression receive support and compression backends are present. However, local evidence did not decisively show the patched guard before allocation, nor did it conclusively show the vulnerable unguarded BUF_MEM_grow/expand path. Per the rules, insufficient behavioral evidence requires inconclusive rather than guessing present or absent.",
+      "status": "inconclusive"
+    },
+    "openssl-3.6.0-openssl": {
+      "confidence": "medium",
+      "evidence": [
+        "openssl-3.6.0-openssl-gcc-O2 exists under target_dir and is a stripped ELF64 x86-64 PIE executable.",
+        "Certificate compression support appears compiled in: strings include RxCertificateCompression, TxCertificateCompression, CompressedCertificate, zlib, brotli, zstd, and TLSv1.3 compressed-certificate read/write traces.",
+        "The reusable OpenSSL reason string table contains 'excessive message size' at 0x55d256 and 'bad decompression' at 0x55cca2, but the inspected direct 0x98 reason-code sites were unrelated cleanup/allocation paths rather than the TLS compressed-certificate receive handler.",
+        "Candidate TLS compressed-certificate trace/decode regions parse three-byte lengths and call compression/decompression-like helpers, but local evidence did not decisively show either the patched expected_length > max_cert_list fatal branch before allocation or the vulnerable grow/decompress path without that guard."
+      ],
+      "reasoning": "The binary is applicable because TLS 1.3 certificate compression code and supported algorithms are present, so not_affected is not supported. However, due to stripping and inlined/static OpenSSL internals, the inspected binary evidence did not conclusively establish the required max_cert_list guard before allocation, nor did it conclusively establish the vulnerable unguarded allocation behavior. Per the rules, the patch-presence decision is inconclusive.",
+      "status": "inconclusive"
+    }
+  },
+  "CVE-2025-68160": {
+    "openssl-3.3.6-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object with BIO_f_linebuffer exported at 0xefc30, so the line-buffer BIO feature is compiled in and applicable.",
+        "BIO_f_linebuffer returns method table at 0x50a380 whose name pointer resolves to the local string \"linebuffer\" and whose old write slot points to 0xefbc0; that wrapper validates input and jumps to the real writer at 0xef8a0.",
+        "In the writer tail, addresses 0xefb0a-0xefb31 compute available space as ctx->obuf_size minus ctx->obuf_len, compare it to remaining input length, and copy only min(inl, avail) bytes via memcpy at 0xefaf0.",
+        "When available space is zero, 0xefb1e branches to 0xefb40, which calls BIO_write(next_bio, ctx->obuf, ctx->obuf_len); 0xefb5e handles i <= 0 via BIO_copy_next_retry, and 0xefb7e-0xefb92 performs memmove of remaining buffered bytes after a partial write."
+      ],
+      "reasoning": "The vulnerable mechanism is an unconditional memcpy of all remaining newline-free input into ctx->obuf without checking ctx->obuf_size. The local linebuffer_write implementation instead shows the patched behavior checklist: bounded chunk copying based on available capacity, flushing when the buffer is full, retry/error handling, and memmove after partial flushes. This is direct binary evidence that the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.3.7-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.3.7-libcrypto-gcc-O2 exists and is a stripped ELF64 x86-64 shared object.",
+        "Dynamic symbols export BIO_f_linebuffer; its method table at 0x50b380 includes the old write callback 0xefbe0, which validates input then jumps to the linebuffer write body at 0xef8c0, so the affected BIO_f_linebuffer code is compiled in.",
+        "In the write body, the final remainder handling at 0xefb2a-0xefb51 computes available space as ctx->obuf_size minus ctx->obuf_len, compares it with remaining input length, and sets the memcpy length to the smaller value before calling memcpy at 0xefb10.",
+        "When available space is zero, control branches to 0xefb60, which calls BIO_write on ctx->obuf/ctx->obuf_len to flush before continuing, rather than copying into a full buffer.",
+        "The flush path handles short writes: 0xefb9e-0xefbb2 calls memmove(ctx->obuf, ctx->obuf + written, ctx->obuf_len - written), then updates ctx->obuf_len via the following subtraction/update path."
+      ],
+      "reasoning": "The vulnerable mechanism is an unconditional memcpy of all remaining newline-free input into ctx->obuf. Local disassembly shows the patched chunked-copy loop: it bounds each memcpy by available buffer capacity, flushes when the buffer is full, and preserves remaining buffered data with memmove after partial writes. This satisfies the supplied behavior_changes checklist, so the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object.",
+        "BIO_f_linebuffer is exported, and its method table at 0x531de0 points the old write entry through 0xf7a70 into the stripped linebuffer_write body at 0xf77e0.",
+        "In linebuffer_write, the final residual-input path at 0xf7a14 loads remaining inl from stack into rdx, sets destination to ctx->obuf + ctx->obuf_len, and calls memcpy at 0xf7a26.",
+        "Immediately after that memcpy, 0xf7a2b adds the same remaining length to ctx->obuf_len and returns through 0xf7992; there is no avail == 0 flush loop or bounded to_copy loop on this path.",
+        "The function does contain BIO_write and memmove handling for earlier flush/partial-write paths, but the final newline-free residual copy remains a single unbounded memcpy matching the vulnerable mechanism."
+      ],
+      "reasoning": "The patch should replace the final unconditional memcpy of remaining input with a loop that computes available obuf capacity, flushes when full, handles partial flushes with memmove, and copies only bounded chunks. Local disassembly instead shows the vulnerable-side final memcpy(buffer+obuf_len, in, inl) behavior with no capacity check, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.4-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object; BIO_f_linebuffer is exported, so the line-buffer BIO code is compiled in.",
+        "BIO_f_linebuffer at 0x11e390 returns BIO_METHOD table 0x5acaa0; table relocations include callback 0x11e320, which validates input length and tail-jumps to the main line-buffer write body at 0x11e090.",
+        "The write body contains the vulnerable terminal copy pattern at 0x11e2c4-0x11e2df: remaining inl is sign-extended and passed directly as memcpy length to ctx->obuf + ctx->obuf_len, then ctx->obuf_len and return count are increased by that full amount.",
+        "No patched final while-loop behavior is present around that terminal copy: there is no avail == 0 flush/retry loop before the final memcpy, and no to_copy = min(inl, avail) chunking for the residual input.",
+        "The function does contain BIO_write and memmove handling for earlier flush paths, but the residual no-newline copy remains a single unbounded memcpy matching the vulnerable-side behavior."
+      ],
+      "reasoning": "The vulnerable mechanism is the final unconditional memcpy of all remaining input into ctx->obuf without proving ctx->obuf_size - ctx->obuf_len is large enough. Local disassembly shows BIO_f_linebuffer is present and the write callback still uses that vulnerable terminal memcpy rather than the patched capacity-checking loop with flush-on-full and bounded chunk copies. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object exporting BIO_f_linebuffer.",
+        "BIO_f_linebuffer returns a BIO_METHOD table at 0x5c7500 whose write callback points to code at 0x120e40.",
+        "In the linebuffer write path, the tail handling at 0x121077-0x12108d loads remaining inl, computes ctx->obuf + ctx->obuf_len, calls memcpy with length inl, then adds inl to ctx->obuf_len.",
+        "No patched final while-loop behavior is present at that tail: there is no avail==0 flush to BIO_write before copying, no chunked min(inl, avail) copy loop, and no continue/retry after freeing buffer space."
+      ],
+      "reasoning": "The vulnerable mechanism is the unconditional final memcpy of all remaining input into ctx->obuf without checking ctx->obuf_size - ctx->obuf_len. Local disassembly shows exactly that vulnerable-side behavior in the BIO_f_linebuffer write callback, rather than the patched bounded-copy-and-flush loop. The binary is therefore missing the CVE-2025-68160 patch.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-69418": {
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 stripped shared object with SONAME libcrypto.so.3.",
+        "Low-level OCB APIs are compiled/exported: CRYPTO_ocb128_encrypt at 0x2c31c0 and CRYPTO_ocb128_decrypt at 0x2c3410.",
+        "Stream fast path is applicable: both functions test ctx+0x20 for non-null and call it indirectly; CRYPTO_ocb128_init stores the caller-supplied stream callback into ctx+0x20; AES-NI/OCB strings are present.",
+        "Encrypt vulnerable behavior: after indirect ctx->stream call at 0x2c3269, code immediately masks len with 0xf at 0x2c326f and tail handling at 0x2c33b8 reads from r14 and writes to rbx, the original in/out registers, with no num_blocks*16 advance.",
+        "Decrypt vulnerable behavior: after indirect ctx->stream call at 0x2c34b9, code immediately masks len with 0xf at 0x2c34bf and tail handling at 0x2c3618 reads from r14 and writes to rbp, the original in/out registers, with no num_blocks*16 advance."
+      ],
+      "reasoning": "The patch requires advancing in and out by num_blocks*16 after the stream fast path before partial-tail handling. Local disassembly shows the stream path exists and is reachable for non-null ctx->stream, but both encrypt and decrypt tail handlers continue using the original base input/output registers after the stream call. This matches the vulnerable-side behavior, not the patched behavior.",
+      "status": "absent"
+    },
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.4-libcrypto-gcc-O2 exists as an ELF64 x86-64 shared object and exports CRYPTO_ocb128_encrypt and CRYPTO_ocb128_decrypt.",
+        "Binary contains OCB/AES hardware-path evidence: exported EVP_aes_*_ocb symbols, crypto/modes/ocb128.c string, aesni_ocb_init_key string, and AES-NI strings.",
+        "CRYPTO_ocb128_encrypt stream path checks ctx stream pointer at [rdi+0x20], calls it via call QWORD PTR [r13+0x20] at 0x2c3669, then computes len&~0xf with mov rax,rbp; and rax,0xfffffffffffffff0 and advances both input/output registers with add r14,rax and add rbx,rax before tail handling.",
+        "CRYPTO_ocb128_decrypt stream path similarly calls QWORD PTR [r13+0x20] at 0x2c38c9, then computes len&~0xf with mov rax,rbx; and rax,0xfffffffffffffff0 and advances both input/output registers with add r14,rax and add rbp,rax before tail handling."
+      ],
+      "reasoning": "The vulnerable mechanism applies because this binary includes the low-level OCB routines and hardware stream support. In both encrypt and decrypt stream paths, local disassembly shows the patched behavior: after ctx->stream() processes full 16-byte blocks, the code advances the saved input and output pointers by the processed full-block byte count before handling the partial tail. That matches the patch intent and rules out the vulnerable base-pointer tail handling.",
+      "status": "present"
+    },
+    "openssl-3.4.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.5-libcrypto-gcc-O2 exists as an ELF64 x86-64 shared object with exported CRYPTO_ocb128_encrypt at 0x2c3d00 and CRYPTO_ocb128_decrypt at 0x2c3f60.",
+        "Binary contains OCB and AES hardware-accelerated applicability evidence: exported CRYPTO_ocb128_* APIs, AES-OCB cipher strings, and AES-NI related strings.",
+        "In CRYPTO_ocb128_encrypt stream path, after indirect call *0x20(%r13) at 0x2c3da9, code computes len & ~0xf in rax, then advances input/output registers with add %rax,%r14 at 0x2c3db4 and add %rax,%rbx at 0x2c3db7 before tail handling.",
+        "In CRYPTO_ocb128_decrypt stream path, after indirect call *0x20(%r13) at 0x2c4009, code computes len & ~0xf in rax, then advances input/output registers with add %rax,%r14 at 0x2c4014 and add %rax,%rbp at 0x2c4017 before tail handling."
+      ],
+      "reasoning": "The vulnerable mechanism is the OCB hardware stream path failing to advance in/out after full-block processing, causing partial-tail handling to use base pointers. This binary includes the applicable OCB/AES hardware-capable code path, and both encrypt and decrypt stream paths show the patched behavior: processed full-block length is computed and both input and output pointers are advanced immediately after ctx->stream before the final partial-block logic. Therefore the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 shared object.",
+        "Dynamic symbols export CRYPTO_ocb128_encrypt at 0x2f8940 and CRYPTO_ocb128_decrypt at 0x2f8b90; OCB and AES-NI OCB support strings are present, so the low-level OCB/HW stream-path condition is applicable.",
+        "In CRYPTO_ocb128_encrypt, after the indirect stream call at 0x2f89e9, execution immediately masks len with and $0xf,%ebp and branches to tail handling; there is no add/lea advancing saved input r14 or output rbx by num_blocks*16.",
+        "Encrypt tail loop at 0x2f8b38 reads from (%r14,%rax) and writes to (%rbx,%rax), using the original base input/output pointers after the stream call.",
+        "In CRYPTO_ocb128_decrypt, after the indirect stream call at 0x2f8c39, execution immediately masks len with and $0xf,%ebx and branches to tail handling; there is no add/lea advancing saved input r14 or output rbp by num_blocks*16.",
+        "Decrypt tail loop at 0x2f8d98 reads from (%r14,%rax) and writes to 0x0(%rbp,%rax), using the original base input/output pointers after the stream call."
+      ],
+      "reasoning": "The patch requires both OCB stream paths to advance in/out by num_blocks*16 after ctx->stream() before processing the trailing partial block. Local disassembly shows the relevant APIs and hardware stream support are present, but both encrypt and decrypt tail handlers still use the original base pointers immediately after the stream callback. That matches the vulnerable-side behavior.",
+      "status": "absent"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object.",
+        "Dynamic symbols export CRYPTO_ocb128_encrypt at 0x2f9690 and CRYPTO_ocb128_decrypt at 0x2f98e0; strings include OCB and AES-NI support, so the low-level OCB hardware stream path is applicable.",
+        "In CRYPTO_ocb128_encrypt, the stream path calls *0x20(%r13) at 0x2f9739 with r14 as input and rbx as output, then immediately masks len with and $0xf,%ebp and branches to tail handling; there is no add/lea advancing r14 or rbx by num_blocks*16 after the call.",
+        "Encrypt tail handling at 0x2f9888 reads from (%r14,%rax) and writes to (%rbx,%rax), showing the original base pointers are used for the partial tail after stream processing.",
+        "In CRYPTO_ocb128_decrypt, the stream path calls *0x20(%r13) at 0x2f9989 with r14 as input and rbp as output, then masks len with and $0xf,%ebx and branches to tail handling; there is no add/lea advancing r14 or rbp by num_blocks*16 after the call.",
+        "Decrypt tail handling at 0x2f9ae8 reads from (%r14,%rax) and writes to 0x0(%rbp,%rax), again using the original base pointers for the partial tail."
+      ],
+      "reasoning": "The vulnerable mechanism is present: after ctx->stream processes full blocks, the binary does not advance the input/output pointers before partial-block tail processing. This directly matches the pre-patch behavior and lacks both required behavior changes from the patch checklist.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-69419": {
+    "openssl-3.0.19-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.0.19-libcrypto-gcc-O2 exists as an ELF64 x86-64 shared object; PKCS#12/BMPString code is compiled in, with exported PKCS12_get_friendlyname, OPENSSL_uni2utf8, OPENSSL_uni2asc, and UTF8_putc symbols.",
+        "OPENSSL_uni2utf8 at 0x22ca10 performs the second pass helper call at 0x22cb1e, immediately tests %eax, and branches on negative via js 0x22cb80.",
+        "The 0x22cb80 error path passes the allocated output buffer in %rdi to CRYPTO_free at 0x201250, clears the return pointer register, and returns through the common epilogue, matching free-and-return-NULL patched behavior.",
+        "The ASN1 string print conversion path calls UTF8_putc at 0xcf500, immediately tests %eax, and branches on negative to 0xcf562, where it sets the function return accumulator to -1 before returning."
+      ],
+      "reasoning": "The vulnerable mechanism is applicable because the binary contains the PKCS#12 friendly-name BMPString conversion path. Local disassembly shows the patched security property: negative conversion lengths from the second bmp_to_utf8/UTF8_putc path are checked before being used, the allocated buffer is freed, and NULL/-1 is returned instead of falling through to length addition and NUL write at an invalid offset.",
+      "status": "present"
+    },
+    "openssl-3.0.20-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.0.20-libcrypto-gcc-O2 exists under target_dir and is an ELF64 x86-64 shared object with PKCS12_get_friendlyname and OPENSSL_uni2utf8 exported, so the vulnerable PKCS#12/BMPString path is compiled in.",
+        "OPENSSL_uni2utf8 at 0x22d0c0 performs the second bmp_to_utf8-style call at 0x22d1ce, immediately tests eax at 0x22d1d3, and branches on negative at 0x22d1d5 to 0x22d230.",
+        "The negative-return path at 0x22d230 passes the allocated buffer in r12 to CRYPTO_free at 0x201360, clears r12 to NULL, and returns through the common return block, matching the patched free-and-return-NULL behavior.",
+        "The do_buf-style UTF8_putc path calls UTF8_putc at 0xcf500 with a 6-byte stack buffer, tests eax at 0xcf505, and branches on negative to 0xcf562, which sets the return value to -1 before returning."
+      ],
+      "reasoning": "The root cause is use of a negative UTF8 conversion length after the second conversion pass. Local disassembly shows the patched guards: OPENSSL_uni2utf8 checks the second conversion result before using it, frees the allocation, and returns NULL on failure; the UTF8_putc caller similarly returns -1 on negative length. This is direct binary evidence of the intended patched behavior.",
+      "status": "present"
+    },
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object exporting OPENSSL_uni2utf8, UTF8_putc, and PKCS12_get_friendlyname, so the vulnerable PKCS#12 BMPString conversion path is compiled in.",
+        "In OPENSSL_uni2utf8 at 0x2da9f8, the second-pass call to bmp_to_utf8 returns in eax; the code immediately compares eax to 4 and then adds eax to ebx at 0x2da9db without any negative-return test.",
+        "The NUL terminator is later written through asctmp+ebx at 0x2daa14-0x2daa1e, so a negative eax from bmp_to_utf8 can still move the output index backward before the terminator write.",
+        "The local bmp_to_utf8 helper at 0x2da520 can return -1 at 0x2da580 and otherwise tail-calls UTF8_putc with the caller-supplied bounded length, matching the vulnerable mechanism described in the metadata."
+      ],
+      "reasoning": "The binary contains the affected PKCS#12 Unicode conversion code. Local disassembly shows the vulnerable-side behavior in OPENSSL_uni2utf8: the second bmp_to_utf8 result is consumed in length/index arithmetic and the terminator write without the patched j < 0 branch that frees the allocation and returns NULL. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "targets/openssl-3.5.4-libcrypto-gcc-O2 exists as an ELF64 x86-64 shared object with SONAME libcrypto.so.3.",
+        "Dynamic symbols include PKCS12_get_friendlyname at 0x30b1a0 and OPENSSL_uni2utf8 at 0x310280, so the PKCS#12 friendly-name conversion path is compiled into this binary.",
+        "In OPENSSL_uni2utf8 second pass, the bmp_to_utf8 call at 0x310378 is followed by cmp eax,0x4 at 0x31037d and control flows to add ebx,eax at 0x31035b without any test/js or other negative-return guard.",
+        "A local error path sets eax to 0xffffffff at 0x3103e7 and jumps to 0x310358, where ebp is advanced and eax is added to ebx, matching the vulnerable use of a negative conversion length before the trailing NUL write at 0x31039e."
+      ],
+      "reasoning": "The required patched behavior is to detect a negative return from the second bmp_to_utf8 conversion, free the allocated buffer, and return NULL before using the length. Local disassembly shows the relevant PKCS#12 code is present and the second-pass negative return is still added into the output length with no free-and-return guard. That is vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.6.0-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object and exports OPENSSL_uni2utf8, UTF8_putc, and PKCS12_get_friendlyname, so the PKCS#12 BMPString conversion path is compiled in.",
+        "PKCS12_get_friendlyname at 0x30bf80 validates BMPString type 0x1e and tail-calls OPENSSL_uni2utf8 at 0x311060, confirming reachability of the vulnerable API path.",
+        "The bmp_to_utf8-like helper at 0x310c80 can return -1 at 0x310ce0 and otherwise tail-calls UTF8_putc at 0x109e30 with a bounded destination length.",
+        "In OPENSSL_uni2utf8 second pass, the helper call at 0x311158 is followed by cmp eax,4 and then paths at 0x311138/0x311165 add eax into ebx; there is no test/js or equivalent negative-return guard before using the length.",
+        "The terminator write at 0x31117e writes through rax derived from asctmp plus ebx; the code lacks the patched behavior of freeing the allocation and returning NULL when the second conversion returns a negative value."
+      ],
+      "reasoning": "The local binary contains the affected PKCS#12 friendly-name conversion path. Its OPENSSL_uni2utf8 implementation matches the vulnerable-side behavior: a negative bmp_to_utf8/UTF8_putc result from the second pass can be added to the output length and used to compute the NUL terminator address, rather than being checked, freed, and returned as NULL. Therefore the requested patch is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-69420": {
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: stripped ELF64 x86-64 shared object.",
+        "Local symbols/strings show applicable OpenSSL TimeStamp/ESS code is compiled in: TS_RESP_verify_response, TS_RESP_verify_signature, PKCS7_get_signed_attribute, d2i_ESS_SIGNING_CERT, d2i_ESS_SIGNING_CERT_V2, and id-smime-aa-signingCertificate(V2).",
+        "In TS_RESP_verify_signature at 0x3353e0, call to PKCS7_get_signed_attribute with NID 0xdf is followed by only test rax,rax/je; non-NULL path immediately dereferences attr->value at mov rax,[rax+0x8], reads sequence data/length, then calls d2i_ESS_SIGNING_CERT at 0x335404.",
+        "In TS_RESP_verify_signature at 0x335415, call to PKCS7_get_signed_attribute with NID 0x43e is likewise followed by only test rax,rax/je; non-NULL path immediately dereferences attr->value at mov rax,[rax+0x8], reads sequence data/length, then calls d2i_ESS_SIGNING_CERT_V2 at 0x335439.",
+        "No cmp/test of attr->type against V_ASN1_SEQUENCE/0x10 appears before either attr->value.sequence dereference in the targeted disassembly window."
+      ],
+      "reasoning": "The vulnerable mechanism is applicable and the local code shows the old behavior: both signingCertificate helpers only check for NULL and then access the ASN1_TYPE value.sequence union member. The patched behavior would add an early attr->type == V_ASN1_SEQUENCE guard before these dereferences. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: stripped ELF64 x86-64 shared object.",
+        "Relevant TimeStamp/ESS code is compiled in: dynamic symbols include TS_RESP_verify_response, TS_RESP_verify_token, PKCS7_get_signed_attribute, d2i_ESS_SIGNING_CERT, and d2i_ESS_SIGNING_CERT_V2.",
+        "In TS_RESP_verify_signature at 0x3359e0, after PKCS7_get_signed_attribute(NID 0xdf), the code tests attr for NULL, then executes cmpl $0x10,(%rax) and branches away on jne before loading attr->value.sequence at 0x8(%rax) and passing sequence data/length to d2i_ESS_SIGNING_CERT.",
+        "In the V2 path at 0x335a1e, after PKCS7_get_signed_attribute(NID 0x43e), the same guard appears: test attr for NULL, cmpl $0x10,(%rax), jne away, then only on match dereferences attr->value.sequence and calls d2i_ESS_SIGNING_CERT_V2."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing ASN1_TYPE.value.sequence after only checking attr != NULL. The patched behavior requires returning/skipping when attr is NULL or attr->type is not V_ASN1_SEQUENCE. Local disassembly shows both signingCertificate and signingCertificateV2 paths check the ASN1_TYPE type field for 0x10 before dereferencing the union and decoding, so the patched behavior is present.",
+      "status": "present"
+    },
+    "openssl-3.4.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object with OpenSSL libcrypto symbols including TS_RESP_verify_response, TS_RESP_verify_token, PKCS7_get_signed_attribute, d2i_ESS_SIGNING_CERT, d2i_ESS_SIGNING_CERT_V2, and OSSL_ESS_check_signing_certs.",
+        "In TS_RESP_verify_signature at 0x336270, after PKCS7_get_signed_attribute for NID 0xdf, the code tests attr for NULL then compares DWORD PTR [rax] to 0x10 before any attr->value access; on mismatch it jumps to 0x33641f and zeroes r15d, treating signing_cert as NULL.",
+        "Only after the 0x10 type check for the first attribute does the code dereference attr->value.sequence via [rax+0x8], load sequence data/length, and call d2i_ESS_SIGNING_CERT at 0x33629d.",
+        "For the V2 attribute at 0x3362ae with NID 0x43e, the same pattern appears: test attr, cmp DWORD PTR [rax],0x10, jump on mismatch to 0x336417 and zero r8d; only the sequence-typed path dereferences [rax+0x8] and calls d2i_ESS_SIGNING_CERT_V2 at 0x3362db."
+      ],
+      "reasoning": "The vulnerable mechanism is unsafe ASN1_TYPE union access as value.sequence without confirming attr->type is V_ASN1_SEQUENCE. Local disassembly shows both signingCertificate and signingCertificateV2 paths enforce attr != NULL and attr->type == 0x10 before reading the sequence union member, and return/use NULL on type mismatch. This matches the patched behavior checklist.",
+      "status": "present"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 shared object, stripped.",
+        "Dynamic symbols include TS_RESP_verify_signature, TS_RESP_verify_response, PKCS7_get_signed_attribute, d2i_ESS_SIGNING_CERT, and d2i_ESS_SIGNING_CERT_V2, so the affected TimeStamp/ESS verification code is compiled in.",
+        "At 0x36f5e0, code calls PKCS7_get_signed_attribute with esi=0xdf, tests only rax for NULL, then immediately dereferences attr->value.sequence via mov rax,[rax+0x8] before calling d2i_ESS_SIGNING_CERT at 0x36f604.",
+        "At 0x36f615, code calls PKCS7_get_signed_attribute with esi=0x43e, tests only rax for NULL, then immediately dereferences attr->value.sequence via mov rax,[rax+0x8] before calling d2i_ESS_SIGNING_CERT_V2 at 0x36f639.",
+        "No attr->type comparison against V_ASN1_SEQUENCE/0x10 appears in either inspected path before the union dereference."
+      ],
+      "reasoning": "The vulnerable mechanism is ASN1_TYPE union access as sequence after only checking attr != NULL. The patch requires returning early unless attr->type is V_ASN1_SEQUENCE. Local disassembly shows both signingCertificate and signingCertificateV2 paths use the vulnerable NULL-only guard and dereference attr->value.sequence without the required type check, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir: ELF64 x86-64 shared object, stripped.",
+        "Relevant TimeStamp/ESS functionality is compiled in: dynamic symbols include TS_RESP_verify_response, PKCS7_get_signed_attribute, d2i_ESS_SIGNING_CERT, and d2i_ESS_SIGNING_CERT_V2.",
+        "At 0x371190, code calls PKCS7_get_signed_attribute with NID 0xdf, tests only attr for NULL, then immediately loads [rax+0x8] and passes sequence data/length to d2i_ESS_SIGNING_CERT at 0x3711b4.",
+        "At 0x3711c5, code calls PKCS7_get_signed_attribute with NID 0x43e, tests only attr for NULL, then immediately loads [rax+0x8] and passes sequence data/length to d2i_ESS_SIGNING_CERT_V2 at 0x3711e9.",
+        "No attr->type comparison to V_ASN1_SEQUENCE appears on either local path before attr->value.sequence dereference."
+      ],
+      "reasoning": "The vulnerable mechanism is ASN1_TYPE union access through attr->value.sequence without first verifying attr->type is V_ASN1_SEQUENCE. The patch requires an early return when attr is NULL or attr->type is not V_ASN1_SEQUENCE. This binary contains the affected TimeStamp/ESS code and both signing-certificate extraction paths show the vulnerable NULL-only check followed by sequence dereference, so the patch is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2025-69421": {
+    "openssl-3.4.3-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-libcrypto-gcc-O2 exists and is an ELF64 x86-64 shared object with SONAME libcrypto.so.3.",
+        "Dynamic symbols export PKCS12_item_decrypt_d2i_ex at 0x2d6b60 and PKCS12_pbe_crypt_ex at 0x2d6720, so the PKCS#12 implementation is compiled into this binary.",
+        "In PKCS12_item_decrypt_d2i_ex, the 5th argument oct is in r8; the function immediately executes mov 0x8(%r8),%rcx at 0x2d6b78 and later mov (%r8),%r8d at 0x2d6ba7 before calling PKCS12_pbe_crypt_ex.",
+        "There is no preceding test/cmp of r8 and no early ERR_R_PASSED_NULL_PARAMETER return path before these dereferences."
+      ],
+      "reasoning": "The required patched behavior is an early NULL check of oct that raises ERR_R_PASSED_NULL_PARAMETER and returns NULL before any oct->data or oct->length access. Local disassembly shows the vulnerable-side behavior: oct is dereferenced directly before validation. The affected PKCS#12 code is present in the requested binary, so this is patch absent rather than not_affected.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.4-libcrypto-gcc-O2 exists and is a stripped ELF64 x86-64 shared object exporting PKCS12_item_decrypt_d2i_ex at 0x30c4e0.",
+        "At function entry, the fifth x86-64 argument register %r8 corresponds to oct; the code dereferences it immediately: 0x30c4f8 `mov 0x8(%r8),%rcx` and later 0x30c527 `mov (%r8),%r8d` before calling PKCS12_pbe_crypt_ex.",
+        "The disassembly from 0x30c4e0 to the dereferences contains no `test %r8,%r8`, `cmp $0,%r8`, or conditional branch to an ERR/null return path before using oct.",
+        "The only visible ERR_set_error path in this function is after ASN1 decode failure with reason constant 0x65, not an early ERR_R_PASSED_NULL_PARAMETER path before oct dereference."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing oct->data/oct->length without first validating oct. The requested binary contains the relevant PKCS#12 code and shows vulnerable-side behavior: oct is dereferenced at function entry before any NULL guard. Therefore the patch behavior is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.5-libcrypto-gcc-O2 exists and is an ELF64 x86-64 shared object, stripped but exporting PKCS12_item_decrypt_d2i_ex at 0x30c970.",
+        "Disassembly of PKCS12_item_decrypt_d2i_ex shows the fifth SysV argument oct in r8 is checked before use: test %r8,%r8 at 0x30c9b4 followed by je 0x30caa0.",
+        "The non-NULL path dereferences oct only after the guard: mov 0x8(%r8),%r10 at 0x30c9bd and mov (%r8),%r8d at 0x30c9c5 before calling PKCS12_pbe_crypt_ex.",
+        "The NULL path at 0x30caa0 calls ERR_new, ERR_set_debug with function/file strings, sets r12 to zero for NULL return, then calls ERR_set_error with library 0x23 and reason 0xc0102; strings include 'passed null parameter'."
+      ],
+      "reasoning": "The vulnerable mechanism is an unchecked dereference of oct->data/oct->length. In this binary, PKCS12_item_decrypt_d2i_ex contains an early NULL check on oct and routes NULL to error reporting and a NULL return before any oct dereference. This matches the patched behavior checklist, so the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.5.6-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.6-libcrypto-gcc-O2 exists and is an ELF64 x86-64 shared object with exported PKCS12_item_decrypt_d2i_ex at 0x30d170.",
+        "In PKCS12_item_decrypt_d2i_ex, the fifth SysV argument oct is in r8; code performs `test %r8,%r8` at 0x30d1b4 and branches on NULL to 0x30d2a0 before any dereference.",
+        "The non-NULL path dereferences oct only after the check: `mov 0x8(%r8),%r10` and `mov (%r8),%r8d`, then calls PKCS12_pbe_crypt_ex.",
+        "The NULL path calls ERR_new, ERR_set_debug, sets return register state via `xor %r12d,%r12d`, calls ERR_set_error with library 0x23 and reason 0xc0102, then returns NULL without reaching the dereference."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing oct->data and oct->length without validating oct. Local disassembly shows an early NULL guard on oct before those dereferences and an error-return path, matching the patch behavior rather than the vulnerable behavior.",
+      "status": "present"
+    },
+    "openssl-3.6.0-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object with dynamic symbol PKCS12_item_decrypt_d2i_ex at 0x30d2c0.",
+        "At function entry, r8 is the oct argument; instruction 0x30d2d8 performs mov 0x8(%r8),%rcx before any test or branch on r8.",
+        "Instruction 0x30d307 performs mov (%r8),%r8d before calling PKCS12_pbe_crypt_ex at 0x30d315, matching direct use of oct->data and oct->length.",
+        "The full function disassembly shows no early oct == NULL guard raising an error and returning NULL before these dereferences."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing oct without validating it. Local disassembly shows PKCS12_item_decrypt_d2i_ex dereferences the oct pointer immediately at entry and later passes fields from it to PKCS12_pbe_crypt_ex, with no prior NULL check or graceful ERR_raise/return path. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2026-22795": {
+    "openssl-3.3.5-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.3.5-openssl-gcc-O2 exists as a stripped ELF 64-bit x86-64 PIE executable.",
+        "Relevant PKCS#12 code is compiled in: strings include apps/pkcs12.c, friendlyName, localKeyID, and PKCS12_parse.",
+        "Candidate parse_bag at 0x46c5d0 calls the attribute getter with NID-like constants 0x9c and 0x9d, matching friendlyName/localKeyID handling.",
+        "After the 0x9c getter returns, non-NULL rax flows directly to mov rbp,QWORD PTR [rax+0x8] at 0x46c613; no preceding compare of the ASN1_TYPE type field to V_ASN1_BMPSTRING (0x1e) is present.",
+        "After the 0x9d getter returns, non-NULL rax flows directly to mov rcx,QWORD PTR [rax+0x8] at 0x46c62c; no preceding compare of the ASN1_TYPE type field to V_ASN1_OCTET_STRING (0x4) is present."
+      ],
+      "reasoning": "The vulnerable mechanism is ASN1_TYPE union access after PKCS12_SAFEBAG_get0_attr without validating the ASN1 tag. The requested binary contains the applicable PKCS#12 parsing code, and local disassembly shows direct value-union pointer loads for friendlyName/localKeyID without the patch's required type checks. This is vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.4.3-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE and contains PKCS#12 code/data strings including PKCS12_parse, friendlyName, and localKeyID.",
+        "The PKCS#12 bag parser candidate at 0x459650 calls the safebag attribute accessor at 0x289940 with esi=0x9c, then with esi=0x9d.",
+        "After the 0x9c attribute call at 0x459686, non-null rax flows directly to mov rbp,QWORD PTR [rax+0x8] at 0x459693, with no type compare against V_ASN1_BMPSTRING (0x1e).",
+        "After the 0x9d attribute call at 0x45969f, non-null rax flows directly to mov rcx,QWORD PTR [rax+0x8] at 0x4596ac, with no type compare against V_ASN1_OCTET_STRING (0x04)."
+      ],
+      "reasoning": "The vulnerable mechanism is compiled in and the local parse_bag-equivalent code shows the vulnerable-side behavior: ASN1_TYPE value union pointers are read from offset +0x8 immediately after retrieving friendlyName/localKeyID attributes, without validating the ASN1 type field first. That contradicts the patch behavior checklist, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE with PKCS12/ASN1 strings compiled in, so the PKCS12 parsing mechanism is applicable.",
+        "In the parse_bag-like function at 0x4b1630, the code calls the same helper with esi=0x9c for friendlyName, tests rax for NULL, then immediately loads rbp = [rax+0x8] at 0x4b1673 with no preceding cmp of [rax] to 0x1e.",
+        "The same function calls the helper with esi=0x9d for localKeyID, tests rax for NULL, then immediately loads rcx = [rax+0x8] at 0x4b168c with no preceding cmp of [rax] to 0x4.",
+        "The loaded localKeyID value is later treated as an ASN1_OCTET_STRING-like object: 0x4b17f2 loads [rcx+0x8] and 0x4b17f6 loads [rcx] before calling the setter, matching vulnerable union-member use after no type validation."
+      ],
+      "reasoning": "The supplied patch requires validating friendlyName as V_ASN1_BMPSTRING and localKeyID as V_ASN1_OCTET_STRING before accessing ASN1_TYPE value union members. Local disassembly shows the vulnerable-side behavior in the PKCS12 bag parser: after attribute lookup, the code only checks for NULL and directly uses value pointers. Therefore the patch is absent for this binary.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable with OpenSSL/PKCS12 strings and code linked in.",
+        "PKCS#12 parse_bag-like code at 0x4b2660 calls the attribute getter with NID_friendlyName 0x9c, checks returned ASN1_TYPE is type 0x1e, and returns 0 at 0x4b26a8 before reading [rax+8] if it is not BMPSTRING.",
+        "The same parse_bag-like code calls the attribute getter with NID_localKeyID 0x9d, checks returned ASN1_TYPE is type 0x4, and returns 0 before reading [rax+8] if it is not OCTET_STRING.",
+        "PKCS7 messageDigest-like helper at 0x2ba3b0 retrieves NID 0x33 and returns the value pointer only after cmp DWORD PTR [rax],0x4; mismatches return NULL.",
+        "s_client ASN1_generate_nconf path at 0x1057df tests the returned ASN1_TYPE for NULL and cmp DWORD PTR [rax],0x10 before accessing [rbp+0x8]; mismatch path frees the object and prints the ASN1_generate_nconf failed string."
+      ],
+      "reasoning": "The vulnerable mechanism is unguarded ASN1_TYPE union access. Local disassembly shows the patched type checks guarding all supplied behavior-change anchors before union-member pointer reads, including failure returns for malformed PKCS#12 attributes and cleanup/skip behavior for non-SEQUENCE s_client input. No architecture or build condition makes the issue inapplicable; the affected PKCS12 and related OpenSSL code is present and patched.",
+      "status": "present"
+    },
+    "openssl-3.5.6-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE executable with PKCS12 and ASN1-related code/strings compiled in.",
+        "In the PKCS12 bag parsing code at 0x4b3285, the binary requests attribute NID 0x9c, tests the returned pointer, compares *(attr) against 0x1e, and returns 0 on mismatch before loading attr+0x8; this matches the friendlyName BMPSTRING guard.",
+        "In the same routine at 0x4b32f4, the binary requests attribute NID 0x9d, tests the returned pointer, compares *(attr) against 0x4, and returns 0 on mismatch before loading attr+0x8; this matches the localKeyID OCTET_STRING guard.",
+        "In the s_client ASN1_generate_nconf path near 0x105900, the binary tests the returned ASN1_TYPE pointer and also compares *(atyp) against 0x10 before accessing value.sequence at atyp+0x8, sending non-SEQUENCE types to the failure/free path."
+      ],
+      "reasoning": "The vulnerable mechanism is unguarded ASN1_TYPE union access in PKCS12 parsing and related ASN1 paths. Local disassembly shows the patched type-validation checks for friendlyName, localKeyID, and generated ASN1 SEQUENCE before union-member access, so the requested binary contains the patched behavior.",
+      "status": "present"
+    }
+  },
+  "CVE-2026-22796": {
+    "openssl-3.3.5-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Resolved binary exists under target_dir: stripped ELF64 x86-64 PIE executable.",
+        "Local strings show PKCS7 code/features compiled in, including PKCS7_dataVerify/PKCS7_signatureVerify and messageDigest-related strings, so the PKCS7 mechanism is applicable.",
+        "Disassembly at 0x27f7a0 matches PKCS7_digest_from_attributes: it looks up NID 0x33, checks for lookup failure/NULL, then returns QWORD PTR [rax+0x8].",
+        "The 0x27f7a0 function has no compare of ASN1_TYPE->type against V_ASN1_OCTET_STRING (4) before reading the value union at offset +8."
+      ],
+      "reasoning": "The supplied root cause is direct ASN1_TYPE value-union access without validating the type tag. The primary patched behavior requires PKCS7_digest_from_attributes to reject non-OCTET_STRING attributes before returning value.octet_string. Local binary evidence shows the applicable PKCS7 code path is present and retains the vulnerable direct union-member load after only NULL/failure checks, with no OCTET_STRING type guard. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.4.3-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.3-openssl-gcc-O2 exists as a stripped ELF64 x86-64 PIE executable with OpenSSL PKCS7/PKCS12/ASN1 strings compiled in, so the feature surface is applicable.",
+        "In the PKCS12 bag parsing routine at 0x459650, the code calls the attribute lookup with NID_friendlyName 0x9c at 0x459686, then only tests for NULL and directly loads [rax+0x8] at 0x459693 with no preceding cmp of ASN1_TYPE->type to 0x1e (V_ASN1_BMPSTRING).",
+        "The same routine calls attribute lookup with NID_localKeyID 0x9d at 0x45969f, then only tests for NULL and directly loads [rax+0x8] at 0x4596ac with no preceding cmp of ASN1_TYPE->type to 0x4 (V_ASN1_OCTET_STRING).",
+        "The routine then switches on bag NIDs 0x96/0x97/0x98/0x9b, matching parse_bag-style PKCS12 key/cert/safeContents handling."
+      ],
+      "reasoning": "The requested binary contains the affected PKCS12 parsing code and local disassembly shows vulnerable-side ASN1_TYPE union access for friendlyName and localKeyID without the patch's required type checks. Although other ASN1 OCTET_STRING type checks are present elsewhere, this concrete parse_bag behavior contradicts the patch checklist, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.4-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is a stripped ELF64 x86-64 PIE with OpenSSL PKCS7/PKCS12-related strings, including PKCS7 routines and messageDigest, so the relevant feature is compiled in.",
+        "At 0x2b9a00 the identified PKCS7 messageDigest helper loads NID 0x33, performs attribute lookup calls, then after a NULL test at 0x2b9a2f-0x2b9a32 directly executes mov rax,[rax+0x8] at 0x2b9a34 and returns it.",
+        "The expected patched guard for PKCS7_digest_from_attributes, cmp ASN1_TYPE->type against V_ASN1_OCTET_STRING (4) before reading value.octet_string, is absent in that local routine."
+      ],
+      "reasoning": "The vulnerable mechanism is direct ASN1_TYPE value-union access without validating the type tag. Local binary evidence shows the relevant PKCS7 messageDigest code is present and still dereferences the union pointer directly after only checking the attribute pointer for NULL. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.5-openssl-gcc-O2 exists and is an ELF64 x86-64 stripped PIE executable; OpenSSL PKCS#7/PKCS#12/s_client code is compiled in, shown by local strings such as messageDigest, friendlyName, localKeyID, apps/pkcs12.c, apps/s_client.c, and ASN1_generate_nconf failed.",
+        "At 0x2ba3b0, the messageDigest path loads NID 0x33, calls the attribute lookup, tests the returned ASN1_TYPE for NULL, then executes cmpl $0x4,(%rax) and branches to return NULL before mov 0x8(%rax), matching the OCTET_STRING type check before value access.",
+        "At 0x4b2660, parse_bag checks friendlyName NID 0x9c with cmpl $0x1e,(%rax) and returns 0 on mismatch before using value.bmpstring; it then checks localKeyID NID 0x9d with cmpl $0x4,(%rax) and returns 0 on mismatch before using value.octet_string.",
+        "At 0x1057d7-0x105807, the s_client ASN1_generate_nconf result is tested for NULL and then checked with cmpl $0x10,(%rax); mismatch branches to the error/free path before the code dereferences value.sequence at 0x8(%rbp)."
+      ],
+      "reasoning": "The vulnerable mechanism is direct ASN1_TYPE union member access without validating the type tag. Local disassembly shows all three patched behavior changes: OCTET_STRING validation in PKCS7_digest_from_attributes, BMPSTRING/OCTET_STRING validation in parse_bag, and SEQUENCE validation in s_client before value.sequence use. These are direct binary evidence of the intended type-safety patch.",
+      "status": "present"
+    },
+    "openssl-3.5.6-openssl": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as a stripped ELF64 x86-64 PIE and contains OpenSSL PKCS7/PKCS12/s_client code strings, so the affected feature code is compiled in.",
+        "PKCS7_digest_from_attributes-like code at 0x2bad80 performs a messageDigest lookup with NID 0x33, tests the returned ASN1_TYPE for NULL, compares DWORD [rax] to 0x4, and returns NULL unless the type is V_ASN1_OCTET_STRING before loading [rax+8].",
+        "parse_bag-like code at 0x4b3280 queries NID 0x9c and rejects non-0x1e types before using [rax+8], then queries NID 0x9d and rejects non-0x4 types before using [rax+8].",
+        "s_client path around 0x105900 tests the ASN1_generate_nconf result for NULL, compares DWORD [rax] to 0x10, and branches to the ASN1_generate_nconf failed error/free path unless the ASN1_TYPE is V_ASN1_SEQUENCE before BIO_write-style use of value.sequence."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked ASN1_TYPE value-union access. Local disassembly shows all three requested patched behavior checks: OCTET_STRING gating for PKCS7 messageDigest, BMPSTRING/OCTET_STRING gating for PKCS12 friendlyName/localKeyID, and SEQUENCE gating for s_client ASN1_generate_nconf output. This is patched behavior, not merely version evidence.",
+      "status": "present"
+    }
+  },
+  "CVE-2026-28387": {
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.4-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object and includes DANE/TLSA code, with strings such as \"no matching DANE TLSA records\" and exported X509_STORE_CTX_set0_dane.",
+        "In the DANE match loop, the matched-certificate update block at 0x35e1be stores the matched TLSA record, loads the old certificate pointer from offset 0x20 of the DANE-like structure into rdi, and calls CRYPTO_free at 0x35e1dc.",
+        "Immediately after that free, the same block stores the new certificate pointer into offset 0x20 and calls X509_up_ref at 0x35e1ed, matching the old OPENSSL_free(dane->mcert); dane->mcert = cert; X509_up_ref(cert) sequence.",
+        "The binary does contain X509_free, and other code calls it, but this specific dane_match_cert replacement site calls CRYPTO_free rather than X509_free."
+      ],
+      "reasoning": "The vulnerable mechanism is freeing dane->mcert with OPENSSL_free/CRYPTO_free instead of the X509 reference-counted destructor. Local disassembly shows the applicable DANE code is compiled in and the relevant update path still directly calls CRYPTO_free before assigning the new certificate and incrementing its refcount. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.4.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.5-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with OpenSSL X509/DANE code compiled in; strings include DANE/TLSA diagnostics such as \"no matching DANE TLSA records\" and \"dane tlsa bad certificate usage\".",
+        "Dynamic symbols provide X509_free at 0x36db30, X509_up_ref at 0x35caf0, and CRYPTO_free at 0x1fcd40.",
+        "In the DANE matching path, the block at 0x35ea6e-0x35ea93 loads the old certificate pointer from dane-like offset 0x20, calls X509_free at 0x35ea82, stores the new cert pointer back to offset 0x20, then calls X509_up_ref at 0x35ea93.",
+        "The observed replacement path uses X509_free, not CRYPTO_free/OPENSSL_free, for the existing mcert before assigning and up-refing the new certificate."
+      ],
+      "reasoning": "The vulnerable mechanism is direct OPENSSL_free/CRYPTO_free of dane->mcert, bypassing X509 reference counting. Local binary evidence shows the relevant DANE certificate replacement behavior uses the patched type-specific X509_free followed by X509_up_ref, matching the intended security property.",
+      "status": "present"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.5-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object.",
+        "DANE support is compiled in: exported X509_STORE_CTX_set0_dane and DANE/TLSA strings such as 'dane tlsa bad certificate usage' and 'no matching DANE TLSA records' are present.",
+        "In the DANE match routine at 0x39b520, the matched-certificate replacement path calls X509_up_ref(cert) at 0x39b8e8, then loads the previous mcert from [rbp+0x20] at 0x39b8fb and calls CRYPTO_free at 0x39b909 with file/line arguments, before storing the new cert to [rbp+0x20] at 0x39b91c.",
+        "The patched behavior would call X509_free on the old mcert in that path; this path instead uses CRYPTO_free/OPENSSL_free semantics."
+      ],
+      "reasoning": "The vulnerable mechanism is direct OPENSSL_free/CRYPTO_free of dane->mcert, bypassing X509 reference counting. Local binary evidence shows the DANE feature is present and the relevant certificate replacement path still frees the old mcert through CRYPTO_free rather than X509_free, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.6.1-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.6.1-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with SONAME libcrypto.so.3.",
+        "DANE/X509 verification support is compiled in: X509_STORE_CTX_set0_dane is exported and DANE/TLSA strings are present.",
+        "In the DANE verification path, rbx is loaded from ctx->dane at [r14+0xf8], DANE records are read from [rbx+0x8], and TLSA record bytes are checked before certificate verification.",
+        "At 0x39f25f the code loads rdi from [rbx+0x20], the dane->mcert slot, then calls 0x3ac9e0, which is X509_free@@OPENSSL_3.0.0.",
+        "The vulnerable allocator-free routine is present separately as CRYPTO_free at 0x22dc40, but the identified DANE mcert release site calls X509_free rather than CRYPTO_free/OPENSSL_free."
+      ],
+      "reasoning": "The vulnerable mechanism is freeing the X509 object stored in dane->mcert with OPENSSL_free/CRYPTO_free instead of the reference-counted X509_free. Local disassembly of the applicable DANE path shows dane->mcert is released via X509_free, matching the patched behavior and not the vulnerable-side behavior.",
+      "status": "present"
+    }
+  },
+  "CVE-2026-28388": {
+    "openssl-3.0.20-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.0.20-libcrypto-gcc-O2 exists under target_dir and is an ELF 64-bit x86-64 shared object with SONAME libcrypto.so.3.",
+        "Local binary exports X509_verify_cert, X509_CRL_get_issuer, X509_NAME_cmp, and ASN1_INTEGER_cmp, and contains delta/CRL strings including deltaCRL, X509v3 Delta CRL Indicator, crlNumber, and freshestCRL, so the affected X.509 CRL verification feature is compiled in.",
+        "In the CRL delta-selection path near 0x2af9d0, the binary checks candidate delta base_crl_number at offset 0xa8 for NULL before issuer/extension comparisons.",
+        "After ASN1_INTEGER_cmp(delta->base_crl_number, base->crl_number) at 0x2afab0-0x2afac3, the binary loads delta->crl_number from offset 0xa0 into rdi at 0x2afacb, executes test rdi,rdi at 0x2afad2, and branches away on NULL at 0x2afad5 before the second ASN1_INTEGER_cmp at 0x2afae2."
+      ],
+      "reasoning": "The vulnerable mechanism is dereferencing delta->crl_number in ASN1_INTEGER_cmp without a prior NULL check. The requested binary contains the applicable CRL delta verification code and shows the patched behavior: a NULL test on delta->crl_number immediately before the final ASN1_INTEGER_cmp, rejecting NULL by branching to the failure/skip path. Therefore the patch is present based on local binary control-flow evidence.",
+      "status": "present"
+    },
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.4-libcrypto-gcc-O2 exists as an ELF64 x86-64 OpenSSL shared object and includes X.509 CRL/delta CRL handling strings and exported X509 verification/CRL APIs.",
+        "The relevant CRL delta-base sequence at 0x360c00 checks candidate delta->base_crl_number at offset 0xa8 and base->crl_number at offset 0xa0 before issuer and extension matching.",
+        "After extension matches, code at 0x360ce0 calls ASN1_INTEGER_cmp(delta->base_crl_number, base->crl_number), then code at 0x360cfb loads 0xa0(%r15) as delta->crl_number and calls ASN1_INTEGER_cmp at 0x360d09.",
+        "There is no local test/cmp against NULL for 0xa0(%r15) between the first comparison and the second ASN1_INTEGER_cmp; only base->crl_number was checked earlier."
+      ],
+      "reasoning": "The patch requires check_delta_base() to reject a delta CRL when delta->crl_number is NULL before dereferencing/comparing it. The binary contains applicable delta CRL verification logic, but the located optimized code reaches ASN1_INTEGER_cmp with delta->crl_number loaded directly from the delta CRL without a NULL guard. That is the vulnerable-side behavior, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.5-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object and contains OpenSSL X.509/CRL verification code with exported ASN1_INTEGER_cmp, X509_CRL_get_issuer, and X509_NAME_cmp.",
+        "The reduced check_delta_base pattern is present inside the X.509 verification code near 0x39e4d2-0x39e57f: it checks delta candidate field 0xa8 for NULL, checks base field 0xa0 for NULL, compares issuers, calls extension-match logic with NIDs 0x5a and 0x302, then calls ASN1_INTEGER_cmp on delta field 0xa8 versus base field 0xa0.",
+        "After the base_crl_number comparison at 0x39e541, the code branches to 0x39e571 and immediately loads 0xa0(%r15) into rdi and calls ASN1_INTEGER_cmp at 0x39e57f, with no intervening test/cmp of 0xa0(%r15) against NULL.",
+        "The only nearby NULL check for offset 0xa0 is at 0x39e4df on 0xa0(%r13), which corresponds to the base CRL number used as the second ASN1_INTEGER_cmp argument, not delta->crl_number."
+      ],
+      "reasoning": "The intended patch adds an early failure when delta->crl_number is NULL before the final ASN1_INTEGER_cmp(delta->crl_number, base->crl_number). Local disassembly shows the vulnerable-side control flow: delta->crl_number at offset 0xa0 of the delta CRL object is dereferenced/passed to ASN1_INTEGER_cmp without a preceding NULL guard. The binary is therefore missing the patch.",
+      "status": "absent"
+    },
+    "openssl-3.6.1-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.6.1-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with OpenSSL X509_CRL and ASN1_INTEGER_cmp code present, so the affected CRL-processing feature is compiled in.",
+        "Disassembly around 0x39ff62 checks candidate delta base_crl_number at offset 0xa8 for NULL and checks base crl_number at offset 0xa0 for NULL before issuer and extension matching.",
+        "The same sequence matches check_delta_base semantics: X509_CRL_get_issuer calls, extension checks for NID 0x5a and 0x302, ASN1_INTEGER_cmp(delta+0xa8, base+0xa0), then ASN1_INTEGER_cmp(delta+0xa0, base+0xa0).",
+        "Before the final call at 0x3a000f, the code loads delta->crl_number from 0xa0(%r15) at 0x3a0008 and calls ASN1_INTEGER_cmp without an intervening NULL test on 0xa0(%r15)."
+      ],
+      "reasoning": "The patch requires an early return when delta->crl_number is NULL before dereferencing it in ASN1_INTEGER_cmp. Local disassembly shows the vulnerable-side behavior: delta->crl_number is passed directly to ASN1_INTEGER_cmp after the base_crl_number comparison, with no NULL guard. Therefore the patch is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2026-28389": {
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.4-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with OpenSSL CMS KeyAgreeRecipientInfo code compiled in; strings include dh_cms_set_shared_info and ecdh_cms_set_shared_info.",
+        "DH path: after CMS_RecipientInfo_kari_get0_alg at 0x142862, code loads alg from stack, dereferences alg->algorithm, and calls OBJ_obj2nid at 0x1428d0-0x1428d8 instead of using X509_ALGOR_get0.",
+        "DH path: code dereferences alg->parameter directly at 0x142afd-0x142b26, checking *(alg->parameter) against V_ASN1_SEQUENCE and then reading the sequence data/length fields before d2i_X509_ALGOR.",
+        "ECDH path: after CMS_RecipientInfo_kari_get0_alg at 0x14327d, code loads alg->algorithm directly and calls OBJ_obj2nid at 0x1432c0-0x1432c8.",
+        "ECDH path: code dereferences alg->parameter directly at 0x14336e-0x143390, checking *(alg->parameter) against V_ASN1_SEQUENCE and then reading nested sequence data/length before d2i_X509_ALGOR."
+      ],
+      "reasoning": "The affected CMS DH/ECDH key-agreement functionality is present in the binary. Both requested vulnerable functions show the old direct X509_ALGOR field access pattern, including direct dereference of alg->parameter before any safe ptype/parameter extraction. This matches the vulnerable-side behavior, not the patched X509_ALGOR_get0 plus ASN1_STRING accessor behavior.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists as an ELF64 x86-64 shared object and contains CMS/KARI evidence: CMS_decrypt, CMS_RecipientInfo_kari_get0_alg, id-smime-alg-ESDH, dh_cms_set_shared_info, and ecdh_cms_set_shared_info strings.",
+        "DH path at 0x1696a2 calls CMS_RecipientInfo_kari_get0_alg, then uses direct structure access at 0x169710-0x16971d: load alg from stack, load [alg] as algorithm, call OBJ_obj2nid, compare with 0xf5.",
+        "DH path later directly dereferences alg->parameter at 0x16993d-0x169966: load [alg+0x8], compare DWORD [parameter] with 0x10, then load [parameter+0x8] and sequence data/length before d2i_X509_ALGOR.",
+        "ECDH path at 0x16a0bd calls CMS_RecipientInfo_kari_get0_alg, then uses direct structure access at 0x16a100-0x16a10d: load [alg] and call OBJ_obj2nid.",
+        "ECDH path directly dereferences alg->parameter at 0x16a1a2-0x16a1d0: load [alg+0x8], compare DWORD [parameter] with 0x10, then load sequence data/length before d2i_X509_ALGOR.",
+        "The observed affected paths do not use X509_ALGOR_get0 followed by ptype checking and ASN1_STRING_get0_data/ASN1_STRING_length for the parameter; they use the vulnerable direct field dereferences."
+      ],
+      "reasoning": "The vulnerable mechanism is direct access to alg->parameter->type/value without proving alg->parameter is present. Local disassembly of both DH and ECDH CMS KARI paths shows exactly that vulnerable-side access pattern, while CMS/KARI support is compiled in, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.6-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.6-libcrypto-gcc-O2 exists as an ELF64 x86-64 shared object with CMS/KARI and ECDH CMS code compiled in; local symbols/strings include CMS_RecipientInfo_kari_get0_alg, X509_ALGOR_get0, ASN1_STRING_get0_data, ASN1_STRING_length, d2i_X509_ALGOR, dh_cms_set_shared_info, and ecdh_cms_set_shared_info.",
+        "DH shared-info path: after CMS_RecipientInfo_kari_get0_alg at 0x169703, code calls X509_ALGOR_get0 at 0x169784 using stack locals for aoid/ptype/parameter, calls OBJ_obj2nid on the extracted aoid at 0x16978e, checks ptype with cmp $0x10 at 0x1699b5, then uses ASN1_STRING_get0_data at 0x1699c5 and ASN1_STRING_length at 0x1699d4 before d2i_X509_ALGOR at 0x1699e3.",
+        "ECDH shared-info path: after CMS_RecipientInfo_kari_get0_alg at 0x16a151, code calls X509_ALGOR_get0 at 0x16a1a4, calls OBJ_obj2nid on the extracted aoid at 0x16a1ae, checks ptype with cmp $0x10 at 0x16a248, then uses ASN1_STRING_get0_data at 0x16a25f and ASN1_STRING_length at 0x16a26e before d2i_X509_ALGOR at 0x16a27b."
+      ],
+      "reasoning": "The vulnerable mechanism was direct dereference of alg->parameter fields before checking whether the optional ASN.1 parameter existed. In both requested DH and ECDH shared-info paths, local binary instructions match the patched behavior checklist: extraction through X509_ALGOR_get0, type checking via the extracted ptype, and ASN1_STRING accessor calls for parameter data/length. This is positive local evidence that the patch is present.",
+      "status": "present"
+    },
+    "openssl-3.6.1-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "targets/openssl-3.6.1-libcrypto-gcc-O2 exists and is a stripped ELF64 x86-64 shared object; CMS DH/ECDH key-agreement code is present, with strings for crypto/cms/cms_dh.c, dh_cms_set_shared_info, crypto/cms/cms_ec.c, ecdh_cms_set_shared_info, CMS_KeyAgreeRecipientInfo, and id-smime-alg-ESDH.",
+        "DH shared-info path at 0x16ca32 calls CMS_RecipientInfo_kari_get0_alg, then uses mov 0x48(%rsp),%rax; mov (%rax),%rdi; call OBJ_obj2nid at 0x16caa0-0x16caa8, matching direct alg->algorithm access rather than patched X509_ALGOR_get0 aoid extraction.",
+        "Same DH path directly dereferences alg->parameter at 0x16cccd-0x16ccf6: mov 0x8(%rax),%rax; cmpl $0x10,(%rax); mov 0x8(%rax),%rax; load data/length; call d2i_X509_ALGOR, matching vulnerable alg->parameter->type/value.sequence access.",
+        "ECDH shared-info path likewise calls CMS_RecipientInfo_kari_get0_alg at 0x16d43d, then directly uses mov 0x30(%rsp),%rax; mov (%rax),%rdi; call OBJ_obj2nid at 0x16d480-0x16d488, and later directly dereferences alg->parameter at 0x16d522-0x16d550 before d2i_X509_ALGOR."
+      ],
+      "reasoning": "The affected CMS DH/ECDH KARI code is compiled into this binary, so it is not not_affected. Local disassembly shows the vulnerable mechanism: direct X509_ALGOR field access to alg->algorithm and alg->parameter->type/value.sequence, not the patched X509_ALGOR_get0 plus ptype check and ASN1_STRING accessor sequence. Therefore the patch is absent.",
+      "status": "absent"
+    }
+  },
+  "CVE-2026-28390": {
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.4-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 OpenSSL shared object with CMS/RSA-OAEP functionality present; symbols/strings include CMS_decrypt, CMS_RecipientInfo_decrypt, RSA_OAEP_PARAMS, EVP_PKEY_CTX_set0_rsa_oaep_label, rsa_cms_decrypt, invalid label, and unsupported label source.",
+        "In the rsa_cms_decrypt OAEP decode path around 0x14b383-0x14b3a7, the code loads oaep->pSourceFunc into rbx, checks only rbx for NULL, then directly reads plab->algorithm via mov (%rbx),%rdi and plab->parameter via mov 0x8(%rbx),%rax followed by cmpl $0x4,(%rax), which would dereference a NULL parameter.",
+        "The same block directly extracts the OCTET STRING internals at 0x14b3b0-0x14b3c0, including loading value/data, writing NULL back to the internal data pointer, and reading length directly.",
+        "The label is passed directly to EVP_PKEY_CTX_set0_rsa_oaep_label at 0x14b406-0x14b410; on failure the original label pointer is freed at 0x14b4fc-0x14b50f. The patched sequence using X509_ALGOR_get0 plus ASN1_STRING_get0_data/ASN1_STRING_length and CRYPTO_memdup is not present in this rsa_cms_decrypt block."
+      ],
+      "reasoning": "The vulnerable mechanism is applicable because CMS RSA-OAEP recipient decryption code is compiled into the binary. Local disassembly shows the vulnerable direct plab->parameter dereference and original-label ownership transfer, rather than the patched safe X509_ALGOR_get0/ASN1_STRING accessor and label-duplication behavior. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.5-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with OpenSSL CMS/RSA-OAEP code compiled in.",
+        "RSA CMS decrypt path at 0x172460 unpacks RSA_OAEP_PARAMS and processes pSourceFunc at 0x1724d3-0x172510 using direct structure access.",
+        "At 0x1724e0 it loads pSourceFunc->algorithm directly and calls OBJ_obj2nid; at 0x1724f3 it loads pSourceFunc->parameter, then 0x1724f7 dereferences (%rax) for parameter->type without a NULL guard.",
+        "Old label ownership behavior is present: 0x172500-0x172510 reads octet string fields directly, moves label data into rbx, and writes NULL to the original data pointer; 0x172556-0x172560 passes that original label directly to EVP_PKEY_CTX_set0_rsa_oaep_label.",
+        "No patched X509_ALGOR_get0/ptype/parameter flow or OPENSSL_memdup-before-set0 behavior is present in this RSA-OAEP decrypt block."
+      ],
+      "reasoning": "The vulnerable mechanism is direct dereference of pSourceFunc->parameter when processing RSA-OAEP SourceFunc. Local disassembly shows exactly that old direct field access and original-label transfer behavior, rather than the patched X509_ALGOR_get0 plus ASN1_STRING_get0_data/length plus duplicated label behavior. Therefore the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.6.1-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists: ELF64 x86-64 shared object with CMS/RSA-OAEP code present, including CMS_decrypt, CMS_RecipientInfo_get0_pkey_ctx, RSA_OAEP_PARAMS, and EVP_PKEY_CTX_set0_rsa_oaep_label.",
+        "In the RSA-OAEP CMS decrypt path around 0x176c83-0x176caa, pSourceFunc is loaded directly from [rbp+0x10], then its algorithm is read from [rbx] and its parameter from [rbx+0x8]; the code compares DWORD PTR [[rbx+0x8]] to 0x4 without a NULL check on [rbx+0x8].",
+        "The same block directly extracts label internals at 0x176cb0-0x176cc2, taking data from octet_string+0x8, clearing that original data pointer to NULL, and taking length from the octet_string object.",
+        "At 0x176d06-0x176d10 the original label pointer is passed directly to EVP_PKEY_CTX_set0_rsa_oaep_label; on failure 0x176dfc-0x176e0f frees that same label with CRYPTO_free.",
+        "No patched call pattern appears in this target block: no X509_ALGOR_get0, ASN1_STRING_get0_data, ASN1_STRING_length, or CRYPTO_memdup/OPENSSL_memdup before setting the OAEP label."
+      ],
+      "reasoning": "The vulnerable mechanism is present: the CMS RSA-OAEP SourceFunc parameter is dereferenced directly through pSourceFunc->parameter before any NULL-safe accessor or parameter-type output is used. The patched behavior would use X509_ALGOR_get0, ASN1_STRING accessors, and duplicate the label before EVP_PKEY_CTX_set0_rsa_oaep_label; the local binary instead matches the old direct-field access and original-label ownership transfer behavior.",
+      "status": "absent"
+    },
+    "openssl-3.6.2-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object with CMS/RSA-OAEP CMS code present, so the affected feature path is applicable.",
+        "In the rsa_cms_decrypt code region, OAEP pSourceFunc is handled via X509_ALGOR_get0 at 0x176d5e with output slots on the stack, followed by OBJ_obj2nid on the returned algorithm and a ptype comparison against 4 at 0x176d78.",
+        "Label extraction uses ASN1_STRING_get0_data at 0x176ec5 and ASN1_STRING_length at 0x176ed2 on the parameter returned by X509_ALGOR_get0, rather than direct ASN.1 field dereferences.",
+        "Before EVP_PKEY_CTX_set0_rsa_oaep_label, the code duplicates label bytes with CRYPTO_memdup at 0x176e7b and passes the duplicate to EVP_PKEY_CTX_set0_rsa_oaep_label at 0x176e96; on set0 failure it frees the duplicate at 0x176eb2."
+      ],
+      "reasoning": "The local disassembly matches the patched behavior checklist: safe X509_ALGOR_get0-based parameter retrieval, ptype-based validation, ASN1_STRING accessors, and duplicated label ownership before set0. This shows the patched security behavior is present rather than the vulnerable direct plab->parameter dereference path.",
+      "status": "present"
+    }
+  },
+  "CVE-2026-31789": {
+    "openssl-3.0.20-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.0.20-libcrypto-gcc-O2 exists under target_dir and is an ELF 64-bit LSB shared object for x86-64.",
+        "ELF header reports Class ELF64 and Machine Advanced Micro Devices X86-64.",
+        "Embedded compiler configuration string includes -m64."
+      ],
+      "reasoning": "The supplied root cause and vulnerability description make this an integer-overflow-to-undersized-allocation issue affecting 32-bit platforms. Local binary evidence shows this requested binary is a 64-bit x86-64 build, so the 32-bit word-size condition required for this CVE is not applicable. This is a configuration/architecture applicability decision, not a claim that the patch hunk is present.",
+      "status": "not_affected"
+    },
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Requested binary exists under target_dir: targets/openssl-3.4.4-libcrypto-gcc-O2.",
+        "file identifies it as an ELF 64-bit LSB shared object for x86-64.",
+        "readelf -h reports Class ELF64 and Machine Advanced Micro Devices X86-64.",
+        "Supplied metadata states the overflow mechanism is a 32-bit-platform issue caused by size_t wraparound in buflen * 3 or 1 + buflen * 2."
+      ],
+      "reasoning": "The vulnerable mechanism is conditioned on 32-bit word size. Local ELF evidence shows this binary is a 64-bit x86-64 object, so the requested binary is outside the affected 32-bit build condition. This is an applicability decision, not evidence that the patch hunk is present.",
+      "status": "not_affected"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists at targets/openssl-3.5.5-libcrypto-gcc-O2 and is an ELF 64-bit LSB shared object for x86-64.",
+        "readelf reports ELF class ELF64 and architecture Advanced Micro Devices X86-64.",
+        "Local symbols/strings show OpenSSL hex conversion code is present, including OPENSSL_buf2hexstr, OPENSSL_buf2hexstr_ex, 0123456789ABCDEF, too many bytes, and buf2hexstr_sep.",
+        "Supplied vulnerability description and root cause state the overflow mechanism affects 32-bit platforms where buflen * 3 or 1 + buflen * 2 can overflow size_t for excessively large inputs."
+      ],
+      "reasoning": "The vulnerable mechanism is conditioned on a 32-bit platform/word size. Local binary evidence shows this requested binary is a 64-bit x86-64 ELF, so the required architecture condition for CVE-2026-31789 is not present. This is a build applicability decision, not evidence that the patch is present.",
+      "status": "not_affected"
+    },
+    "openssl-3.6.1-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Requested binary exists: ELF 64-bit LSB shared object for x86-64.",
+        "ELF header class is ELF64 and architecture is Advanced Micro Devices X86-64.",
+        "Supplied vulnerability metadata states the heap overflow is only applicable on 32-bit platforms due to size_t allocation-size arithmetic overflow for very large buflen values."
+      ],
+      "reasoning": "The vulnerable mechanism is unchecked buflen*3 or 1+buflen*2 allocation-size arithmetic that can wrap on 32-bit size_t. Local binary evidence shows this target is a 64-bit x86-64 ELF, so the required 32-bit platform condition for this CVE is absent. This is a build/architecture applicability decision, not a claim that the patch hunk is present.",
+      "status": "not_affected"
+    }
+  },
+  "CVE-2026-31790": {
+    "openssl-3.4.4-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.4.4-libcrypto-gcc-O2 exists as an ELF64 x86-64 stripped shared object and includes OpenSSL provider RSA KEM strings: RSASVE, rsasve_generate, providers/implementations/kem/rsa_kem.c.",
+        "Likely rsasve_generate body calls RSA_size at 0x3aad92, stores nlen in r15, then calls RSA_public_encrypt at 0x3aaf33 with r8d=0x3 (RSA_NO_PADDING).",
+        "Immediately after RSA_public_encrypt, code does mov r13d,eax; test eax,eax; je 0x3aaf98. The nonzero path sets *outlen/*secretlen to r15 and forces return 1 at 0x3aaf54.",
+        "Failure path at 0x3aaf98 calls OPENSSL_cleanse(secret,nlen), but it is reached only when ret == 0, not when ret < 0 or ret != nlen.",
+        "No post-call comparison of ret against nlen is present before the success path."
+      ],
+      "reasoning": "The vulnerable mechanism is present: RSA_public_encrypt is treated as a boolean success check, so a negative return value is nonzero and reaches the success path that sets output lengths and returns 1. The patched security property requires rejecting ret <= 0 and ret != nlen; local disassembly shows that exact-length check is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.5-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "Binary exists under target_dir and is an ELF64 x86-64 shared object; RSASVE/rsa_kem strings and RSA_public_encrypt/OPENSSL_cleanse/RSA_size symbols are present, so the RSA/RSASVE KEM code is applicable.",
+        "At 0x3f790d the code passes r8d=3 (RSA_NO_PADDING) and calls RSA_public_encrypt at 0x329890 after RSA_size/random-secret generation patterns matching rsasve_generate.",
+        "Immediately after the call, 0x3f7918 moves eax to r13d, 0x3f791b tests eax, and 0x3f791d branches to failure/OPENSSL_cleanse only when eax is zero.",
+        "There is no post-call check for ret <= 0 and no comparison of ret against expected nlen before the success path; a negative return is nonzero and falls through to setting output lengths and returning success."
+      ],
+      "reasoning": "The vulnerable mechanism is the boolean/nonzero success test on RSA_public_encrypt. The requested binary contains the applicable RSASVE code path and implements only a zero-return failure check, not the patched exact positive-length check. Therefore RSA_public_encrypt returning -1 would still take the success path, so the patch is absent.",
+      "status": "absent"
+    },
+    "openssl-3.5.6-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.5.6-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object; RSASVE, RSA_public_encrypt, RSA_size, EVP_PKEY_encapsulate, and OPENSSL_cleanse strings/symbols are present, so the RSASVE RSA KEM code path is compiled in.",
+        "The rsasve_generate-shaped function at 0x3f81e0 reads RSA from ctx+0x8, calls RSA_size at 0x3f8222, handles out==NULL by setting output lengths to nlen, and calls RSA_public_encrypt at 0x3f83d0 with r8d=3 (RSA_NO_PADDING).",
+        "Immediately after RSA_public_encrypt, the binary compares the return value to nlen (`cmp %eax,%r14d; jne 0x3f8448`) and then rejects non-positive returns (`test %eax,%eax; jle 0x3f8448`).",
+        "The failure target 0x3f8448 calls OPENSSL_cleanse with secret pointer from 0x8(%rsp) and length from 0x10(%rsp), then returns failure without setting outlen/secretlen; the success path sets lengths only after the exact positive-length check."
+      ],
+      "reasoning": "Local disassembly shows the patched security behavior: RSASVE accepts RSA_public_encrypt only when it returns exactly the expected modulus length and greater than zero, and it cleanses the generated secret on failure. This rules out the vulnerable boolean `if (ret)` behavior that would accept -1 as success.",
+      "status": "present"
+    },
+    "openssl-3.6.1-libcrypto": {
+      "confidence": "high",
+      "evidence": [
+        "openssl-3.6.1-libcrypto-gcc-O2 exists as a stripped ELF64 x86-64 shared object with RSASVE/rsa_kem strings and RSA_public_encrypt/OPENSSL_cleanse code present.",
+        "The RSASVE generate candidate at 0x400cf0 references rsasve_generate string at 0x4c7080 and calls RSA_size at 0x400d32, matching the target function structure.",
+        "After RSA_public_encrypt at 0x400ed3, the code does mov r13d,eax; test eax,eax; je 0x400f38, so only a zero return enters failure handling.",
+        "For any non-zero return, including -1, control sets output lengths at 0x400ee4 and 0x400ef1 and sets return value 1 at 0x400ef4.",
+        "OPENSSL_cleanse is called at 0x400f40 only on the zero-return branch, with no ret<=0 or ret==nlen comparison before success."
+      ],
+      "reasoning": "The vulnerable mechanism is present: rsasve_generate treats RSA_public_encrypt as a boolean success check. Local disassembly shows no patched exact-length validation and negative return values take the success path, so the patch is absent.",
+      "status": "absent"
+    }
+  }
+}

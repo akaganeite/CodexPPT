@@ -1,13 +1,126 @@
 {
   "active_profile": "codex_default",
   "aliases": {
-    "openai": "codex_default"
+    "openai": "codex_default",
+    "aiflxer": "aiflxer",
+    "aiflexr": "aiflexr_gpt55",
+    "ark": "volc_deepseek_v4_pro_max",
+    "volc": "volc_deepseek_v4_pro_max"
   },
   "profiles": {
     "codex_default": {
       "provider": "codex",
       "reasoning": {
-        "mode": "inherit"
+        "mode": "on",
+        "effort": "max"
+      }
+    },
+    "starless_terra_high": {
+      "provider": "codex",
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "mode": "on",
+        "effort": "high"
+      }
+    },
+    "starless_luna_medium": {
+      "provider": "codex",
+      "model": "gpt-5.6-luna",
+      "reasoning": {
+        "mode": "on",
+        "effort": "medium"
+      }
+    },
+    "aiflxer": {
+      "provider": "openai",
+      "api_key_env": [
+        "AIFLXER_API_KEY"
+      ],
+      "base_url": "https://api.aiflexr.com/v1",
+      "wire_api": "responses",
+      "model": "gpt-5.6-sol",
+      "reasoning": {
+        "mode": "on",
+        "effort": "medium"
+      }
+    },
+    "aiflexr_gpt55": {
+      "provider": "openai",
+      "api_key_env": [
+        "AIFLEXR_API_KEY"
+      ],
+      "base_url": "https://api.aiflexr.com/v1",
+      "wire_api": "responses",
+      "model": "gpt-5.5",
+      "reasoning": {
+        "mode": "on",
+        "effort": "medium"
+      }
+    },
+    "cliproxy_deepseek_v4_pro_max": {
+      "provider": "openai",
+      "api_key_env": [
+        "PPTAGENT_API_KEY"
+      ],
+      "base_url": "http://127.0.0.1:8317/v1",
+      "wire_api": "responses",
+      "model": "deepseek-v4-pro",
+      "reasoning": {
+        "mode": "on",
+        "effort": "max"
+      }
+    },
+    "cliproxy_luna_medium": {
+      "provider": "openai",
+      "api_key_env": [
+        "PPTAGENT_API_KEY"
+      ],
+      "base_url": "http://127.0.0.1:8317/v1",
+      "wire_api": "responses",
+      "model": "gpt-5.6-luna",
+      "reasoning": {
+        "mode": "on",
+        "effort": "medium"
+      }
+    },
+    "cliproxy_terra_high": {
+      "provider": "openai",
+      "api_key_env": [
+        "PPTAGENT_API_KEY"
+      ],
+      "base_url": "http://127.0.0.1:8317/v1",
+      "wire_api": "responses",
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "mode": "on",
+        "effort": "high"
+      }
+    },
+    "cliproxy_sol_max": {
+      "provider": "openai",
+      "api_key_env": [
+        "PPTAGENT_API_KEY"
+      ],
+      "base_url": "http://127.0.0.1:8317/v1",
+      "wire_api": "responses",
+      "model": "gpt-5.6-sol",
+      "reasoning": {
+        "mode": "on",
+        "effort": "max"
+      }
+    },
+    "volc_deepseek_v4_pro_max": {
+      "provider": "volcengine-agent-plan",
+      "api_key_env": [
+        "ARK_API_KEY"
+      ],
+      "base_url": "https://ark.cn-beijing.volces.com/api/plan/v3",
+      "wire_api": "responses",
+      "model": "deepseek-v4-pro",
+      "model_supports_reasoning_summaries": false,
+      "reasoning": {
+        "mode": "on",
+        "effort": "max"
       }
     }
   }

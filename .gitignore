@@ -11,4 +11,5 @@ groundtruth/
 testset/
 binutils/gcc/
 binutils/gcc_strip_debug_keep_symbols/
+metadata/
 metadata/**/*.json

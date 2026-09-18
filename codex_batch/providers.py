@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 
 MODEL_CONFIG_PATH = Path(__file__).resolve().parent.parent / "model_config.json"
-REASONING_EFFORTS = {"low", "medium", "high", "xhigh"}
+REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class ModelProfile:
     requires_openai_auth: bool
     reasoning_mode: str
     reasoning_effort: str | None
+    model_supports_reasoning_summaries: bool | None
     codex_provider_name: str
 
     @property
@@ -97,18 +98,25 @@ def parse_profile(name: str, raw: object) -> ModelProfile:
             )
     elif reasoning_effort is not None and reasoning_effort not in REASONING_EFFORTS:
         raise ValueError(f"model profile {name!r}.reasoning.effort is invalid")
+    model_supports_reasoning_summaries = raw.get("model_supports_reasoning_summaries")
+    if model_supports_reasoning_summaries is not None and not isinstance(model_supports_reasoning_summaries, bool):
+        raise ValueError(f"model profile {name!r}.model_supports_reasoning_summaries must be boolean")
 
     if provider == "codex":
+        model = raw.get("model")
+        if model is not None and (not isinstance(model, str) or not model):
+            raise ValueError(f"model profile {name!r}.model must be a non-empty string when set")
         return ModelProfile(
             name=name,
             provider=provider,
             base_url=None,
             wire_api=None,
-            model=None,
+            model=model,
             api_key_env=None,
             requires_openai_auth=False,
             reasoning_mode=reasoning_mode,
             reasoning_effort=reasoning_effort,
+            model_supports_reasoning_summaries=model_supports_reasoning_summaries,
             codex_provider_name="",
         )
 
@@ -142,6 +150,7 @@ def parse_profile(name: str, raw: object) -> ModelProfile:
         requires_openai_auth=requires_openai_auth,
         reasoning_mode=reasoning_mode,
         reasoning_effort=reasoning_effort,
+        model_supports_reasoning_summaries=model_supports_reasoning_summaries,
         codex_provider_name=codex_provider_name,
     )
 
@@ -176,12 +185,27 @@ def provider_overrides(profile: ModelProfile) -> list[str]:
             f'requires_openai_auth={str(profile.requires_openai_auth).lower()}',
         ]
     )
-    return [
+    overrides = [
         "-c",
         f'model_provider="{profile.codex_provider_name}"',
         "-c",
         f'model_providers.{profile.codex_provider_name}={{' + ", ".join(fields) + "}",
     ]
+    if profile.model_supports_reasoning_summaries is not None:
+        enabled = str(profile.model_supports_reasoning_summaries).lower()
+        overrides.extend(["-c", f"model_supports_reasoning_summaries={enabled}"])
+    return overrides
+
+
+def validate_profile_environment(profile: ModelProfile) -> None:
+    """Fail once before scheduling a batch when a custom provider key is absent."""
+    if profile.uses_current_codex_provider or profile.api_key_env is None:
+        return
+    if not os.environ.get(profile.api_key_env, "").strip():
+        raise ValueError(
+            f"model profile {profile.name!r} requires non-empty environment variable "
+            f"{profile.api_key_env!r}; export it before starting the batch"
+        )
 
 
 def resolved_reasoning_effort(args: argparse.Namespace, profile: ModelProfile) -> str | None:
