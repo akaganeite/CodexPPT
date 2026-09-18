@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "provider": "deepseek",
+  "base_url": "https://api.deepseek.com",
+  "endpoint": "/chat/completions",
+  "model": "deepseek-v4-pro",
+  "api_key": "",
+  "api_key_env": "DEEPSEEK_API_KEY",
+  "timeout_seconds": 300,
+  "max_retries": 2,
+  "temperature": 0.0,
+  "max_tokens": 4096,
+  "json_mode": true
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeployedSourceReviewResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "partial", "failed"]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {"type": "string"},
+          "source_version": {"type": "string"},
+          "classified_label": {
+            "type": "string",
+            "enum": ["vuln", "patch", "inconclusive"]
+          },
+          "functions_available": {"type": "boolean"},
+          "confidence": {"type": "number"},
+          "reason": {"type": "string"},
+          "evidence": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "function_mappings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "canonical_function": {"type": "string"},
+                "candidate_function": {"type": "string"},
+                "relationship": {
+                  "type": "string",
+                  "enum": ["exact", "semantic_equivalent", "unavailable"]
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                }
+              },
+              "required": [
+                "canonical_function",
+                "candidate_function",
+                "relationship",
+                "evidence"
+              ]
+            }
+          }
+        },
+        "required": [
+          "candidate_id",
+          "source_version",
+          "classified_label",
+          "functions_available",
+          "confidence",
+          "reason",
+          "evidence",
+          "function_mappings"
+        ]
+      }
+    },
+    "notes": {"type": "string"}
+  },
+  "required": ["status", "items", "notes"]
+}

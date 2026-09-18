@@ -1,0 +1,104 @@
+{
+  "defaults": {
+    "arch": "amd64",
+    "verify_sha256": true
+  },
+  "projects": {
+    "binutils": {
+      "source_package": "binutils",
+      "binary_packages": {
+        "exact": ["binutils-x86-64-linux-gnu", "libbinutils", "binutils-multiarch", "libctf0", "libctf-nobfd0", "libsframe1", "libgprofng0"],
+        "regex": ["^binutils-[a-z0-9_+.-]+-linux-gnu$", "^libbinutils$", "^binutils-multiarch$", "^libctf.*", "^libsframe[0-9].*", "^libgprofng[0-9].*"]
+      },
+      "debug_packages": {
+        "exact": ["binutils-x86-64-linux-gnu-dbg", "libbinutils-dbg", "binutils-dbg", "binutils-multiarch-dbg", "binutils-x86-64-linux-gnu-dbgsym", "libbinutils-dbgsym"],
+        "regex": ["^binutils-[a-z0-9_+.-]+-linux-gnu-(dbg|dbgsym)$", "^libbinutils-(dbg|dbgsym)$", "^binutils(-multiarch)?-(dbg|dbgsym)$", "^libctf.*-(dbg|dbgsym)$", "^libsframe[0-9].*-(dbg|dbgsym)$", "^libgprofng[0-9].*-(dbg|dbgsym)$"]
+      },
+      "elf": {
+        "so_globs": ["usr/lib/**/libbfd*.so*", "usr/lib/**/libopcodes*.so*", "usr/lib/**/libctf*.so*", "usr/lib/**/libsframe*.so*", "usr/lib/**/libgprofng*.so*"],
+        "executable_globs": ["usr/bin/*addr2line", "usr/bin/*ar", "usr/bin/*as", "usr/bin/*c++filt", "usr/bin/*elfedit", "usr/bin/*gprof", "usr/bin/*ld*", "usr/bin/*nm", "usr/bin/*objcopy", "usr/bin/*objdump", "usr/bin/*ranlib", "usr/bin/*readelf", "usr/bin/*size", "usr/bin/*strings", "usr/bin/*strip"],
+        "exclude_globs": ["usr/lib/debug/**", "usr/share/**"]
+      }
+    },
+    "curl": {
+      "source_package": "curl",
+      "binary_packages": {
+        "exact": ["libcurl4", "libcurl3-gnutls", "libcurl3-nss", "curl"],
+        "regex": ["^libcurl[0-9].*", "^curl$"]
+      },
+      "debug_packages": {
+        "exact": ["libcurl4-dbgsym", "libcurl3-gnutls-dbgsym", "libcurl3-nss-dbgsym", "curl-dbgsym", "curl-dbg"],
+        "regex": ["^libcurl[0-9].*-(dbgsym|dbg)$", "^curl-(dbgsym|dbg)$"]
+      },
+      "elf": {
+        "so_globs": ["usr/lib/**/libcurl*.so*"],
+        "executable_globs": ["usr/bin/curl"],
+        "exclude_globs": ["usr/lib/debug/**", "usr/share/**"]
+      }
+    },
+    "ffmpeg": {
+      "source_package": "ffmpeg",
+      "binary_packages": {
+        "exact": ["libavcodec60", "libavcodec59", "libavcodec58", "libavformat60", "libavformat59", "libavformat58", "libavutil58", "libavutil57", "libavutil56", "ffmpeg"],
+        "regex": ["^libav(codec|format|util|filter|device|resample)[0-9]+$", "^libsw(scale|resample)[0-9]+$", "^ffmpeg$"]
+      },
+      "debug_packages": {
+        "exact": ["ffmpeg-dbgsym"],
+        "regex": ["^(libav.*|libsw.*|ffmpeg)-(dbgsym|dbg)$"]
+      },
+      "elf": {
+        "so_globs": ["usr/lib/**/libav*.so*", "usr/lib/**/libsw*.so*"],
+        "executable_globs": ["usr/bin/ffmpeg", "usr/bin/ffprobe"],
+        "exclude_globs": ["usr/lib/debug/**", "usr/share/**"]
+      }
+    },
+    "libxml2": {
+      "source_package": "libxml2",
+      "binary_packages": {
+        "exact": ["libxml2", "libxml2-utils"],
+        "regex": ["^libxml2$", "^libxml2-utils$"]
+      },
+      "debug_packages": {
+        "exact": ["libxml2-dbgsym", "libxml2-dbg", "libxml2-utils-dbgsym"],
+        "regex": ["^libxml2(?:-utils)?-(dbgsym|dbg)$"]
+      },
+      "elf": {
+        "so_globs": ["usr/lib/**/libxml2.so*", "lib/**/libxml2.so*"],
+        "executable_globs": ["usr/bin/xmllint", "usr/bin/xmlcatalog"],
+        "exclude_globs": ["usr/lib/debug/**", "usr/share/**"]
+      }
+    },
+    "openssl": {
+      "source_package": "openssl",
+      "binary_packages": {
+        "exact": ["libssl3", "libssl1.1", "libssl1.0.0", "openssl"],
+        "regex": ["^libssl[0-9].*", "^openssl$"]
+      },
+      "debug_packages": {
+        "exact": ["libssl3-dbgsym", "libssl1.1-dbgsym", "openssl-dbgsym", "openssl-dbg"],
+        "regex": ["^(openssl|libssl.*)-(dbgsym|dbg)$"]
+      },
+      "elf": {
+        "so_globs": ["usr/lib/**/libssl.so*", "usr/lib/**/libcrypto.so*", "lib/**/libssl.so*", "lib/**/libcrypto.so*"],
+        "executable_globs": ["usr/bin/openssl"],
+        "exclude_globs": ["usr/lib/debug/**", "usr/share/**"]
+      }
+    },
+    "sqlite": {
+      "source_package": "sqlite3",
+      "binary_packages": {
+        "exact": ["libsqlite3-0", "sqlite3"],
+        "regex": ["^libsqlite3-[0-9]+$", "^sqlite3$"]
+      },
+      "debug_packages": {
+        "exact": ["libsqlite3-0-dbgsym", "sqlite3-dbgsym", "sqlite3-dbg"],
+        "regex": ["^(libsqlite3-[0-9]+|sqlite3)-(dbgsym|dbg)$"]
+      },
+      "elf": {
+        "so_globs": ["usr/lib/**/libsqlite3.so*", "lib/**/libsqlite3.so*"],
+        "executable_globs": ["usr/bin/sqlite3"],
+        "exclude_globs": ["usr/lib/debug/**", "usr/share/**"]
+      }
+    }
+  }
+}
