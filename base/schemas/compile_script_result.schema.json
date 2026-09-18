@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CompileScriptResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "partial", "failed", "blocked"] },
+    "script_path": { "type": "string" },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "notes": { "type": "string" }
+  },
+  "required": ["status", "script_path", "changed_files", "notes"]
+}

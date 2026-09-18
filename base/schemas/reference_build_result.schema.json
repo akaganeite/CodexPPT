@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReferenceBuildResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "partial", "failed", "blocked"] },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cve_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["ok", "failed", "skipped"] },
+          "vuln_commit": { "type": "string" },
+          "patch_commit": { "type": "string" },
+          "binary_name": { "type": "string" },
+          "vuln_path": { "type": "string" },
+          "patch_path": { "type": "string" },
+          "functions": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" }
+        },
+        "required": ["cve_id", "status", "vuln_commit", "patch_commit", "binary_name", "vuln_path", "patch_path", "functions", "notes"]
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "required": ["status", "items", "notes"]
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NotAffectedReviewResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "partial", "failed", "blocked"] },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cve_id": { "type": "string" },
+          "label": { "type": "string" },
+          "tag": { "type": "string" },
+          "binary_name": { "type": "string" },
+          "compiler": { "type": "string" },
+          "opt": { "type": "string" },
+          "build_profile": { "type": "string" },
+          "target_path": { "type": "string" },
+          "missing_functions": { "type": "array", "items": { "type": "string" } },
+          "status": {
+            "type": "string",
+            "enum": ["affected", "not_affected", "patch_evolution", "backport_fix", "missing_fix", "wrong_binary", "inconclusive", "failed"]
+          },
+          "confidence": { "type": "number" },
+          "reason": { "type": "string" },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "suggested_action": { "type": "string" }
+        },
+        "required": [
+          "cve_id",
+          "label",
+          "tag",
+          "binary_name",
+          "compiler",
+          "opt",
+          "build_profile",
+          "target_path",
+          "missing_functions",
+          "status",
+          "confidence",
+          "reason",
+          "evidence",
+          "suggested_action"
+        ]
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "required": ["status", "items", "notes"]
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TargetBuildResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": { "type": "string", "enum": ["ok", "partial", "failed", "blocked"] },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cve_id": { "type": "string" },
+          "label": { "type": "string" },
+          "version": { "type": "string" },
+          "tag": { "type": "string" },
+          "binary_name": { "type": "string" },
+          "path": { "type": "string" },
+          "status": { "type": "string", "enum": ["ok", "failed", "skipped"] },
+          "notes": { "type": "string" }
+        },
+        "required": ["cve_id", "label", "tag", "version", "binary_name", "path", "status", "notes"]
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "required": ["status", "items", "notes"]
+}

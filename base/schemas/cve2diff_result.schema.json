@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CVE2DiffResult",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["found", "not_found", "blocked", "ambiguous"]
+    },
+    "selected_commit": { "type": "string" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "commit": { "type": "string" },
+          "parent": { "type": "string" },
+          "relation": {
+            "type": "string",
+            "enum": ["mainline", "backport", "patch_evolution", "unknown"]
+          },
+          "confidence": { "type": "number" },
+          "source": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "selected": { "type": "boolean" }
+        },
+        "required": ["commit", "parent", "relation", "confidence", "source", "evidence", "selected"]
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "required": ["status", "selected_commit", "candidates", "notes"]
+}

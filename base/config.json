@@ -1,0 +1,249 @@
+{
+    "ref_rule": [
+        "git",
+        "sourceware",
+        "bugzilla"
+    ],
+    "compile_rule": {
+        "openssl": {
+            "binary": [
+                ["./","libssl", "so"],
+                ["./","libcrypto", "so"],
+                ["./apps","openssl"]
+            ],
+            "config": [
+                ["./config", "-d", "shared"],
+                ["./config", "-d"]
+            ]
+        },
+        "binutils":{
+            "binary": [
+                ["./binutils","objdump"],
+                ["./binutils","readelf"],
+                ["./binutils","nm-new"],
+                ["./binutils","nm"],
+                ["./binutils","addr2line"],
+                ["./binutils","size"],
+                ["./binutils","strings"],
+                ["./binutils","strip"],
+                ["./binutils","objcopy"],
+                ["./binutils","ld"],
+                ["./binutils","ar"],
+                ["./binutils","as"]
+            ],
+            "config": [
+                ["./configure", "--disable-werror", "--enable-debug","--disable-gdb"]
+            ],
+            "make": [
+                ["make","all-binutils", "all-ld", "all-gas","MAKEINFO=true"]
+            ],
+            "env": {
+                "CFLAGS": "-fcommon",
+                "CXXFLAGS": "-fcommon"
+            }
+        },
+        "curl":{
+            "binary": [
+                ["./src","curl"]
+            ],
+            "config": [
+                ["autoreconf", "-fi","&&","./configure", "--disable-werror", "--disable-shared", "--enable-debug","--with-openssl"]
+            ]
+        },
+        "ffmpeg":{
+            "binary": [
+                ["./","ffmpeg_g"],
+                ["./","ffprobe_g"],
+                ["./","ffplay_g"]
+            ],
+            "config": [
+                ["./configure","--enable-debug=3"]
+            ]
+        },
+        "freetype":{
+            "binary": [
+                ["./objs/.libs","libfreetype","so"]
+            ],
+            "config": [
+                [
+                    "chmod ","755","./autogen.sh","&&",
+                    "./autogen.sh","&&",
+                    "./configure",
+                    "--enable-freetype-config",
+                    "--with-harfbuzz=no",
+                    "--with-png=yes",
+                    "--with-zlib=yes",
+                    "--enable-static",
+                    "--enable-shared"
+                ]
+            ]
+        },
+        "imagemagick":{
+            "binary":[
+                ["./MagickCore/.libs/","libMagickCore","so"],
+                ["./MagickWand/.libs/","libMagickWand","so"]
+            ],
+            "config":[
+                [
+                    "./configure",
+                    "--disable-werrors",
+                    "--enable-shared",
+                    "--disable-install"
+                ]
+            ]
+        },
+        "libxml2":{
+            "binary":[
+                ["./.libs","libxml2","so"]
+            ],
+            "config":[
+                [
+                    "./autogen.sh",
+                    "--with-modules",
+                    "--with-debug",
+                    "--without-python"
+                ]
+            ]
+        },
+        "openjpeg":{
+            "binary":[
+                ["./bin","libopenjp2","so"]
+            ],
+            "config":[
+                [
+                    "cmake",
+                    "-DCMAKE_BUILD_TYPE=Debug"
+                ]
+            ]
+        },
+        "tcpdump":{
+            "binary":[
+                ["./","tcpdump"]
+            ],
+            "config":[
+                [
+                    "./configure"
+                ]
+            ]
+        },
+        "sqlite":{
+            "binary":[
+                ["./","sqlite3"]
+            ],
+            "config":[
+                [
+                    "./configure",
+                    "--enable-debug",
+                    "--disable-shared",
+                    "--disable-amalgamation"
+                ]
+            ]
+        }
+    },
+    "vendor_map": {
+        "openssl": [
+            "openssl",
+            "openssl"
+        ],
+        "libxml2": [
+            "xmlsoft",
+            "libxml2"
+        ],
+        "ffmpeg": [
+            "ffmpeg",
+            "ffmpeg"
+        ],
+        "sqlite": [
+            "sqlite",
+            "sqlite"
+        ],
+        "binutils": [
+            "gnu",
+            "binutils"
+        ],
+        "curl": [
+            "haxx",
+            "curl"
+        ],
+        "tcpdump": [
+            "tcpdump",
+            "tcpdump"
+        ],
+        "openjpeg": [
+            "uclouvain",
+            "openjpeg"
+        ],
+        "freetype": [
+            "freetype",
+            "freetype"
+        ],
+        "imagemagick": [
+            "imagemagick",
+            "imagemagick"
+        ]
+    },
+    "tag_rules": {
+        "binutils": {
+            "owner": "bminor",
+            "name": "binutils-gdb",
+            "tag_pattern": "^binutils-(\\d+(?:_\\d+)*)$",
+            "replace": {
+                "_": "."
+            }
+        },
+        "curl": {
+            "owner": "curl",
+            "name": "curl",
+            "tag_pattern": "^curl-(.+)$",
+            "replace": {
+                "_": "."
+            }
+        },
+        "ffmpeg": {
+            "owner": "FFmpeg",
+            "name": "FFmpeg",
+            "tag_pattern": "^n(.+)$"
+        },
+        "freetype": {
+            "owner": "freetype",
+            "name": "freetype",
+            "tag_pattern": "^VER-(.+)$",
+            "replace": {
+                "-": "."
+            }
+        },
+        "imagemagick": {
+            "owner": "ImageMagick",
+            "name": "ImageMagick",
+            "tag_pattern": "^(\\d+\\.\\d+\\.\\d+.*)$"
+        },
+        "libxml2": {
+            "owner": "GNOME",
+            "name": "libxml2",
+            "tag_pattern": "^v(.+)$"
+        },
+        "openjpeg": {
+            "owner": "uclouvain",
+            "name": "openjpeg",
+            "tag_pattern": "^v(.+)|version\\.(.+)$"
+        },
+        "openssl": {
+            "owner": "openssl",
+            "name": "openssl",
+            "tag_pattern": "^(?:OpenSSL_|openssl-)(.+)$",
+            "replace": {
+                "_": "."
+            }
+        },
+        "sqlite": {
+            "owner": "sqlite",
+            "name": "sqlite",
+            "tag_pattern": "^version-(.+)$"
+        },
+        "tcpdump": {
+            "owner": "the-tcpdump-group",
+            "name": "tcpdump",
+            "tag_pattern": "^tcpdump-(.+)$"
+        }
+    }
+}
