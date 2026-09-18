@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import re
 import time
 from typing import Any
 
-from claudeagent.common import jdump, write_artifact
+from claudeagent.common import PROVIDER_ERROR_STATUS, jdump, write_artifact
 from claudeagent.evidence_summary import (
     HEX_ADDRESS_RE,
     MAX_VERIFICATION_ADDRESS_RANGES,
@@ -27,19 +26,6 @@ FINAL_SCHEMA_VERSION = "final_result.v6"
 MAX_CITED_EVIDENCE = 8
 _UNSET = object()
 
-# Determinate verdicts must rely on binary semantics, not version/release/path labels.
-VERSION_EVIDENCE_RE = re.compile(
-    r"\b[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9_.]+)?\b|"
-    r"\bpre-?[0-9]+\.[0-9]+\.[0-9]+|"
-    r"\bbefore\s+[0-9]+\.[0-9]+\.[0-9]+|"
-    r"\bfixed\s+in\s+[0-9]+\.[0-9]+\.[0-9]+|"
-    r"/home/|/media/|/extdisk/|file path|target filename|target file name|"
-    r"binary filename|binary file name|directory name|binary name|"
-    r"naming convention|path contains|path indicates",
-    re.IGNORECASE,
-)
-
-
 def _bounded_fallback_summary(value: Any) -> str:
     """Keep Host-generated fallback reasoning within the artifact schema limit."""
     text = str(value or "")
@@ -47,6 +33,13 @@ def _bounded_fallback_summary(value: Any) -> str:
         return text
     parts = text_head_tail(text, 3500)
     return f"{parts['head']}\n... {parts['omitted_chars']} chars omitted ...\n{parts['tail']}"[:3800]
+
+
+def _provider_error_message(value: Any) -> str:
+    """Normalize transport failures before putting them in artifacts or terminals."""
+    text = str(value or "").replace("\x00", "")
+    text = " ".join(text.split())
+    return text[:2000] or "Responses provider returned an unspecified error"
 
 
 def _ledger_by_id(evidence_ledger: Any) -> dict[str, dict[str, Any]]:
@@ -129,13 +122,6 @@ def resolve_final_tool_args(
         errors.append("$.inconclusive_reason: determinate verdicts should use 'none'")
 
     reasoning = str(candidate.get("reasoning", ""))
-    if status in DETERMINATE_STATUSES:
-        verdict_text = "\n".join([*(str(item.get("claim", "")) for item in cited), reasoning])
-        if VERSION_EVIDENCE_RE.search(verdict_text):
-            errors.append(
-                "$.reasoning/evidence_ids: determinate verdict appears to rely on version "
-                "strings, filenames, paths, or release labels instead of semantic binary evidence"
-            )
 
     canonical = {
         "schema_version": FINAL_SCHEMA_VERSION,
@@ -228,8 +214,8 @@ def submit_detection_result(
                 "real ledger evidence_ids and summarize every cited pending item first. Determinate "
                 "statuses require positive target-binary evidence; an anchor miss alone is not enough. "
                 "Cite at most eight items, and include a verification address range for present/absent. "
-                "Remove versions, paths, filenames, release chronology, and unsupported interpretations "
-                "from reasoning. Use inconclusive only when the binary evidence is genuinely unresolved."
+                "Correct unsupported interpretations from reasoning. Use inconclusive only when the "
+                "binary evidence is genuinely unresolved."
             ),
         }
     metadata = AGENT_CONTEXT["metadata"]
@@ -407,6 +393,18 @@ def validate_final_result_artifact(result: dict[str, Any]) -> list[str]:
     """Validate serialized artifacts against schema and ledger provenance."""
     errors = validate_json_schema(result, load_final_result_schema())
     _validate_ledger_provenance(result, errors)
+    if result.get("status") == PROVIDER_ERROR_STATUS:
+        if result.get("ok") is not False:
+            errors.append("$.ok: provider_error artifacts must set ok=false")
+        if result.get("confidence") != "low":
+            errors.append("$.confidence: provider_error artifacts must use low confidence")
+        if result.get("evidence") != [] or result.get("evidence_ids") != []:
+            errors.append("$.evidence/evidence_ids: provider_error artifacts cannot cite evidence")
+        if result.get("decisive_addresses") != []:
+            errors.append("$.decisive_addresses: provider_error artifacts cannot name decisive addresses")
+        if result.get("inconclusive_reason") != "none":
+            errors.append("$.inconclusive_reason: provider_error artifacts must use none")
+        return errors
     candidate = {
         "status": result.get("status"),
         "confidence": result.get("confidence"),
@@ -447,6 +445,8 @@ def build_final_artifact(
     out["timing"] = timing
     out["usage_metrics"] = usage
     out["metadata_sha256"] = str(AGENT_CONTEXT.get("metadata_sha256", ""))
+    out["source_context_sha256"] = str(AGENT_CONTEXT.get("source_context_sha256", ""))
+    out["debug_companion_sha256"] = str(AGENT_CONTEXT.get("debug_companion_sha256", ""))
     out["observations"] = AGENT_CONTEXT.get("observations", [])
     out["evidence_ledger"] = AGENT_CONTEXT.get("evidence_ledger", [])
     out["harness_metrics"] = harness_metrics()
@@ -492,6 +492,7 @@ def _fallback_result(
     ok: bool,
     summary: str,
     inconclusive_reason: str,
+    status: str = "inconclusive",
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
@@ -500,7 +501,7 @@ def _fallback_result(
         "cve_id": metadata.get("cve_id", AGENT_CONTEXT.get("cve_id", "")),
         "binary": binary,
         "schema_version": FINAL_SCHEMA_VERSION,
-        "status": "inconclusive",
+        "status": status,
         "confidence": "low",
         "evidence": [],
         "evidence_ids": [],
@@ -541,6 +542,13 @@ def api_failure_fallback_result(metadata: dict[str, Any], binary: str, error: st
         metadata,
         binary,
         ok=False,
-        summary=f"Model API failed after all retries; no verdict could be sampled. Error: {error}",
-        inconclusive_reason="tool_failure",
+        summary="Model provider failed after all retries; no verdict was sampled.",
+        inconclusive_reason="none",
+        status=PROVIDER_ERROR_STATUS,
+        extra={
+            "provider_error": {
+                "stage": "responses_api",
+                "message": _provider_error_message(error),
+            },
+        },
     )

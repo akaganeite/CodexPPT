@@ -14,11 +14,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from claudeagent.common import DETERMINATE_STATUSES, ROOT, VERDICTS, expand, jdump, load_json
+from claudeagent.binary_workspace import resolve_debug_companion
+from claudeagent.common import (
+    DETERMINATE_STATUSES,
+    PROVIDER_ERROR_STATUS,
+    ROOT,
+    VERDICTS,
+    expand,
+    jdump,
+    load_json,
+)
 from claudeagent.finalize import FINAL_SCHEMA_VERSION, validate_final_result_artifact
-from claudeagent.host import import_env_from_interactive_shell
+from claudeagent.host import binary_sha256, import_env_from_interactive_shell
 from claudeagent.metadata_input import metadata_sha256, validate_metadata_prompt_input
 from claudeagent.model_config import resolve_api_key, resolve_profile
+from claudeagent.patch_source import build_patch_source_context
+from claudeagent.prompting import metadata_for_agent
+from claudeagent.run_python_tool import retain_scratch_scripts
 
 
 PACKAGE_PARENT = ROOT.parent
@@ -28,7 +40,7 @@ DEFAULT_METADATA = "/home/zhangxb/ClawSpace/agent/straight_detect/metadata/curl/
 LABEL_TO_STATUS = {"vuln": "absent", "patch": "present", "not_affected": "not_affected"}
 SCORING_STATUSES = {"present", "absent", "not_affected"}
 RESUME_MODES = ("auto", "all", "error", "inconclusive")
-_COMPLETED_STATUSES = set(VERDICTS)
+_COMPLETED_STATUSES = {*VERDICTS, PROVIDER_ERROR_STATUS}
 _COMPILER_OPT_RE = re.compile(r"-.+-O[0-3]$")
 DEPLOY_COMPILER = "deploy"
 _DEPLOY_SUFFIX = "-deployed"
@@ -108,7 +120,15 @@ def batch_metrics_pptagent(
     batch_wall_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Produce the same top-level metrics shape used by prior batch reports."""
-    scored = [record for record in records if record.get("expected") in SCORING_STATUSES]
+    scored = [
+        record
+        for record in records
+        if record.get("expected") in SCORING_STATUSES
+        and record.get("predicted") != PROVIDER_ERROR_STATUS
+    ]
+    provider_errors = [
+        record for record in records if record.get("predicted") == PROVIDER_ERROR_STATUS
+    ]
     affected = [record for record in scored if record["expected"] != "not_affected"]
     not_affected = [record for record in scored if record["expected"] == "not_affected"]
     tp = sum(record["expected"] == "present" and record.get("predicted") == "present" for record in affected)
@@ -146,6 +166,7 @@ def batch_metrics_pptagent(
             "TC": len(affected),
             "not-affected": sum(record.get("predicted") == "not_affected" for record in scored),
             "inconclusive": sum(record.get("predicted") == "inconclusive" for record in scored),
+            "provider_error": len(provider_errors),
         },
         "inconclusive_status": dict(sorted(Counter(
             str(record.get("inconclusive_reason") or "unspecified")
@@ -199,6 +220,8 @@ def load_cases(testset_path: str, groundtruth_path: str, cve_filter: str) -> lis
 
 def load_metadata_index(metadata_path: str) -> dict[str, dict[str, Any]]:
     raw = load_json(metadata_path)
+    if isinstance(raw, dict) and isinstance(raw.get("cves"), (dict, list)):
+        raw = raw["cves"]
     indexed: dict[str, dict[str, Any]] = {}
     if isinstance(raw, dict) and isinstance(raw.get("cve_id"), str):
         candidates = [raw]
@@ -227,7 +250,7 @@ def required_metadata_hashes(
     cve_ids: set[str] | list[str],
 ) -> dict[str, str]:
     return {
-        cve_id: metadata_sha256(metadata_by_cve[cve_id], cve_id)
+        cve_id: metadata_sha256(metadata_for_agent(metadata_by_cve[cve_id]), cve_id)
         for cve_id in sorted(set(cve_ids))
         if cve_id in metadata_by_cve
     }
@@ -317,28 +340,63 @@ def _select_resume_cases(
     out_root: Path,
     args: argparse.Namespace,
     metadata_hashes: dict[str, str],
+    source_context_hashes: dict[str, str] | None = None,
+    debug_companion_hashes: dict[tuple[str, str], str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
     to_run: list[dict[str, Any]] = []
     to_reuse: list[dict[str, Any]] = []
-    counts = {"total": len(cases), "completed": 0, "inconclusive": 0, "stale_metadata": 0, "retry": 0, "skipped": 0}
+    source_context_hashes = source_context_hashes or {}
+    debug_companion_hashes = debug_companion_hashes or {}
+    counts = {
+        "total": len(cases),
+        "completed": 0,
+        "inconclusive": 0,
+        "provider_error": 0,
+        "stale_metadata": 0,
+        "stale_source": 0,
+        "stale_debug": 0,
+        "retry": 0,
+        "skipped": 0,
+    }
     for case in cases:
         artifact = _existing_case_artifact(safe_case_dir(out_root, case["cve_id"], case["binary_name"]))
         status = str(artifact["status"]) if artifact else None
-        stale = bool(
+        stale_metadata = bool(
             artifact
             and metadata_hashes.get(case["cve_id"])
             and artifact.get("metadata_sha256") != metadata_hashes[case["cve_id"]]
         )
+        stale_source = bool(
+            artifact
+            and artifact.get("source_context_sha256", "")
+            != source_context_hashes.get(case["cve_id"], "")
+        )
+        stale_debug = bool(
+            artifact
+            and artifact.get("debug_companion_sha256", "")
+            != debug_companion_hashes.get((case["cve_id"], case["binary_name"]), "")
+        )
+        stale = stale_metadata or stale_source or stale_debug
         if status is not None:
             counts["completed"] += 1
             counts["inconclusive"] += status == "inconclusive"
-            counts["stale_metadata"] += stale
+            counts["provider_error"] += status == PROVIDER_ERROR_STATUS
+            counts["stale_metadata"] += stale_metadata
+            counts["stale_source"] += stale_source
+            counts["stale_debug"] += stale_debug
         if args.resume == "all":
             run_it = True
         elif args.resume == "inconclusive":
-            run_it = stale or status == "inconclusive"
+            run_it = stale or status in {"inconclusive", PROVIDER_ERROR_STATUS}
+        elif args.resume == "error":
+            run_it = stale or status in {None, PROVIDER_ERROR_STATUS}
         else:
-            run_it = stale or status is None or (status == "inconclusive" and args.retry_inconclusive)
+            run_it = (
+                stale
+                or status is None
+                or status == PROVIDER_ERROR_STATUS
+                or (status == "inconclusive" and args.retry_inconclusive)
+            )
         if run_it:
             to_run.append(case)
             counts["retry"] += 1
@@ -378,8 +436,14 @@ def _case_command(case: dict[str, Any], args: argparse.Namespace, binary_path: P
         command += ["--base-url", args.base_url]
     if args.model_profile:
         command += ["--model-profile", args.model_profile]
+    if getattr(args, "import_interactive_env", False):
+        command.append("--import-interactive-env")
     if args.no_strict:
         command.append("--no-strict")
+    if args.source_repo:
+        command += ["--source-repo", str(expand(args.source_repo))]
+    if getattr(args, "debug_dir", ""):
+        command += ["--debug-dir", str(expand(args.debug_dir))]
     return command
 
 
@@ -395,6 +459,32 @@ def _empty_record(case: dict[str, Any], binary_path: Path, case_dir: Path) -> di
         "timing": {},
         "model_turns": 0,
     }
+
+
+def _source_preflight_record(
+    case: dict[str, Any],
+    args: argparse.Namespace,
+    error: str,
+    *,
+    stage: str = "patch-source",
+) -> dict[str, Any]:
+    """Build a case-local batch error without launching the model worker."""
+    binary_path = resolve_binary(
+        args.binaries_root,
+        args.variant,
+        case["binary_name"],
+        args.compiler,
+        args.opt,
+    )
+    case_dir = safe_case_dir(expand(args.out_root), case["cve_id"], case["binary_name"])
+    record = _empty_record(case, binary_path, case_dir)
+    record.update({
+        "predicted": "error",
+        "ok": False,
+        "error": f"{stage} preflight failed: {error}",
+        "correct": False,
+    })
+    return record
 
 
 def _update_record_from_final(record: dict[str, Any], final: dict[str, Any], *, wall_seconds: float | None = None) -> None:
@@ -414,6 +504,8 @@ def _update_record_from_final(record: dict[str, Any], final: dict[str, Any], *, 
         "timing": final.get("timing", {}),
         "model_turns": usage.get("model_turns", 0),
         "metadata_sha256": final.get("metadata_sha256", ""),
+        "source_context_sha256": final.get("source_context_sha256", ""),
+        "debug_companion_sha256": final.get("debug_companion_sha256", ""),
     })
     if wall_seconds is not None:
         record["wall_seconds"] = round(wall_seconds, 2)
@@ -426,41 +518,55 @@ def run_one_case(case: dict[str, Any], args: argparse.Namespace) -> dict[str, An
     if not binary_path.is_file():
         record.update({"predicted": "not_found", "ok": False, "error": "binary file missing", "correct": False})
         return record
-    final_path = case_dir / "final_result.json"
-    prior_signature = _artifact_signature(final_path)
-    started = time.time()
+    if getattr(args, "debug_dir", ""):
+        try:
+            resolve_debug_companion(binary_path, args.debug_dir)
+        except Exception as exc:
+            record.update({
+                "predicted": "error",
+                "ok": False,
+                "error": f"debug companion preflight failed: {exc}",
+                "correct": False,
+            })
+            return record
     try:
-        proc = subprocess.run(
-            _case_command(case, args, binary_path, case_dir),
-            cwd=str(PACKAGE_PARENT),
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=args.case_timeout,
-        )
-        record["agent_returncode"] = proc.returncode
-        if proc.stderr.strip():
-            record["stderr_tail"] = proc.stderr.strip()[-600:]
-    except subprocess.TimeoutExpired:
-        record.update({"predicted": "timeout", "ok": False, "error": f"case timeout after {args.case_timeout}s", "correct": False})
+        final_path = case_dir / "final_result.json"
+        prior_signature = _artifact_signature(final_path)
+        started = time.time()
+        try:
+            proc = subprocess.run(
+                _case_command(case, args, binary_path, case_dir),
+                cwd=str(PACKAGE_PARENT),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=args.case_timeout,
+            )
+            record["agent_returncode"] = proc.returncode
+            if proc.stderr.strip():
+                record["stderr_tail"] = proc.stderr.strip()[-600:]
+        except subprocess.TimeoutExpired:
+            record.update({"predicted": "timeout", "ok": False, "error": f"case timeout after {args.case_timeout}s", "correct": False})
+            return record
+        if not final_path.is_file():
+            record.update({"predicted": "error", "ok": False, "error": "no final_result.json produced", "correct": False})
+            return record
+        if prior_signature is not None and _artifact_signature(final_path) == prior_signature:
+            record.update({"predicted": "error", "ok": False, "error": "case subprocess did not produce a fresh final_result.json", "correct": False})
+            return record
+        try:
+            final = load_json(final_path)
+        except Exception as exc:
+            record.update({"predicted": "error", "ok": False, "error": f"unreadable final_result: {exc}", "correct": False})
+            return record
+        errors = _artifact_validation_errors(final)
+        if errors:
+            record.update({"predicted": "error", "ok": False, "error": "invalid final_result artifact", "schema_validation_errors": errors, "correct": False})
+            return record
+        _update_record_from_final(record, final, wall_seconds=time.time() - started)
         return record
-    if not final_path.is_file():
-        record.update({"predicted": "error", "ok": False, "error": "no final_result.json produced", "correct": False})
-        return record
-    if prior_signature is not None and _artifact_signature(final_path) == prior_signature:
-        record.update({"predicted": "error", "ok": False, "error": "case subprocess did not produce a fresh final_result.json", "correct": False})
-        return record
-    try:
-        final = load_json(final_path)
-    except Exception as exc:
-        record.update({"predicted": "error", "ok": False, "error": f"unreadable final_result: {exc}", "correct": False})
-        return record
-    errors = _artifact_validation_errors(final)
-    if errors:
-        record.update({"predicted": "error", "ok": False, "error": "invalid final_result artifact", "schema_validation_errors": errors, "correct": False})
-        return record
-    _update_record_from_final(record, final, wall_seconds=time.time() - started)
-    return record
+    finally:
+        retain_scratch_scripts(str(case_dir / "scratch"))
 
 
 def _record_from_artifact(case: dict[str, Any], case_dir: Path) -> dict[str, Any]:
@@ -475,7 +581,7 @@ def _record_from_artifact(case: dict[str, Any], case_dir: Path) -> dict[str, Any
 
 
 def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
-    outcomes = list(VERDICTS) + ["not_found", "timeout", "error"]
+    outcomes = list(VERDICTS) + [PROVIDER_ERROR_STATUS, "not_found", "timeout", "error"]
     confusion = {expected: {outcome: 0 for outcome in outcomes} for expected in VERDICTS}
     repair_names = (
         "schema_repair_attempts",
@@ -486,6 +592,8 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         "evidence_summary_updates",
         "evidence_summary_revisions",
         "evidence_summary_failures",
+        "source_tool_calls",
+        "source_tool_failures",
     )
     totals = {name: 0 for name in repair_names}
     correct = 0
@@ -495,8 +603,9 @@ def aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         predicted = record.get("predicted", "error")
         if expected in confusion:
             confusion[expected][predicted if predicted in outcomes else "error"] += 1
-            scored += 1
-            correct += bool(record.get("correct"))
+            if predicted != PROVIDER_ERROR_STATUS:
+                scored += 1
+                correct += bool(record.get("correct"))
         metrics = record.get("harness_metrics") or {}
         for name in repair_names:
             totals[name] += int(metrics.get(name, 0) or 0)
@@ -540,12 +649,70 @@ def run_batch(args: argparse.Namespace) -> int:
         raise SystemExit(f"metadata missing for selected CVE(s): {missing}")
     for cve_id in sorted(selected_cves):
         try:
-            validate_metadata_prompt_input(metadata_by_cve[cve_id])
+            validate_metadata_prompt_input(metadata_for_agent(metadata_by_cve[cve_id]))
         except ValueError as exc:
             raise SystemExit(f"metadata input rejected for {cve_id}: {exc}") from exc
 
+    source_context_hashes: dict[str, str] = {}
+    source_preflight_errors: dict[str, str] = {}
+    if args.source_repo:
+        for cve_id in sorted(selected_cves):
+            try:
+                context = build_patch_source_context(args.source_repo, metadata_by_cve[cve_id])
+            except Exception as exc:
+                source_preflight_errors[cve_id] = str(exc) or exc.__class__.__name__
+                continue
+            if context is not None:
+                source_context_hashes[cve_id] = context.source_context_sha256
+
+    debug_companion_hashes: dict[tuple[str, str], str] = {}
+    debug_preflight_errors: dict[tuple[str, str], str] = {}
+    if args.debug_dir:
+        for case in cases:
+            binary_path = resolve_binary(
+                args.binaries_root,
+                args.variant,
+                case["binary_name"],
+                args.compiler,
+                args.opt,
+            )
+            if not binary_path.is_file():
+                continue
+            key = (case["cve_id"], case["binary_name"])
+            try:
+                companion = resolve_debug_companion(binary_path, args.debug_dir)
+                if companion is not None:
+                    debug_companion_hashes[key] = binary_sha256(companion)
+            except Exception as exc:
+                debug_preflight_errors[key] = str(exc) or exc.__class__.__name__
+
     out_root = expand(args.out_root)
-    to_run, to_reuse, counts = _select_resume_cases(cases, out_root, args, metadata_hashes)
+    source_failed_cases = [
+        case for case in cases if case["cve_id"] in source_preflight_errors
+    ]
+    debug_failed_cases = [
+        case
+        for case in cases
+        if case["cve_id"] not in source_preflight_errors
+        and (case["cve_id"], case["binary_name"]) in debug_preflight_errors
+    ]
+    eligible_cases = [
+        case
+        for case in cases
+        if case["cve_id"] not in source_preflight_errors
+        and (case["cve_id"], case["binary_name"]) not in debug_preflight_errors
+    ]
+    to_run, to_reuse, counts = _select_resume_cases(
+        eligible_cases,
+        out_root,
+        args,
+        metadata_hashes,
+        source_context_hashes,
+        debug_companion_hashes,
+    )
+    counts["total"] = len(cases)
+    counts["source_preflight_failed"] = len(source_failed_cases)
+    counts["debug_preflight_failed"] = len(debug_failed_cases)
     if args.dry_run:
         missing_binaries = [
             case
@@ -560,6 +727,12 @@ def run_batch(args: argparse.Namespace) -> int:
         print("total_cases:", len(cases))
         print("by_expected:", {value: sum(case["expected"] == value for case in cases) for value in (*VERDICTS, "unknown")})
         print("metadata_hashes:", metadata_hashes)
+        print("source_repo:", str(expand(args.source_repo)) if args.source_repo else "")
+        print("source_context_hashes:", source_context_hashes)
+        print("source_preflight_errors:", source_preflight_errors)
+        print("debug_dir:", str(expand(args.debug_dir)) if args.debug_dir else "")
+        print("debug_companion_hashes:", debug_companion_hashes)
+        print("debug_preflight_errors:", debug_preflight_errors)
         print("resume_mode:", args.resume, "retry_inconclusive:", args.retry_inconclusive)
         print("resume_counts:", counts)
         print("missing_binaries:", len(missing_binaries))
@@ -574,10 +747,30 @@ def run_batch(args: argparse.Namespace) -> int:
     print(
         f"resume={args.resume} retry_inconclusive={args.retry_inconclusive} "
         f"total={counts['total']} retry={counts['retry']} skipped={counts['skipped']} "
-        f"(completed={counts['completed']} inconclusive={counts['inconclusive']} stale_metadata={counts['stale_metadata']})",
+        f"(completed={counts['completed']} inconclusive={counts['inconclusive']} "
+        f"provider_error={counts['provider_error']} "
+        f"stale_metadata={counts['stale_metadata']} stale_source={counts['stale_source']} "
+        f"stale_debug={counts['stale_debug']} "
+        f"source_preflight_failed={counts['source_preflight_failed']} "
+        f"debug_preflight_failed={counts['debug_preflight_failed']})",
         file=sys.stderr,
     )
     records = [
+        _source_preflight_record(
+            case,
+            args,
+            source_preflight_errors[case["cve_id"]],
+        )
+        for case in source_failed_cases
+    ] + [
+        _source_preflight_record(
+            case,
+            args,
+            debug_preflight_errors[(case["cve_id"], case["binary_name"])],
+            stage="debug companion",
+        )
+        for case in debug_failed_cases
+    ] + [
         _record_from_artifact(case, safe_case_dir(out_root, case["cve_id"], case["binary_name"]))
         for case in to_reuse
     ]
@@ -611,6 +804,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--compiler", default="gcc")
     parser.add_argument("--opt", default="o0", choices=["o0", "o1", "o2", "o3"])
     parser.add_argument("--metadata-json", default=DEFAULT_METADATA)
+    parser.add_argument(
+        "--debug-dir",
+        default="",
+        help="directory containing <resolved-binary-basename>.debug companions",
+    )
+    parser.add_argument(
+        "--source-repo",
+        default="",
+        help="local Git repository containing metadata-referenced patch commits",
+    )
     parser.add_argument("--out-root", required=True)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--cve", default="")
@@ -622,9 +825,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default="")
     parser.add_argument("--base-url", default="")
     parser.add_argument("--model-profile", default="")
+    parser.add_argument(
+        "--import-interactive-env",
+        action="store_true",
+        help="also ask each case worker to import its profile API key from interactive zsh",
+    )
     parser.add_argument("--no-strict", action="store_true")
-    parser.add_argument("--max-turns", type=int, default=20)
-    parser.add_argument("--finalization-turns", type=int, default=3)
+    parser.add_argument("--max-turns", type=int, default=32)
+    parser.add_argument("--finalization-turns", type=int, default=5)
     parser.add_argument("--api-timeout", type=int, default=240)
     parser.add_argument("--api-max-retries", type=int, default=3)
     parser.add_argument("--api-turn-retries", type=int, default=1)

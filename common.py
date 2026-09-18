@@ -22,6 +22,7 @@ MODEL_CONFIG = ROOT / "model_config.json"
 # Verdict vocabulary. Determinate verdicts must cite tool-emitted evidence ids.
 VERDICTS = ("present", "absent", "not_affected", "inconclusive")
 DETERMINATE_STATUSES = {"present", "absent", "not_affected"}
+PROVIDER_ERROR_STATUS = "provider_error"
 
 
 def jdump(obj: Any) -> str:

@@ -133,18 +133,32 @@ def binary_sha256(binary: Path) -> str:
 def symbol_hint(binary: Path) -> dict[str, Any]:
     if not binary.is_file():
         return {"has_useful_symbols": False, "reason": "binary missing", "sample_defined_text_symbols": []}
-    result = run_host_cmd(["nm", "-an", "--defined-only", str(binary)], timeout=30, max_output_chars=24000)
     samples: list[str] = []
-    for raw in str(result.get("stdout", "")).splitlines():
-        parts = raw.strip().split()
-        if len(parts) >= 3 and parts[1].lower() in {"t", "w"} and not parts[2].startswith((".", "$")):
-            samples.append(raw.strip())
-            if len(samples) >= 12:
-                break
+    returncode: int | None = None
+    try:
+        proc = subprocess.Popen(
+            ["nm", "-an", "--defined-only", str(binary)],
+            text=True,
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        assert proc.stdout is not None
+        for raw in proc.stdout:
+            parts = raw.strip().split()
+            if len(parts) >= 3 and parts[1].lower() in {"t", "w"} and not parts[2].startswith((".", "$")):
+                samples.append(raw.strip())
+                if len(samples) >= 12:
+                    proc.terminate()
+                    break
+        proc.stdout.close()
+        returncode = proc.wait(timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        returncode = None
     return {
         "has_useful_symbols": len(samples) >= 3,
         "reason": "defined function symbols are available" if len(samples) >= 3 else "too few defined function symbols for nm anchoring",
-        "nm_returncode": result.get("returncode"),
+        "nm_returncode": 0 if len(samples) >= 3 else returncode,
         "sample_defined_text_symbols": samples,
     }
 
@@ -175,6 +189,8 @@ def load_cve_metadata(args: argparse.Namespace) -> dict[str, Any]:
         all_data = load_json(args.metadata_json)
         if not args.cve_id:
             raise SystemExit("--cve-id is required with --metadata-json")
+        if isinstance(all_data, dict) and isinstance(all_data.get("cves"), (dict, list)):
+            all_data = all_data["cves"]
         if isinstance(all_data, dict) and args.cve_id in all_data:
             data = all_data[args.cve_id]
         elif isinstance(all_data, list):

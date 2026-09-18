@@ -6,7 +6,10 @@
     "submit_detection_result": {
       "type": "object",
       "properties": {
-        "status": { "$ref": "#/properties/status" },
+        "status": {
+          "type": "string",
+          "enum": ["present", "absent", "not_affected", "inconclusive"]
+        },
         "confidence": { "$ref": "#/properties/confidence" },
         "evidence_ids": { "$ref": "#/properties/evidence_ids" },
         "reasoning": { "$ref": "#/properties/reasoning" },
@@ -54,7 +57,7 @@
     "binary": { "type": "string" },
     "status": {
       "type": "string",
-      "enum": ["present", "absent", "not_affected", "inconclusive"]
+      "enum": ["present", "absent", "not_affected", "inconclusive", "provider_error"]
     },
     "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
     "evidence": {
@@ -88,8 +91,25 @@
         "other"
       ]
     },
+    "provider_error": {
+      "type": "object",
+      "required": ["stage", "message"],
+      "properties": {
+        "stage": { "type": "string", "enum": ["responses_api"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      },
+      "additionalProperties": false
+    },
     "completed_at_epoch": { "type": "number" },
     "metadata_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_context_sha256": {
+      "type": "string",
+      "pattern": "^(?:|[0-9a-f]{64})$"
+    },
+    "debug_companion_sha256": {
+      "type": "string",
+      "pattern": "^(?:|[0-9a-f]{64})$"
+    },
     "observations": {
       "type": "array",
       "items": {

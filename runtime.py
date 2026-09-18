@@ -35,6 +35,8 @@ def ensure_runtime_state() -> None:
     AGENT_CONTEXT.setdefault("observations", [])
     AGENT_CONTEXT.setdefault("evidence_ledger", [])
     AGENT_CONTEXT.setdefault("metadata_sha256", "")
+    AGENT_CONTEXT.setdefault("source_context_sha256", "")
+    AGENT_CONTEXT.setdefault("debug_companion_sha256", "")
     AGENT_CONTEXT.setdefault("observation_counter", 0)
     AGENT_CONTEXT.setdefault("evidence_counter", 0)
     AGENT_CONTEXT.setdefault("script_counter", 0)
@@ -50,6 +52,8 @@ def initialize_agent_context(
     output_dir: str = "",
     scratch_dir: str = "",
     metadata_sha256: str = "",
+    source_context_sha256: str = "",
+    debug_companion_sha256: str = "",
 ) -> None:
     if not metadata_sha256:
         from claudeagent.metadata_input import metadata_sha256 as compute_metadata_sha256
@@ -66,6 +70,8 @@ def initialize_agent_context(
         "output_dir": output_dir,
         "scratch_dir": scratch_dir,
         "metadata_sha256": metadata_sha256,
+        "source_context_sha256": source_context_sha256,
+        "debug_companion_sha256": debug_companion_sha256,
         "observations": [],
         "evidence_ledger": [],
         "observation_counter": 0,
@@ -172,4 +178,6 @@ def harness_metrics() -> dict[str, int]:
     metrics.setdefault("evidence_summary_updates", 0)
     metrics.setdefault("evidence_summary_revisions", 0)
     metrics.setdefault("evidence_summary_failures", 0)
+    metrics.setdefault("source_tool_calls", 0)
+    metrics.setdefault("source_tool_failures", 0)
     return metrics

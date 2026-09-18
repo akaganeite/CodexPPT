@@ -3,13 +3,13 @@
     "type": "function",
     "name": "run_python",
     "strict": false,
-    "description": "Run a Python script inside a bubblewrap sandbox to inspect the target binary. The sandbox exposes the target ONLY at /workspace/binary (read-only); /scratch is writable for intermediate dumps (e.g. objdump output); the network is isolated; python3 standard library and binutils (file, readelf, objdump, nm, strings, xxd, od, hexdump, size, c++filt) are available, but NO third-party packages (no capstone/pyelftools -- parse ELF via subprocess to readelf/objdump or struct). Each call returns an observation_id and pending evidence_id(s); after the output has been returned in an earlier response, summarize any evidence you intend to cite.",
+    "description": "Run a Python script inside a bubblewrap sandbox to inspect the target binary. The sandbox exposes the target ONLY at /workspace/binary (read-only); /scratch is writable case-local temporary space whose files persist across tool calls, including a full objdump saved as text, and the Host removes temporary by-products when the case ends while retaining its recorded Python scripts; the network is isolated; python3 standard library and binutils (file, readelf, objdump, nm, strings, xxd, od, hexdump, size, c++filt) are available, but NO third-party packages (no capstone/pyelftools -- parse ELF via subprocess to readelf/objdump or struct). Whole-binary objdump is allowed for global localization, but return only bounded candidates and narrow decisive windows on stdout rather than the full dump. Each call returns an observation_id and pending evidence_id(s); after the output has been returned in an earlier response, summarize any evidence you intend to cite.",
     "parameters": {
       "type": "object",
       "properties": {
         "script": {
           "type": "string",
-          "description": "Full Python source. Call binutils via subprocess, e.g. subprocess.run(['objdump','-d','-Mintel','/workspace/binary'],capture_output=True,text=True). Return findings on stdout (that becomes your evidence)."
+          "description": "Full Python source. Call binutils via subprocess. You may write complete output such as objdump -d to /scratch/full_objdump.txt, search it in this or later calls, and print only narrow findings on stdout (that becomes your evidence)."
         },
         "timeout_sec": {
           "type": "integer",
@@ -25,6 +25,110 @@
         }
       },
       "required": ["script", "timeout_sec", "max_output_chars"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "list_patch_sources",
+    "strict": false,
+    "description": "List the Host-approved files and functions from the post-patch source snapshot. This source is investigation guidance only and never creates citable binary evidence.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "read_patch_function",
+    "strict": false,
+    "description": "Read one metadata-approved function from one post-patch source file. The result is bounded, line-numbered guidance and is not verdict evidence.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "source_file_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque source file id returned by list_patch_sources."
+        },
+        "function_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A patch-related function associated with that source file."
+        },
+        "context_lines": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "description": "Extra source lines before and after the function."
+        }
+      },
+      "required": ["source_file_id", "function_name", "context_lines"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "read_patch_source",
+    "strict": false,
+    "description": "Read a bounded line window from one Host-approved post-patch source file. Use source_file_id rather than a path. Source output is guidance only.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "source_file_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque source file id returned by list_patch_sources."
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Inclusive one-based start line."
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Inclusive one-based end line; at most 200 lines are returned."
+        }
+      },
+      "required": ["source_file_id", "start_line", "end_line"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "search_patch_source",
+    "strict": false,
+    "description": "Search literal text within the Host-approved post-patch source files and return bounded line-numbered matches. Source output is guidance only.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Literal text to search for."
+        },
+        "source_file_id": {
+          "type": "string",
+          "description": "Optional opaque file id; use an empty string to search all approved files."
+        },
+        "context_lines": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Context lines around each match."
+        },
+        "max_results": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Maximum number of matches to return."
+        }
+      },
+      "required": ["query", "source_file_id", "context_lines", "max_results"],
       "additionalProperties": false
     }
   },

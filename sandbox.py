@@ -10,7 +10,8 @@ Instead of auditing the script, we confine the *process* with bubblewrap:
   - the target binary is the ONLY binary mounted (read-only, at a fixed in-sandbox path),
   - only ``/usr /lib /lib64 /bin`` are mounted read-only (python3 + binutils + loader),
   - ``scratch`` is writable (intermediate dumps), everything else (``/home /etc /root /tmp``,
-    source repos, sibling debug artifacts) is simply absent,
+    source repos, sibling debug artifacts) is simply absent. When debug mode is
+    enabled, its symbols/DWARF have already been merged into the one mounted target,
   - network is unshared (no exfiltration).
 
 So confinement is enforced by the OS, not by inspecting script text. The script

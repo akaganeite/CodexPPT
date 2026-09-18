@@ -12,12 +12,23 @@ from typing import Any
 from claudeagent.common import TOOLS_JSON, load_json
 from claudeagent.evidence_summary import summarize_evidence
 from claudeagent.finalize import submit_detection_result
+from claudeagent.patch_source import (
+    SOURCE_TOOL_NAMES,
+    list_patch_sources,
+    read_patch_function,
+    read_patch_source,
+    search_patch_source,
+)
 from claudeagent.run_python_tool import run_python
 from claudeagent.schema_validate import final_tool_parameters_schema
 
 
 TOOL_FUNCS = {
     "run_python": run_python,
+    "list_patch_sources": list_patch_sources,
+    "read_patch_function": read_patch_function,
+    "read_patch_source": read_patch_source,
+    "search_patch_source": search_patch_source,
     "summarize_evidence": summarize_evidence,
     "submit_detection_result": submit_detection_result,
 }
@@ -28,8 +39,22 @@ FINALIZATION_TOOL_FUNCS = {
 }
 
 
-def load_tools(strict: bool) -> list[dict[str, Any]]:
+def enabled_tool_funcs(source_enabled: bool = False) -> dict[str, Any]:
+    """Return the runtime handlers enabled for one investigation."""
+    return {
+        name: handler
+        for name, handler in TOOL_FUNCS.items()
+        if source_enabled or name not in SOURCE_TOOL_NAMES
+    }
+
+
+def load_tools(strict: bool, source_enabled: bool = False) -> list[dict[str, Any]]:
     tools = load_json(TOOLS_JSON)
+    tools = [
+        tool
+        for tool in tools
+        if source_enabled or tool.get("name") not in SOURCE_TOOL_NAMES
+    ]
     final_parameters = final_tool_parameters_schema()
     for tool in tools:
         if tool.get("name") == "submit_detection_result":

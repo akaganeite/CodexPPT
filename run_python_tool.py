@@ -17,6 +17,8 @@ to the investigator summary and independent verifier.
 
 from __future__ import annotations
 
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,25 @@ from claudeagent.observations import (
 )
 from claudeagent.runtime import AGENT_CONTEXT, bump_command_failure, next_id
 from claudeagent.sandbox import run_in_sandbox
+
+
+def retain_scratch_scripts(scratch_dir: str) -> None:
+    """At case completion, retain only host-recorded Python scripts."""
+    root = Path(scratch_dir)
+    if not root.is_dir():
+        return
+    for path in root.iterdir():
+        try:
+            if path.is_file() and re.fullmatch(r"script_\d+\.py", path.name):
+                continue
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
+        except OSError:
+            # Tool output and the final artifact remain valid even when a
+            # best-effort cleanup encounters a concurrently closed file.
+            continue
 
 
 def run_python(script: str, timeout_sec: int = 0, max_output_chars: int = 0) -> dict[str, Any]:
@@ -67,7 +88,10 @@ def run_python(script: str, timeout_sec: int = 0, max_output_chars: int = 0) -> 
 
     observation = observation_from_host_result(
         tool="run_python",
-        command=["python3", "-S", str(script_path)],
+        # The command shown to the model must match the sandbox namespace, not
+        # the host-side scratch directory.  The latter can disclose run roots
+        # and unrelated filesystem layout through the tool-result history.
+        command=["python3", "-S", f"/scratch/{script_name}"],
         proc=result,
         stdout_budget=stdout_budget,
         parsed_facts={"command": "python3"},  # minimal; no rich extraction by design

@@ -8,6 +8,7 @@ must later attach a natural-language claim before an evidence id can be cited.
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from pathlib import Path
@@ -24,6 +25,60 @@ MODEL_STDOUT_BUDGET = 6000
 MODEL_STDERR_BUDGET = 2000
 MODEL_LIST_LIMIT = 12
 MODEL_STRING_LIMIT = 1200
+SOURCE_MODEL_RESULT_LIMIT = 16 * 1024
+SOURCE_RESULT_KEYS = {
+    "ok",
+    "tool",
+    "error",
+    "available",
+    "source_file_count",
+    "files",
+    "limits",
+    "source_file_id",
+    "path",
+    "function_name",
+    "locator",
+    "definition_start_line",
+    "definition_end_line",
+    "start_line",
+    "end_line",
+    "total_lines",
+    "returned_line_count",
+    "content",
+    "truncated",
+    "char_truncated",
+    "omitted_chars_in_last_line",
+    "next_start_line",
+    "query",
+    "matches",
+    "returned_results",
+    "total_matches",
+    "source_chars",
+    "result_chars",
+    "budget_remaining_chars",
+    "_bounded_source_guidance",
+}
+
+# A target binary can retain compiler DWARF/string remnants such as
+# ``/home/user/repo/foo.c``.  They are not an authorized source-inspection
+# surface, and model-authored scripts must not turn them into a back channel to
+# host layout or local source trees.  Keep the binary-derived observation while
+# replacing just the host-local path token.
+_HOST_LOCAL_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])/(?:home|root|Users|private|var|media|mnt|tmp)"
+    r"(?:/[^\s\x00\"'<>]+)+"
+)
+
+
+def redact_host_local_paths(value: Any) -> Any:
+    """Remove host-local absolute paths before an observation is persisted."""
+    if isinstance(value, str):
+        return _HOST_LOCAL_PATH_RE.sub("[REDACTED_HOST_PATH]", value)
+    if isinstance(value, list):
+        return [redact_host_local_paths(item) for item in value]
+    if isinstance(value, dict):
+        return {key: redact_host_local_paths(item) for key, item in value.items()}
+    return value
 
 
 def parsed_facts_for_command(argv: list[str], stdout: str, stderr: str, returncode: int | None) -> dict[str, Any]:
@@ -98,8 +153,8 @@ def observation_from_host_result(
 ) -> dict[str, Any]:
     ensure_runtime_state()
     observation_id = next_id("obs", "observation_counter")
-    stdout = str(proc.get("stdout", ""))
-    stderr = str(proc.get("stderr", ""))
+    stdout = str(redact_host_local_paths(str(proc.get("stdout", ""))))
+    stderr = str(redact_host_local_paths(str(proc.get("stderr", ""))))
     stdout_parts = text_head_tail(stdout, stdout_budget)
     stderr_parts = text_head_tail(stderr, stderr_budget)
     truncated = bool(stdout_parts["truncated"] or stderr_parts["truncated"])
@@ -130,9 +185,9 @@ def observation_from_host_result(
         "parsed_facts": parsed_facts or parsed_facts_for_command(command, stdout, stderr, proc.get("returncode")),
     }
     if proc.get("error"):
-        observation["error"] = proc.get("error")
+        observation["error"] = redact_host_local_paths(proc.get("error"))
     if extra:
-        observation.update(extra)
+        observation.update(redact_host_local_paths(extra))
     AGENT_CONTEXT["observations"].append(observation)
     return observation
 
@@ -212,6 +267,36 @@ def compact_evidence_for_model(evidence: list[dict[str, Any]]) -> list[dict[str,
 def compact_tool_result_for_model(result: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(result, dict):
         return result
+    if result.get("tool") in {
+        "list_patch_sources",
+        "read_patch_function",
+        "read_patch_source",
+        "search_patch_source",
+    }:
+        # Source tools enforce their own strict line/character budgets. Keep
+        # their structured line-numbered content intact, but whitelist fields
+        # so central exception handling can never echo arbitrarily large raw
+        # arguments into model history.
+        payload = {
+            key: value
+            for key, value in result.items()
+            if key in SOURCE_RESULT_KEYS
+        }
+        if isinstance(payload.get("error"), str):
+            payload["error"] = payload["error"][:1000]
+        payload["_bounded_source_guidance"] = True
+        try:
+            encoded_size = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+        except (TypeError, ValueError):
+            encoded_size = SOURCE_MODEL_RESULT_LIMIT + 1
+        if encoded_size > SOURCE_MODEL_RESULT_LIMIT:
+            return {
+                "_bounded_source_guidance": True,
+                "ok": False,
+                "tool": result.get("tool"),
+                "error": "bounded patch-source result exceeded the model transport limit",
+            }
+        return payload
     if result.get("tool") == "summarize_evidence":
         return {
             "_compacted_for_model": True,

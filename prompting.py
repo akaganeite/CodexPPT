@@ -2,10 +2,35 @@
 
 from __future__ import annotations
 
+import copy
+import re
 from typing import Any
 
 from claudeagent.common import compact_json
 from claudeagent.metadata_input import validate_metadata_prompt_input
+
+
+_COMMIT_ID_TOKEN_RE = re.compile(r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{7,64}(?![0-9A-Fa-f])")
+
+
+def metadata_for_agent(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Project behavior metadata into the small, answer-safe initial task view."""
+    allowed_keys = (
+        "cve_id",
+        "project",
+        "cwe",
+        "functions",
+        "vulnerability_description",
+        "patch_commit_message",
+        "patch_hunk",
+    )
+    agent_metadata = {
+        key: copy.deepcopy(metadata[key]) for key in allowed_keys if key in metadata
+    }
+    message = agent_metadata.get("patch_commit_message")
+    if isinstance(message, str):
+        agent_metadata["patch_commit_message"] = _COMMIT_ID_TOKEN_RE.sub("<commit-id>", message)
+    return agent_metadata
 
 
 def build_task(
@@ -13,15 +38,16 @@ def build_task(
     binary: str,
     preflight: dict[str, Any],
 ) -> str:
-    """Render the complete, answer-scrubbed CVE metadata for one investigation."""
-    validate_metadata_prompt_input(metadata)
+    """Render the answer-scrubbed initial task for one investigation."""
+    agent_metadata = metadata_for_agent(metadata)
+    validate_metadata_prompt_input(agent_metadata)
     binary_facts = dict(preflight.get("binary", {}))
     binary_facts["path"] = "/workspace/binary"
     if isinstance(binary_facts.get("file"), str) and binary:
         binary_facts["file"] = binary_facts["file"].replace(binary, "/workspace/binary")
     payload = {
         "cve": metadata.get("cve_id", ""),
-        "cve_metadata": metadata,
+        "cve_metadata": agent_metadata,
         "target_binary": "/workspace/binary",
         "scratch_dir": "/scratch",
         "binary_facts": binary_facts,
